@@ -1,5 +1,8 @@
 import nengo
 
+import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
+import nengo_spinnaker as mundy_nengo
+USE_GFE = True
 
 def out_fun_1(val):
     assert val.size == 2
@@ -27,3 +30,11 @@ def create_model():
         p2 = nengo.Probe(ens2, synapse=0.05, label="probe2")
 
     return model, [in_node], dict()
+
+if __name__ == '__main__':
+    network, function_of_time, function_of_time_time_period = create_model()
+    if USE_GFE:
+        sim = gfe_nengo.NengoSimulator(network)
+    else:
+        sim = mundy_nengo.Simulator(network)
+    sim.run(100)

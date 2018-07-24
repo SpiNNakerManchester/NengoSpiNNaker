@@ -1,17 +1,17 @@
 from collections import defaultdict
 
 import numpy
-from nengo_spinnaker.connection import LearningRule
-from nengo_spinnaker.builder.model import PassthroughNode
-from nengo_spinnaker.builder.node import InputNode, OutputNode
-from nengo_spinnaker.builder.ports import OutputPort, InputPort, \
+from nengo_spinnaker_gfe.connection import LearningRule
+from nengo_spinnaker_gfe.builder.model import PassthroughNode
+from nengo_spinnaker_gfe.builder.node import InputNode, OutputNode
+from nengo_spinnaker_gfe.builder.ports import OutputPort, InputPort, \
     EnsembleOutputPort, EnsembleInputPort
-from nengo_spinnaker.builder.transmission_parameters import \
+from nengo_spinnaker_gfe.builder.transmission_parameters import \
     PassthroughNodeTransmissionParameters, EnsembleTransmissionParameters, \
     NodeTransmissionParameters
-from nengo_spinnaker.operators import Filter, EnsembleLIF, SDPReceiver, \
+from nengo_spinnaker_gfe.operators import Filter, EnsembleLIF, SDPReceiver, \
     SDPTransmitter, ValueSink, ValueSource
-from nengo_spinnaker.regions.filters import NoneFilter, LowpassFilter, \
+from nengo_spinnaker_gfe.regions.filters import NoneFilter, LowpassFilter, \
     LinearFilter
 from spinnaker_graph_front_end.examples.nengo import constants
 from spinnaker_graph_front_end.examples.nengo.application_vertices. \
@@ -49,9 +49,9 @@ from spinnaker_graph_front_end.examples.nengo.nengo_filters. \
 from spinnaker_graph_front_end.examples.nengo.nengo_filters. \
     none_filter import NoneFilter as GFENoneFilter
 
-from nengo_spinnaker.nengo_implicit_interfaces import \
+from nengo_spinnaker_gfe.nengo_implicit_interfaces import \
     NengoInputNode
-from nengo_spinnaker.nengo_implicit_interfaces import \
+from nengo_spinnaker_gfe.nengo_implicit_interfaces import \
     NengoOutputNode
 
 

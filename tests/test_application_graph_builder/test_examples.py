@@ -21,12 +21,12 @@ from spinnaker_graph_front_end.examples.nengo.tests.examples.two_d import \
 from spinnaker_graph_front_end.examples.nengo.tests.test_app_graph_utilities \
     import compare_against_the_nengo_spinnaker_and_gfe_impls
 
-import nengo_spinnaker
+import nengo_spinnaker_gfe
 from examples.lines import \
     create_model as lines_create_model
-from nengo_spinnaker.cache import NoDecoderCache
-from nengo_spinnaker.builder import Model
-from nengo_spinnaker.node_io import Ethernet
+from nengo_spinnaker_gfe.cache import NoDecoderCache
+from nengo_spinnaker_gfe.builder import Model
+from nengo_spinnaker_gfe.node_io import Ethernet
 
 
 class TestAppGraphBuilder(unittest.TestCase):
@@ -48,8 +48,8 @@ class TestAppGraphBuilder(unittest.TestCase):
             function_of_time_nodes_time_period=(
                 nodes_as_function_of_time_time_period))
 
-        # build via nengo_spinnaker - spinnaker
-        nengo_spinnaker.add_spinnaker_params(nengo_network.config)
+        # build via nengo_spinnaker_gfe - spinnaker
+        nengo_spinnaker_gfe.add_spinnaker_params(nengo_network.config)
         for nengo_node in nodes_as_function_of_time:
             nengo_network.config[nengo_node].function_of_time = True
         for nengo_node in nodes_as_function_of_time_time_period:
@@ -74,7 +74,7 @@ class TestAppGraphBuilder(unittest.TestCase):
             raise Exception("didnt match")
 
     def test_node_sliced_value_source(self):
-        # build via gfe nengo_spinnaker spinnaker
+        # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             value_source_test_create_model()
         TestAppGraphBuilder.run_test(
@@ -82,7 +82,7 @@ class TestAppGraphBuilder(unittest.TestCase):
 
     def test_application_graph_builder_learn_assocates(self):
 
-        # build via gfe nengo_spinnaker spinnaker
+        # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             la_create_model()
         TestAppGraphBuilder.run_test(
@@ -90,7 +90,7 @@ class TestAppGraphBuilder(unittest.TestCase):
 
     def test_application_graph_builder_learn_comm_channel(self):
 
-        # build via gfe nengo_spinnaker spinnaker
+        # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             lcc_create_model()
         TestAppGraphBuilder.run_test(

@@ -1,7 +1,12 @@
+from nengo.processes import WhiteSignal
+
+import nengo_spinnaker as mundy_nengo
 import numpy as np
 
 import nengo
-from nengo.processes import WhiteSignal
+import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
+
+USE_GFE = True
 
 
 def create_model():
@@ -37,3 +42,11 @@ def create_model():
         # Connect the error into the learning rule
         nengo.Connection(error, conn.learning_rule)
     return model, list(), dict()
+
+if __name__ == '__main__':
+    network, function_of_time, function_of_time_time_period = create_model()
+    if USE_GFE:
+        sim = gfe_nengo.NengoSimulator(network)
+    else:
+        sim = mundy_nengo.Simulator(network)
+    sim.run(100)
