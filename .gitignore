@@ -1,0 +1,13 @@
+/.project
+/.pydevproject
+/.idea
+/doc/build
+/.settings
+*.pyc
+build/
+dist/
+PACMAN.egg-info
+/SpiNNaker_PACMAN.egg-info/
+/.cache
+.coverage
+.pytest_cache

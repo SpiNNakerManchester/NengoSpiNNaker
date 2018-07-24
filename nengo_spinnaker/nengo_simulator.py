@@ -103,9 +103,9 @@ class NengoSimulator(SpiNNaker):
             extra_pre_run_algorithms=extra_pre_run_algorithms,
             extra_post_run_algorithms=extra_post_run_algorithms,
             time_scale_factor=time_scale,
-            default_config_paths=(
+            default_config_paths=[(
                 os.path.join(os.path.dirname(__file__),
-                             self.CONFIG_FILE_NAME)),
+                             self.CONFIG_FILE_NAME))],
             machine_time_step=machine_time_step,
             extra_xml_paths=xml_paths)
 
