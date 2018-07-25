@@ -60,6 +60,7 @@ from nengo_spinnaker_gfe.utility_objects. \
     ParameterExtractionFromNengoEnsemble
 from nengo_spinnaker_gfe.utility_objects. \
     parameter_transform import ParameterTransform
+from spinn_utilities.progress_bar import ProgressBar
 
 logger = FormatAdapter(logging.getLogger(__name__))
 
@@ -104,6 +105,13 @@ class NengoApplicationGraphBuilder(object):
             Dict[NengoObject]->ApplicationVertex, int)
         """
 
+        n_elements = self._determine_n_elements(nengo_network)
+        progress_bar = ProgressBar(
+            total_number_of_things_to_do=n_elements,
+            string_describing_what_being_progressed=(
+                "Converting between the Nengo Graph and the SpiNNaker nengo"
+                " operator graph"))
+
         # start by setting the specific random number generator for all seeds.
         if nengo_random_number_generator_seed is not None:
             numpy.random.seed(nengo_random_number_generator_seed)
@@ -129,10 +137,22 @@ class NengoApplicationGraphBuilder(object):
             nengo_to_app_graph_map, machine_time_step, host_network,
             nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
-            function_of_time_nodes_time_period)
+            function_of_time_nodes_time_period, progress_bar)
+        progress_bar.end()
 
         return (nengo_operator_graph, host_network, nengo_to_app_graph_map,
                 random_number_generator)
+
+    def _determine_n_elements(self, nengo_network):
+        count = 0
+        for nengo_sub_network in nengo_network.networks:
+            count += self._determine_n_elements(nengo_sub_network)
+        count += len(nengo_network.ensembles)
+        count += len(nengo_network.nodes)
+        count += len(nengo_network.connections)
+        count += len(nengo_network.probes)
+        return count
+
 
     def _build_sub_network_graph(
             self, nengo_network, random_number_generator,
@@ -140,7 +160,7 @@ class NengoApplicationGraphBuilder(object):
             nengo_operator_graph, nengo_to_app_graph_map, machine_time_step,
             host_network, nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
-            function_of_time_nodes_time_period):
+            function_of_time_nodes_time_period, progress_bar):
         """ Builds an entire sub network from the nengo network. 
         
         :param nengo_network: the nengo network 
@@ -159,6 +179,7 @@ class NengoApplicationGraphBuilder(object):
         :param decoder_cache: still don't know what this is for yet.
         :param nengo_random_number_generator_seed: The nengo random number \
         generator seed.
+        :param progress_bar: the progress bar
         :param function_of_time_nodes_time_period: the dict of nodes to function
         :return: 4 things in a tuple. \
         1. the nengo operator graph (an application graph with pass through \
@@ -178,17 +199,17 @@ class NengoApplicationGraphBuilder(object):
                 nengo_operator_graph, nengo_to_app_graph_map, machine_time_step,
                 host_network, nengo_nodes_as_function_of_time, decoder_cache,
                 nengo_random_number_generator_seed,
-                function_of_time_nodes_time_period)
+                function_of_time_nodes_time_period, progress_bar)
 
         # convert from ensembles to neuron model operators
-        for nengo_ensemble in nengo_network.ensembles:
+        for nengo_ensemble in progress_bar.over(nengo_network.ensembles, False):
             self._ensemble_conversion(
                 nengo_ensemble, random_number_generator,
                 utilise_extra_core_for_output_types_probe,
                 nengo_operator_graph, nengo_to_app_graph_map)
 
         # convert from nodes to either pass through nodes or sources.
-        for nengo_node in nengo_network.nodes:
+        for nengo_node in progress_bar.over(nengo_network.nodes, False):
             self._node_conversion(
                 nengo_node, random_number_generator, machine_time_step,
                 host_network, nengo_operator_graph, nengo_to_app_graph_map,
@@ -199,7 +220,8 @@ class NengoApplicationGraphBuilder(object):
         # convert connections into edges with specific data elements
         live_io_receivers = dict()
         live_io_senders = dict()
-        for nengo_connection in nengo_network.connections:
+        for nengo_connection in progress_bar.over(
+                nengo_network.connections, False):
             self._connection_conversion(
                 nengo_connection, nengo_operator_graph, nengo_to_app_graph_map,
                 random_number_generator, host_network, decoder_cache,
@@ -207,7 +229,7 @@ class NengoApplicationGraphBuilder(object):
 
         # for each probe, ask the operator if it supports this probe (equiv
         # of recording connection_parameters)
-        for nengo_probe in nengo_network.probes:
+        for nengo_probe in progress_bar.over(nengo_network.probes, False):
             self._probe_conversion(
                 nengo_probe, nengo_to_app_graph_map, random_number_generator,
                 nengo_operator_graph, host_network, decoder_cache,
