@@ -50,7 +50,7 @@ class ValueSourceApplicationVertex(
             self._recording_of[variable] = not self._recording_of[variable]
 
     def can_probe_variable(self, variable):
-        return variable in self.PROBEABLE_ATTRIBUTES
+        return variable in self._recording_of
 
     def get_data_for_variable(self, variable):
         pass

@@ -128,29 +128,27 @@ class LIFApplicationVertex(
         additional_arguments="operator_graph")
     def create_machine_vertices(self, resource_tracker, operator_graph):
 
-        # verify no neurons are incoming  (no idea why)
-        incoming_partitions = operator_graph. \
-            get_outgoing_edge_partitions_ending_at_vertex(self)
         outgoing_partitions = operator_graph.\
             get_outgoing_edge_partitions_starting_at_vertex(self)
+        incoming_edges = operator_graph.get_edges_ending_at_vertex(self)
 
         standard_outgoing_partitions = list()
         outgoing_learnt_partitions = list()
         incoming_modulatory_learning_rules = list()
 
         # filter incoming partitions
-        for incoming_partition in incoming_partitions:
+        for in_edge in incoming_edges:
             # verify there's no neurons incoming partitions
-            if incoming_partition.identifier.source_port == \
-                    constants.ENSEMBLE_INPUT_PORT.NEURONS:
+            if in_edge.input_port == constants.ENSEMBLE_INPUT_PORT.NEURONS:
                 raise Exception("not suppose to have neurons incoming")
 
-            # locate all modulating incoming partitions
-            if incoming_partition.identifier.source_port == \
-                    constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE:
+            # locate all modulating incoming partitions learning rules
+            if ((in_edge.input_port ==
+                    constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
+                    in_edge.input_port == constants.ENSEMBLE_INPUT_PORT.LEARNT
+                 ) and in_edge.reception_parameters.learning_rule is not None):
                 incoming_modulatory_learning_rules.append(
-                    incoming_partition.identifier.transmission_parameter
-                    .learning_rule)
+                    in_edge.reception_parameters.learning_rule)
 
         # filter outgoing partitions
         for outgoing_partition in outgoing_partitions:

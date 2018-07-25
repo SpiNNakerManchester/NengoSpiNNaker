@@ -34,9 +34,9 @@ class NengoMachineGraphGenerator(object):
 
         # add nengo_spinnaker_gfe algorithms
         algorithms.append("NengoApplicationGraphBuilder")
-        algorithms.append("NengoPartitioner")
         if insert_interposers:
             algorithms.append("NengoUtiliseInterposers")
+        algorithms.append("NengoPartitioner")
 
         # add nengo_spinnaker_gfe inputs
         inputs["NengoModel"] = nengo_network

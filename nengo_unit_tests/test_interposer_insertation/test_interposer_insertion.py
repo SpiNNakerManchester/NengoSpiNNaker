@@ -1,40 +1,34 @@
 import unittest
-
-from spinnaker_graph_front_end.examples.nengo.overridden_mapping_algorithms. \
+from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
     nengo_application_graph_builder import NengoApplicationGraphBuilder
-from spinnaker_graph_front_end.examples.nengo.overridden_mapping_algorithms.nengo_partitioner import \
-    NengoPartitioner
-from spinnaker_graph_front_end.examples.nengo.overridden_mapping_algorithms. \
-    nengo_utilise_interposers import \
-    NengoUtiliseInterposers
-from spinnaker_graph_front_end.examples.nengo.tests.examples.basic import \
-    create_model as basic_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples. \
-    learn_associates import create_model as la_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples. \
-    learn_comm_channel import create_model as lcc_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples.net import \
-    create_model as net_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples.spa import \
-    create_model as spa_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples.spaun_model \
-    import create_model as spaun_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples \
-    .test_nodes_sliced import create_model as value_source_test_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.examples.two_d import \
-    create_model as two_d_create_model
-from spinnaker_graph_front_end.examples.nengo.tests.test_app_graph_utilities import \
-    compare_against_the_nengo_spinnaker_and_gfe_impls
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_utilise_interposers import NengoUtiliseInterposers
+from nengo_unit_tests.examples.basic import create_model as basic_create_model
+from nengo_unit_tests.examples.learn_associates import create_model as \
+    la_create_model
+from nengo_unit_tests.examples.learn_comm_channel import create_model as \
+    lcc_create_model
+from nengo_unit_tests.examples.net import create_model as net_create_model
+from nengo_unit_tests.examples.spa import create_model as spa_create_model
+from nengo_unit_tests.examples.spaun_model import create_model as \
+    spaun_create_model
+from nengo_unit_tests.examples.test_nodes_sliced import create_model as \
+    value_source_test_create_model
+from nengo_unit_tests.examples.two_d import create_model as two_d_create_model
+from nengo_unit_tests.test_app_graph_utilities \
+    import compare_against_the_nengo_spinnaker_and_gfe_impls
 
-import nengo_spinnaker_gfe
-from examples.lines import \
+import nengo_spinnaker
+from nengo_spinnaker.builder import Model
+from nengo_spinnaker.node_io import Ethernet
+
+
+from nengo_unit_tests.examples.lines import \
     create_model as lines_create_model
-from nengo_spinnaker_gfe.cache import NoDecoderCache
-from nengo_spinnaker_gfe.builder import Model
-from nengo_spinnaker_gfe.node_io import Ethernet
+from nengo.cache import NoDecoderCache
 
 
-class TestAppGraphPartitioner(unittest.TestCase):
+class TestAppGraphAndInterposerBuilder(unittest.TestCase):
 
     TEST_SPAUN = False
 
@@ -44,7 +38,6 @@ class TestAppGraphPartitioner(unittest.TestCase):
 
         # build via gfe nengo_spinnaker_gfe spinnaker
         seed = 11111
-        timer_period = 10
         app_graph_builder = NengoApplicationGraphBuilder()
         (app_graph, host_network, nengo_to_app_graph_map,
          random_number_generator) = app_graph_builder(
@@ -52,18 +45,16 @@ class TestAppGraphPartitioner(unittest.TestCase):
             machine_time_step=1.0,
             nengo_random_number_generator_seed=seed,
             decoder_cache=NoDecoderCache(),
-            utilise_extra_core_for_output_types_probe=True,
+            utilise_extra_core_for_probes=True,
             nengo_nodes_as_function_of_time=nodes_as_function_of_time,
             function_of_time_nodes_time_period=(
                 nodes_as_function_of_time_time_period))
         interposer_installer = NengoUtiliseInterposers()
         app_graph = interposer_installer(
-            app_graph, nengo_to_app_graph_map, random_number_generator,
-            seed)
-        machine_graph, graph_mapper = NengoPartitioner(app_graph)
+            app_graph, random_number_generator, seed)
 
         # build via nengo_spinnaker_gfe - spinnaker
-        nengo_spinnaker_gfe.add_spinnaker_params(nengo_network.config)
+        nengo_spinnaker.add_spinnaker_params(nengo_network.config)
         for nengo_node in nodes_as_function_of_time:
             nengo_network.config[nengo_node].function_of_time = True
         for nengo_node in nodes_as_function_of_time_time_period:
@@ -74,7 +65,6 @@ class TestAppGraphPartitioner(unittest.TestCase):
         nengo_spinnaker_network_builder = Model()
         nengo_spinnaker_network_builder.build(nengo_network, **builder_kwargs)
         nengo_spinnaker_network_builder.add_interposers()
-        nengo_spinnaker_network_builder.make_netlist(timer_period)
         nengo_operators = dict()
         nengo_operators.update(
             nengo_spinnaker_network_builder.object_operators)
@@ -93,7 +83,7 @@ class TestAppGraphPartitioner(unittest.TestCase):
         # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             value_source_test_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_learn_assocates(self):
@@ -101,7 +91,7 @@ class TestAppGraphPartitioner(unittest.TestCase):
         # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             la_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_learn_comm_channel(self):
@@ -109,49 +99,49 @@ class TestAppGraphPartitioner(unittest.TestCase):
         # build via gfe nengo_spinnaker_gfe spinnaker
         network, function_of_time, function_of_time_time_period = \
             lcc_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_example_2d(self):
         network, function_of_time, function_of_time_time_period = \
             two_d_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_basic(self):
         network, function_of_time, function_of_time_time_period = \
             basic_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_lines(self):
         network, function_of_time, function_of_time_time_period = \
             lines_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_net(self):
         network, function_of_time, function_of_time_time_period = \
             net_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_spa(self):
         network, function_of_time, function_of_time_time_period = \
             spa_create_model()
-        TestAppGraphPartitioner.run_test(
+        TestAppGraphAndInterposerBuilder.run_test(
             network, function_of_time, function_of_time_time_period)
 
     def test_application_graph_builder_spaun_model(self):
         if self.TEST_SPAUN:
             network, function_of_time, function_of_time_time_period = \
                 spaun_create_model()
-            TestAppGraphPartitioner.run_test(
+            TestAppGraphAndInterposerBuilder.run_test(
                 network, function_of_time, function_of_time_time_period)
 
 if __name__ == "__main__":
     this_network, this_function_of_time, this_function_of_time_time_period = \
         la_create_model()
-    TestAppGraphPartitioner.run_test(
+    TestAppGraphAndInterposerBuilder.run_test(
         this_network, this_function_of_time,
         this_function_of_time_time_period)

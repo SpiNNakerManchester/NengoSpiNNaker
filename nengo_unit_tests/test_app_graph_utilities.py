@@ -1,57 +1,54 @@
 from collections import defaultdict
 
 import numpy
-from nengo_spinnaker_gfe.connection import LearningRule
-from nengo_spinnaker_gfe.builder.model import PassthroughNode
-from nengo_spinnaker_gfe.builder.node import InputNode, OutputNode
-from nengo_spinnaker_gfe.builder.ports import OutputPort, InputPort, \
+from nengo.connection import LearningRule
+from nengo_spinnaker.builder.model import PassthroughNode
+from nengo_spinnaker.builder.node import InputNode, OutputNode
+from nengo_spinnaker.builder.ports import OutputPort, InputPort, \
     EnsembleOutputPort, EnsembleInputPort
-from nengo_spinnaker_gfe.builder.transmission_parameters import \
+from nengo_spinnaker.builder.transmission_parameters import \
     PassthroughNodeTransmissionParameters, EnsembleTransmissionParameters, \
     NodeTransmissionParameters
-from nengo_spinnaker_gfe.operators import Filter, EnsembleLIF, SDPReceiver, \
+from nengo_spinnaker.operators import Filter, EnsembleLIF, SDPReceiver, \
     SDPTransmitter, ValueSink, ValueSource
-from nengo_spinnaker_gfe.regions.filters import NoneFilter, LowpassFilter, \
+from nengo_spinnaker.regions.filters import NoneFilter, LowpassFilter, \
     LinearFilter
-from spinnaker_graph_front_end.examples.nengo import constants
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
-    interposer_application_vertex import \
-    InterposerApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
-    lif_application_vertex import \
-    LIFApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
-    pass_through_application_vertex import \
-    PassThroughApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
-    sdp_receiver_application_vertex import \
-    SDPReceiverApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
+
+from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.application_vertices.\
+    interposer_application_vertex import InterposerApplicationVertex
+from nengo_spinnaker_gfe.application_vertices. \
+    lif_application_vertex import LIFApplicationVertex
+from nengo_spinnaker_gfe.application_vertices. \
+    pass_through_application_vertex import PassThroughApplicationVertex
+from nengo_spinnaker_gfe.application_vertices. \
+    sdp_receiver_application_vertex import SDPReceiverApplicationVertex
+from nengo_spinnaker_gfe.application_vertices. \
     sdp_transmitter_application_vertex import SDPTransmitterApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
+from nengo_spinnaker_gfe.application_vertices. \
     value_sink_application_vertex import ValueSinkApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.application_vertices. \
+from nengo_spinnaker_gfe.application_vertices. \
     value_source_application_vertex import ValueSourceApplicationVertex
-from spinnaker_graph_front_end.examples.nengo.connection_parameters \
+from nengo_spinnaker_gfe.connection_parameters \
     .ensemble_transmission_parameters import EnsembleTransmissionParameters \
     as GFEEnsembleTransmissionParameters
-from spinnaker_graph_front_end.examples.nengo.connection_parameters \
+from nengo_spinnaker_gfe.connection_parameters \
     .node_transmission_parameters import NodeTransmissionParameters as \
     GFENodeTransmissionParameters
-from spinnaker_graph_front_end.examples.nengo.connection_parameters \
+from nengo_spinnaker_gfe.connection_parameters \
     .pass_through_node_transmission_parameters import \
     PassthroughNodeTransmissionParameters as \
-        GFEPassthroughNodeTransmissionParameters
-from spinnaker_graph_front_end.examples.nengo.nengo_filters. \
+    GFEPassthroughNodeTransmissionParameters
+from nengo_spinnaker_gfe.nengo_filters. \
     linear_filter import LinearFilter as GFELinearFilter
-from spinnaker_graph_front_end.examples.nengo.nengo_filters. \
+from nengo_spinnaker_gfe.nengo_filters. \
     low_pass_filter import LowPassFilter as GFELowPassFilter
-from spinnaker_graph_front_end.examples.nengo.nengo_filters. \
+from nengo_spinnaker_gfe.nengo_filters. \
     none_filter import NoneFilter as GFENoneFilter
 
-from nengo_spinnaker_gfe.nengo_implicit_interfaces import \
+from nengo_spinnaker_gfe.nengo_implicit_interfaces.nengo_input_node import \
     NengoInputNode
-from nengo_spinnaker_gfe.nengo_implicit_interfaces import \
+from nengo_spinnaker_gfe.nengo_implicit_interfaces.nengo_output_node import \
     NengoOutputNode
 
 
@@ -375,7 +372,7 @@ def _check_partition_to_nengo_objects(
                         source_port, weight, latching, transmission_param)]:
                 for destination in outgoing_partition.edge_destinations:
                     valid = _check_vert(
-                        sink_object, destination, None,
+                        sink_object, destination,
                         nengo_spinnaker_network_builder, mappings)
                     if valid:
                         gfe_equiv_input_port = _create_gfe_port(input_port)

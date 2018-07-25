@@ -23,3 +23,10 @@ class ConnectionApplicationEdge(ApplicationEdge):
     @property
     def reception_parameters(self):
         return self._reception_parameters
+
+    def __repr__(self):
+        return "edge between {} and {}".format(
+            self._pre_vertex, self._post_vertex)
+
+    def __str__(self):
+        return self.__repr__()
