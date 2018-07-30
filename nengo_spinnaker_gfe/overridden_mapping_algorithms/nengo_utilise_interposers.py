@@ -394,25 +394,21 @@ class NengoUtiliseInterposers(object):
             for destination_outgoing_partition in original_operator_graph.\
                     get_outgoing_edge_partitions_starting_at_vertex(
                         destination_vertex):
-
-                for original_application_edge in \
-                        destination_outgoing_partition.edges:
-
-                    self._process_copy_connection_pass_through_nodes(
-                        interposers, destination_vertex,
-                        random_number_generator,
-                        source_vertex, destination_outgoing_partition, seed,
-                        interposer_application_graph, original_application_edge,
-                        used_interposers, source_port,
-                        original_required_latching, original_operator_graph,
-                        original_edge, original_transmission_param)
+                self._process_copy_connection_pass_through_nodes(
+                    interposers, destination_vertex,
+                    random_number_generator,
+                    source_vertex, destination_outgoing_partition, seed,
+                    interposer_application_graph,
+                    used_interposers, source_port,
+                    original_required_latching, original_operator_graph,
+                    original_edge, original_transmission_param)
 
         return used_interposers
 
     def _process_copy_connection_pass_through_nodes(
             self, interposers, destination_vertex, random_number_generator,
             source_vertex, destination_outgoing_partition, seed,
-            interposer_application_graph, original_application_edge,
+            interposer_application_graph,
             used_interposers, source_port, original_required_latching,
             original_operator_graph, original_edge,
             original_transmission_parameter):
@@ -428,13 +424,15 @@ class NengoUtiliseInterposers(object):
             interposer_application_graph.add_outgoing_edge_partition(
                 new_outgoing_edge_partition)
             interposer_application_graph.add_vertex(interposer)
-            interposer_application_graph.add_edge(
-                ConnectionApplicationEdge(
-                    pre_vertex=source_vertex, post_vertex=interposer,
-                    input_port=constants.INPUT_PORT.STARNDARD,
-                    reception_parameters=(
-                        original_application_edge.reception_parameters)),
-                destination_outgoing_partition.identifier)
+            for original_application_edge in \
+                    destination_outgoing_partition.edges:
+                interposer_application_graph.add_edge(
+                    ConnectionApplicationEdge(
+                        pre_vertex=source_vertex, post_vertex=interposer,
+                        input_port=constants.INPUT_PORT.STARNDARD,
+                        reception_parameters=(
+                            original_application_edge.reception_parameters)),
+                    destination_outgoing_partition.identifier)
 
             # Mark the interposer as reached
             used_interposers.add(
@@ -700,15 +698,14 @@ class NengoUtiliseInterposers(object):
             if isinstance(vertex, InterposerApplicationVertex):
                 continue
 
-            for outgoing_partition in \
-                    interposer_application_graph.outgoing_edge_partitions:
-                source_vertex = outgoing_partition.pre_vertex
+            for outgoing_partition in interposer_application_graph.\
+                    get_outgoing_edge_partitions_starting_at_vertex(vertex):
 
                 # only process none interposers sources
-                if source_vertex not in stacking:
+                if vertex not in stacking:
                     self._process_stackable_interposer(
                         outgoing_partition, stacking, random_number_generator,
-                        stacked_interposer_graph, source_vertex, seed)
+                        stacked_interposer_graph, vertex, seed)
 
         # For each stacked interposer build up a mapping from sinks, reception
         # parameters and signal parameters to the transmission parameters that
