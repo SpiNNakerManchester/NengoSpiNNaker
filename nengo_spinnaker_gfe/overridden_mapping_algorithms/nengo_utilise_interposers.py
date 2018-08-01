@@ -2,6 +2,10 @@ import itertools
 from collections import deque, defaultdict
 
 import numpy
+
+from nengo_spinnaker_gfe.graph_components.\
+    destination_input_port_learning_rule import \
+    DestinationInputPortLearningRule
 from pacman.model.graphs import AbstractOutgoingEdgePartition
 from pacman.model.graphs.application import ApplicationEdge
 from pacman.model.graphs.impl import Graph
@@ -216,7 +220,8 @@ class NengoUtiliseInterposers(object):
                 self.NEW_PARTITION_TRANSFORM_VALUE))
         new_transmission_param, destination_input_port = \
             new_transmission_param.update_to_global_inhibition_if_required(
-                constants.INPUT_PORT.STARNDARD)
+                DestinationInputPortLearningRule(
+                    constants.INPUT_PORT.STARNDARD))
 
         # create new outgoing partition to reflect new params
         new_outgoing_edge_partition = ConnectionOutgoingPartition(
@@ -237,7 +242,8 @@ class NengoUtiliseInterposers(object):
                 self.INTERPOSER_PARAMETER_FILTER,
                 transmission_param.size_in,
                 self.INTERPOSER_LEARNING_RULE),
-            input_port=destination_input_port))
+            input_port=destination_input_port),
+            new_outgoing_edge_partition.identifier)
 
         # update the used interposers
         used_interposers.add((source, new_outgoing_edge_partition))
@@ -429,7 +435,8 @@ class NengoUtiliseInterposers(object):
                 interposer_application_graph.add_edge(
                     ConnectionApplicationEdge(
                         pre_vertex=source_vertex, post_vertex=interposer,
-                        input_port=constants.INPUT_PORT.STARNDARD,
+                        input_port=DestinationInputPortLearningRule(
+                            constants.INPUT_PORT.STARNDARD),
                         reception_parameters=(
                             original_application_edge.reception_parameters)),
                     destination_outgoing_partition.identifier)

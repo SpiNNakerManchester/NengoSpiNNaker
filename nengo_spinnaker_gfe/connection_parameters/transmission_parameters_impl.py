@@ -31,7 +31,7 @@ class TransmissionParametersImpl(object):
 
     def __eq__(self, other):
         return (type(self) is type(other) and
-                self._transform == other._transform)
+                self._transform == other.transform)
 
     def __hash__(self):
         return hash((type(self), self._transform))
@@ -61,9 +61,10 @@ class TransmissionParametersImpl(object):
 
     def update_to_global_inhibition_if_required(self, destination_input_port):
         # change to support global inhibition if required
-        if (destination_input_port is constants.ENSEMBLE_INPUT_PORT.NEURONS
+        if (destination_input_port.destination_input_port ==
+                constants.ENSEMBLE_INPUT_PORT.NEURONS
                 and self.supports_global_inhibition):
-            destination_input_port = (
+            destination_input_port.destination_input_port = (
                 constants.ENSEMBLE_INPUT_PORT.GLOBAL_INHIBITION)
             return self.as_global_inhibition_connection, destination_input_port
         else:

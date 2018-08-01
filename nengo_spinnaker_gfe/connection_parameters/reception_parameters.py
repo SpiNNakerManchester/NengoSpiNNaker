@@ -3,8 +3,8 @@ from nengo import LinearFilter
 
 
 class ReceptionParameters(object):
-    """Basic reception connection_parameters that relate to the reception of a series of
-    multicast packets.
+    """Basic reception connection_parameters that relate to the reception of a
+     series of multicast packets.
 
     Attributes
     ----------
@@ -38,8 +38,8 @@ class ReceptionParameters(object):
         return self._learning_rule
 
     def concat(self, other):
-        """Create new reception connection_parameters by combining this set of reception
-        connection_parameters with another.
+        """Create new reception connection_parameters by combining this set 
+        of reception connection_parameters with another.
         """
         # Combine the nengo_filters
         if self._parameter_filter is None:

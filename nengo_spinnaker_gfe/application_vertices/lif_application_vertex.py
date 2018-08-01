@@ -139,16 +139,24 @@ class LIFApplicationVertex(
         # filter incoming partitions
         for in_edge in incoming_edges:
             # verify there's no neurons incoming partitions
-            if in_edge.input_port == constants.ENSEMBLE_INPUT_PORT.NEURONS:
+            if in_edge.input_port.destination_input_port == \
+                    constants.ENSEMBLE_INPUT_PORT.NEURONS:
                 raise Exception("not suppose to have neurons incoming")
 
             # locate all modulating incoming partitions learning rules
-            if ((in_edge.input_port ==
+            if (in_edge.input_port.destination_input_port ==
                     constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
-                    in_edge.input_port == constants.ENSEMBLE_INPUT_PORT.LEARNT
-                 ) and in_edge.reception_parameters.learning_rule is not None):
-                incoming_modulatory_learning_rules.append(
-                    in_edge.reception_parameters.learning_rule)
+                    in_edge.input_port.destination_input_port ==
+                        constants.ENSEMBLE_INPUT_PORT.LEARNT):
+                if in_edge.reception_parameters.learning_rule is not None:
+                    incoming_modulatory_learning_rules.append(
+                        in_edge.reception_parameters.learning_rule)
+                else:
+                    incoming_modulatory_learning_rules.append(
+                        in_edge.input_port.learning_rule)
+
+        if len(incoming_modulatory_learning_rules) != 3:
+            raise Exception("too many")
 
         # filter outgoing partitions
         for outgoing_partition in outgoing_partitions:

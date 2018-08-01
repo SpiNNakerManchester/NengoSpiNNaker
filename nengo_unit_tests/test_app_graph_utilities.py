@@ -398,7 +398,7 @@ def locate_reception_parameters(gfe_app_graph, outgoing_partition,
     reception_params = list()
     for edge in gfe_app_graph.get_edges_ending_at_vertex_with_partition_name(
             destination_vertex, outgoing_partition.identifier):
-        if edge.input_port == destination_input_port:
+        if edge.input_port.destination_input_port == destination_input_port:
             reception_params.append(edge.reception_parameters)
     return reception_params
 

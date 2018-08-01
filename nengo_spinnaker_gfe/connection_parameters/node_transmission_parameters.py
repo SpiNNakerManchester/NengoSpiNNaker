@@ -5,8 +5,8 @@ from nengo_spinnaker_gfe.connection_parameters. \
 from nengo_spinnaker_gfe.utility_objects.parameter_transform import \
     ParameterTransform
 
-from nengo_spinnaker_gfe.connection_parameters.transmission_parameters_impl import \
-    TransmissionParametersImpl
+from nengo_spinnaker_gfe.connection_parameters.\
+    transmission_parameters_impl import TransmissionParametersImpl
 
 
 class NodeTransmissionParameters(

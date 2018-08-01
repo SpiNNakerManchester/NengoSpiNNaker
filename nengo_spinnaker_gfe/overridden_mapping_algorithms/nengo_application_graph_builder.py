@@ -10,6 +10,9 @@ from nengo.ensemble import Neurons
 from nengo.exceptions import BuildError
 from nengo.processes import Process
 from nengo.utils.builder import full_transform
+from nengo_spinnaker_gfe.graph_components.\
+    destination_input_port_learning_rule import \
+    DestinationInputPortLearningRule
 from pacman.model.graphs import AbstractOutgoingEdgePartition
 from pacman.model.graphs.application import ApplicationEdge
 from pacman.model.graphs.impl import Graph
@@ -17,7 +20,8 @@ from spinn_utilities.log import FormatAdapter
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
     AbstractNengoApplicationVertex
-from nengo_spinnaker_gfe.abstracts.abstract_nengo_object import AbstractNengoObject
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_object \
+    import AbstractNengoObject
 from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
 from nengo_spinnaker_gfe.application_vertices.lif_application_vertex import \
     LIFApplicationVertex
@@ -27,7 +31,8 @@ from nengo_spinnaker_gfe.application_vertices.\
     sdp_receiver_application_vertex import SDPReceiverApplicationVertex
 from nengo_spinnaker_gfe.application_vertices. \
     sdp_transmitter_application_vertex import SDPTransmitterApplicationVertex
-from nengo_spinnaker_gfe.application_vertices.value_sink_application_vertex import \
+from nengo_spinnaker_gfe.application_vertices.\
+    value_sink_application_vertex import \
     ValueSinkApplicationVertex
 from nengo_spinnaker_gfe.application_vertices. \
     value_source_application_vertex import ValueSourceApplicationVertex
@@ -974,7 +979,7 @@ class NengoApplicationGraphBuilder(object):
                     nengo_connection.learning_rule.learning_rule_type.modifies
                 if modifies == constants.ENCODERS_FLAG:
                     input_port = constants.ENSEMBLE_INPUT_PORT.LEARNT
-            return operator, input_port
+            return operator, DestinationInputPortLearningRule(input_port)
 
     @staticmethod
     def _get_destination_vertex_and_input_port_for_learning_rule(
@@ -1027,7 +1032,9 @@ class NengoApplicationGraphBuilder(object):
             raise NotImplementedError(
                 "SpiNNaker only supports learning rules  "
                 "which modify 'decoders' or 'encoders'")
-        return operator, constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE
+        return operator, DestinationInputPortLearningRule(
+            constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE,
+            nengo_connection.post_obj)
 
     @staticmethod
     def _get_destination_vertex_and_input_port_for_nengo_node(
@@ -1049,7 +1056,8 @@ class NengoApplicationGraphBuilder(object):
         """
         if isinstance(nengo_connection.post_obj, PassThroughApplicationVertex):
             return (nengo_to_app_graph_map[nengo_connection.post_obj],
-                    constants.INPUT_PORT.STANDARD)
+                    DestinationInputPortLearningRule(
+                        constants.INPUT_PORT.STANDARD))
         elif (isinstance(nengo_connection.pre_obj, nengo.Node) and
                 not isinstance(nengo_connection.pre_obj,
                                PassThroughApplicationVertex)):
@@ -1087,7 +1095,7 @@ class NengoApplicationGraphBuilder(object):
                     if host_link not in host_network:
                         host_network.add(host_link)
                         nengo.Connection(operator, nengo_connection.post_obj,
-                                                   synapse=None)
+                                         synapse=None)
 
                 # update records
                 live_io_senders[nengo_connection.pre_obj] = operator
@@ -1096,7 +1104,8 @@ class NengoApplicationGraphBuilder(object):
                 operator = live_io_senders[nengo_connection.post_obj]
 
             # return operator and the defacto output port
-            return operator, constants.INPUT_PORT.STANDARD
+            return operator, DestinationInputPortLearningRule(
+                constants.INPUT_PORT.STANDARD)
 
     def get_destination_vertex_and_input_port(
             self, nengo_connection, nengo_to_app_graph_map, host_network,
@@ -1119,7 +1128,8 @@ class NengoApplicationGraphBuilder(object):
         # if neurons, hand the sink of the connection
         if isinstance(nengo_connection.post_obj, nengo.ensemble.Neurons):
             return (nengo_to_app_graph_map[nengo_connection.post_obj.ensemble],
-                    constants.ENSEMBLE_INPUT_PORT.NEURONS)
+                    DestinationInputPortLearningRule(
+                        constants.ENSEMBLE_INPUT_PORT.NEURONS))
         # if ensemble, get result from ensemble block
         elif isinstance(nengo_connection.post_obj, nengo.Ensemble):
             return self._get_destination_vertex_and_input_port_for_ensemble(
@@ -1132,7 +1142,8 @@ class NengoApplicationGraphBuilder(object):
         # if a basic nengo object, hand back a basic port
         elif isinstance(nengo_connection.post_obj, NengoObject):
             return (nengo_to_app_graph_map[nengo_connection.post_obj],
-                    constants.INPUT_PORT.STANDARD)
+                    DestinationInputPortLearningRule(
+                        constants.INPUT_PORT.STANDARD))
         # if a node.
         elif isinstance(nengo_connection.post_obj, nengo.Node):
             return self._get_destination_vertex_and_input_port_for_nengo_node(

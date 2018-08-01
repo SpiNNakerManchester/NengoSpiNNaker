@@ -132,6 +132,6 @@ class TestAppGraphBuilder(unittest.TestCase):
 
 if __name__ == "__main__":
     this_network, this_function_of_time, this_function_of_time_time_period = \
-        value_source_test_create_model()
+        la_create_model()
     TestAppGraphBuilder.run_test(
         this_network, this_function_of_time, this_function_of_time_time_period)

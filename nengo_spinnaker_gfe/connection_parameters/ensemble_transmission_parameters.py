@@ -9,8 +9,8 @@ from nengo_spinnaker_gfe.nengo_exceptions import \
     NotConcatableTransmissionParameter
 from nengo_spinnaker_gfe.utility_objects.parameter_transform import \
     ParameterTransform
-from nengo_spinnaker_gfe.connection_parameters.transmission_parameters_impl import \
-    TransmissionParametersImpl
+from nengo_spinnaker_gfe.connection_parameters.\
+    transmission_parameters_impl import TransmissionParametersImpl
 
 try:
     from xxhash import xxh64 as fasthash
