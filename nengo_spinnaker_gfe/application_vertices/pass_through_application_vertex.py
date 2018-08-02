@@ -13,7 +13,7 @@ class PassThroughApplicationVertex(AbstractNengoApplicationVertex):
             self, label=label, rng=rng, seed=seed)
 
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices)
-    def create_machine_vertices(self, resource_tracker):
+    def create_machine_vertices(self, resource_tracker, nengo_partitioner):
         raise NotImplementedError(
             "This vertex has not been implemented. Please set the config "
             "param [Node] optimise_utilise_interposers to True to avoid "

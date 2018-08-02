@@ -36,6 +36,14 @@ class LowPassFilter(AbstractFilter):
     def size_words(self):
         return self.SIZE_OF_WORDS
 
+    @staticmethod
+    @overrides(AbstractFilter.build_filter)
+    def build_filter(requires_latching, reception_params, width=None):
+        if width is None:
+            width = reception_params.width
+        return LowPassFilter(
+            width, requires_latching, reception_params.parameter_filter.tau)
+
     @overrides(AbstractFilter.pack_into)
     def pack_into(self, spec, dt):
 

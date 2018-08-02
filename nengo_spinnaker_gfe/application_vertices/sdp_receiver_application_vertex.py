@@ -55,7 +55,8 @@ class SDPReceiverApplicationVertex(
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments="operator_graph")
-    def create_machine_vertices(self, resource_tracker, operator_graph):
+    def create_machine_vertices(
+            self, resource_tracker, nengo_partitioner, operator_graph):
         # Get all outgoing signals and their associated transmission
         # connection_parameters
 

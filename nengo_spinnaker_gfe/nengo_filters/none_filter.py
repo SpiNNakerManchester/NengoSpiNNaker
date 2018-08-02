@@ -23,3 +23,10 @@ class NoneFilter(AbstractFilter):
     @overrides(AbstractFilter.pack_into)
     def pack_into(self, spec, dt):
         pass
+
+    @staticmethod
+    @overrides(AbstractFilter.build_filter)
+    def build_filter(requires_latching, reception_params, width=None):
+        if width is None:
+            width = reception_params.width
+        return NoneFilter(width, requires_latching)

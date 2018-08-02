@@ -46,3 +46,14 @@ class AbstractFilter(object):
         :param dt: 
         :return: 
         """
+
+    @staticmethod
+    @abstractmethod
+    def build_filter(requires_latching, reception_params, width=None):
+        """ builds a filter based off these params
+        
+        :param requires_latching: 
+        :param reception_params: 
+        :param width: 
+        :return: a filter object
+        """

@@ -1,6 +1,15 @@
 import numpy
+import math
 from nengo.learning_rules import PES as NengoPES
+from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
+    AbstractSupportNengoPartitioner
+from nengo_spinnaker_gfe.nengo_filters.filter_and_routing_region_generator import \
+    FilterAndRoutingRegionGenerator
 from pacman.executor.injection_decorator import inject_items
+from pacman.model.graphs.common import Slice
+from pacman.model.resources import CPUCyclesPerTickResource, DTCMResource, \
+    ResourceContainer
+from spinn_machine import Processor
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe.abstracts. \
@@ -15,7 +24,8 @@ from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
 
 
 class LIFApplicationVertex(
-        AbstractNengoApplicationVertex, AbstractProbeable):
+        AbstractNengoApplicationVertex, AbstractProbeable,
+        AbstractSupportNengoPartitioner):
 
     __slots__ = [
         "_eval_points",
@@ -28,11 +38,37 @@ class LIFApplicationVertex(
         "_probeable_variables",
         "_is_recording_probeable_variable",
         "_probeable_variables_supported_elsewhere",
-        "_direct_input"]
+        "_direct_input",
+        "_n_neurons",
+        "_cluster_size_out",
+        "_cluster_size_in",
+        "_cluster_learnt_size_out",
+        "_ensamble_size_in"]
+
+    # flag saying if the ensamble can operate over multiple chips
+    ENSAMBLE_PARTITIONING_OVER_MULTIPLE_CHIPS = False
+
+    # expected resource limits to allow collaboration cores to work
+    DTCM_USAGE_PER_CORE = 0.75
+    CPU_USAGE_PER_CORE = 0.4
+
+    # magic numbers from mundy's thesis, no idea what they are, or where they
+    #  come from.
+    INPUT_FILTERING_CYCLES_1 = 39
+    INPUT_FILTERING_CYCLES_2 = 135
+    NEURON_UPDATE_CYCLES_1 = 9
+    NEURON_UPDATE_CYCLES_2 = 61
+    NEURON_UPDATE_CYCLES_3 = 174
+    DECODE_AND_TRANSMIT_CYCLES_1 = 2
+    DECODE_AND_TRANSMIT_CYCLES_2 = 143
+    DECODE_AND_TRANSMIT_CYCLES_3 = 173
+
+    DTCM_BYTES_PER_NEURON = 3
+    DTCM_BYTES_MULTIPLIER = 4
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
-            max_rates, intercepts, gain, bias, size_in,
+            max_rates, intercepts, gain, bias, size_in, n_neurons,
             utilise_extra_core_for_output_types_probe):
         """ constructor for lifs
         
@@ -56,6 +92,11 @@ class LIFApplicationVertex(
         self._gain = gain
         self._bias = bias
         self._direct_input = numpy.zeros(size_in)
+        self._ensamble_size_in = size_in
+        self._n_neurons = n_neurons
+        self._cluster_size_out = None
+        self._cluster_size_in = None
+        self._cluster_learnt_size_out = None
 
         self._probeable_variables = [
             constants.RECORD_OUTPUT_FLAG, constants.RECORD_SPIKES_FLAG,
@@ -126,7 +167,11 @@ class LIFApplicationVertex(
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments="operator_graph")
-    def create_machine_vertices(self, resource_tracker, operator_graph):
+    def create_machine_vertices(
+            self, resource_tracker, nengo_partitioner,
+            operator_graph):
+
+        machine_vertices = list()
 
         outgoing_partitions = operator_graph.\
             get_outgoing_edge_partitions_starting_at_vertex(self)
@@ -155,9 +200,6 @@ class LIFApplicationVertex(
                     incoming_modulatory_learning_rules.append(
                         in_edge.input_port.learning_rule)
 
-        if len(incoming_modulatory_learning_rules) != 3:
-            raise Exception("too many")
-
         # filter outgoing partitions
         for outgoing_partition in outgoing_partitions:
             # locate all standard outgoing partitions
@@ -179,19 +221,115 @@ class LIFApplicationVertex(
         # determine learning rules size out
 
         # convert to cluster sizes
-        cluster_size_out = decoders.shape[0]
-        cluster_size_in = self._scaled_encoders.shape[1]
-        cluster_learnt_size_out = self._determine_cluster_learnt_size_out(
+        self._cluster_size_out = decoders.shape[0]
+        self._cluster_size_in = self._scaled_encoders.shape[1]
+        self._cluster_learnt_size_out, encoders_with_gain, learning_rules \
+            = self._determine_cluster_learnt_size_out(
             outgoing_learnt_partitions, incoming_modulatory_learning_rules)
 
+        n_atoms_partitioned = 0
+        max_resources_to_use_per_core = ResourceContainer(
+            dtcm=DTCMResource(
+                int(math.ceil(
+                    Processor.DTCM_AVAILABLE * self.DTCM_USAGE_PER_CORE))),
+            cpu_cycles=CPUCyclesPerTickResource(
+                int(math.ceil(
+                    Processor.CLOCK_SPEED * self.CPU_USAGE_PER_CORE))))
+
+        while n_atoms_partitioned < self._n_neurons:
+            max_cores = resource_tracker.get_maximum_cores_available_on_a_chip()
+            if self.ENSAMBLE_PARTITIONING_OVER_MULTIPLE_CHIPS:
+                slices = nengo_partitioner.create_slices(
+                    Slice(0, self._n_neurons - 1), self,
+                    max_resources_to_use_per_core, max_cores)
+                for neuron_slice in slices:
+                    cluster_vertices = self._create_cluster_and_verts(
+                        neuron_slice, encoders_with_gain.shape[1])
+                    machine_vertices.extend(cluster_vertices)
+            else:
+                cluster_vertices = self._create_cluster_and_verts(
+                    Slice(0, self._n_neurons - 1), encoders_with_gain.shape[1])
+                machine_vertices.extend(cluster_vertices)
+
+    def _create_cluster_and_verts(
+            self, neuron_slice, encoders_with_gain,
+                                       n_learnt_input_signals,):
+        self._cluster_size_out = size_out
+        self._cluster_learnt_size_out = size_learnt_out
 
 
+    def _get_input_filtering_cycles(self, size_in):
+        """Cycles required to perform filtering of received values."""
+        # Based on thesis profiling
+        return (self.INPUT_FILTERING_CYCLES_1 * size_in +
+                self.INPUT_FILTERING_CYCLES_2)
 
+    def _get_neuron_update_cycles(self, size_in, n_neurons_on_core):
+        """Cycles required to simulate neurons."""
+        # Based on thesis profiling
+        return (self.NEURON_UPDATE_CYCLES_1 * n_neurons_on_core * size_in +
+                self.NEURON_UPDATE_CYCLES_2 * n_neurons_on_core +
+                self.NEURON_UPDATE_CYCLES_3)
+
+    def _get_decode_and_transmit_cycles(self, n_neurons_in_cluster, size_out):
+        """Cycles required to decode spikes and transmit packets."""
+        # Based on thesis profiling
+        return (self.DECODE_AND_TRANSMIT_CYCLES_1 * n_neurons_in_cluster *
+                size_out + self.DECODE_AND_TRANSMIT_CYCLES_2 * size_out +
+                self.DECODE_AND_TRANSMIT_CYCLES_3)
+
+    @overrides(AbstractSupportNengoPartitioner.dtcm_usage_for_slice)
+    def dtcm_usage_for_slice(self, neuron_slice, n_cores):
+
+        size_learnt_out_per_core = \
+            int(math.ceil(float(self._cluster_learnt_size_out) / n_cores))
+        size_out_per_core = \
+            int(math.ceil((float(self._cluster_size_out) / n_cores)))
+
+        n_neurons = neuron_slice.hi_atom - neuron_slice.lo_atom
+        neurons_per_core = int(math.ceil((float(n_neurons) / n_cores)))
+
+        encoder_cost = neurons_per_core * self._cluster_size_in
+        decoder_cost = n_neurons * (
+            size_out_per_core + size_learnt_out_per_core)
+        neurons_cost = neurons_per_core * self.DTCM_BYTES_PER_NEURON
+
+        return DTCMResource(
+            (encoder_cost + decoder_cost + neurons_cost) *
+            self.DTCM_BYTES_MULTIPLIER)
+
+    @overrides(AbstractSupportNengoPartitioner.cpu_usage_for_slice)
+    def cpu_usage_for_slice(self, neuron_slice, n_cores):
+
+        # Compute the number of neurons in the slice and the number allocated
+        # to the most heavily loaded core.
+        n_neurons = neuron_slice.hi_atom - neuron_slice.lo_atom
+        neurons_per_core = int(math.ceil((float(n_neurons) / n_cores)))
+        size_in_per_core = \
+            int(math.ceil((float(self._cluster_size_in) / n_cores)))
+        size_out_per_core = \
+            int(math.ceil((float(self._cluster_size_out) / n_cores)))
+        size_learnt_out_per_core = \
+            int(math.ceil(float(self._cluster_learnt_size_out) / n_cores))
+
+        # Compute the loading
+        # TODO Profile PES and Voja
+        return CPUCyclesPerTickResource(
+            self._get_input_filtering_cycles(size_in_per_core) +
+            self._get_neuron_update_cycles(
+                self._cluster_size_in, neurons_per_core) +
+            self._get_decode_and_transmit_cycles(n_neurons, size_out_per_core) +
+            self._get_decode_and_transmit_cycles(
+                n_neurons, size_learnt_out_per_core))
 
     def _determine_cluster_learnt_size_out(
             self, outgoing_learnt_partitions,
             incoming_modulatory_learning_rules):
         learnt_decoders = numpy.array([])
+        encoders_with_gain = self._scaled_encoders
+        learning_rules = list()
+        mod_keyspace_routes = list()
+        mod_filters = list()
         for learnt_outgoing_partition in outgoing_learnt_partitions:
             partition_identifier = learnt_outgoing_partition.identifier
             transmission_parameter = partition_identifier.transmission_parameter
@@ -221,6 +359,11 @@ class LIFApplicationVertex(
                     "learning, but no corresponding modulatory "
                     "connection" % self.label)
 
+            # Add error connection to lists
+            # of modulatory filters and routes
+            mod_filters = FilterAndRoutingRegionGenerator.add_filters(
+                mod_filters, learnt_outgoing_partition, minimise=False)
+
             decoder_start = learnt_decoders.shape[0]
 
             # Get new decoders and output keys for learnt connection
@@ -236,10 +379,16 @@ class LIFApplicationVertex(
             else:
                 learnt_decoders = numpy.vstack(
                     (learnt_decoders, rule_decoders))
-        return learnt_decoders.shape[0]
 
-    @staticmethod
-    def _get_decoders_and_n_keys(standard_outgoing_partitions, minimise=False):
+            # Create a duplicate copy of the original size_in columns of
+            # the encoder matrix for modification by this learning rule
+            base_encoders = encoders_with_gain[:, :self._ensamble_size_in]
+            encoders_with_gain = numpy.hstack(
+                (encoders_with_gain, base_encoders))
+        return learnt_decoders.shape[0], encoders_with_gain
+
+    def _get_decoders_and_n_keys(
+            self, standard_outgoing_partitions, minimise=False):
 
         decoders = list()
         n_keys = 0
@@ -248,7 +397,7 @@ class LIFApplicationVertex(
             if not isinstance(partition_identifier.transmission_parameter,
                               EnsembleTransmissionParameters):
                 raise NengoException(
-                    "To determine the decoders and keys, the ensamble {} "
+                    "To determine the decoders and keys, the ensemble {} "
                     "assumes it only has ensemble transmission params. this "
                     "was not the case.".format(self))
             decoder = partition_identifier.transmission_parameter.full_decoders

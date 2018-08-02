@@ -51,3 +51,13 @@ class NotAbleToBeConnectedToAsADestination(NengoException):
 class NotConcatableTransmissionParameter(NengoException):
     """ raised when during interposers, a transmission parameter is asked to
     concat a transmission parameter which it cant accept."""
+
+
+class NotPartitionable(NengoException):
+    """ raised when the nengo partitioner fails to partition a vertex. 
+    """
+
+
+class NotRecognisedFilterType(NengoException):
+    """ raised when the filter builder does not recognise the type of filter. 
+    """

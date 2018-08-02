@@ -427,7 +427,8 @@ class NengoApplicationGraphBuilder(object):
                 max_rates=params_from_nengo_ensemble.max_rates,
                 intercepts=params_from_nengo_ensemble.intercepts,
                 gain=params_from_nengo_ensemble.gain,
-                bias=params_from_nengo_ensemble.bias)
+                bias=params_from_nengo_ensemble.bias,
+                n_neurons=nengo_ensemble.n_neurons)
         else:
             raise NeuronTypeConstructorNotFoundException(
                 "could not find a constructor for neuron type {}. I have "

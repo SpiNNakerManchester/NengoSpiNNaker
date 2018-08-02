@@ -47,6 +47,15 @@ class LinearFilter(AbstractFilter):
     def size_words(self):
         return 1 + self._order * 2
 
+    @staticmethod
+    @overrides(AbstractFilter.build_filter)
+    def build_filter(requires_latching, reception_params, width=None):
+        if width is None:
+            width = reception_params.width
+        return LinearFilter(
+            width, requires_latching, reception_params.filter.num,
+            reception_params.filter.den)
+
     @overrides(AbstractFilter.pack_into)
     def pack_into(self, spec, dt):
         """Pack the struct describing the filter into the buffer."""
@@ -61,7 +70,5 @@ class LinearFilter(AbstractFilter):
         ab = numpy.vstack((-a[1:], b[1:])).T.flatten()
 
         # Convert the values to fixpoint and write into a data buffer
-        struct.pack_into(
-            "<I{}s".format(self.order * 2 * 4), buffer, offset,
-            self.order,
-            helpful_functions.convert_numpy_array_to_s16_15(ab).tostring())
+        spec.write_value(self.order)
+        spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(ab))
