@@ -30,15 +30,15 @@ def slice_up_atoms(initial_slice, n_slices):
     """Create a set of smaller slices from an original slice.
     
     :param initial_slice: A slice which must have `start` and `stop` set.
-    :type initial_slice: :py:class:`slice`
+    :type initial_slice: 
     :param n_slices:  Number of slices to produce.
     :type n_slices: int
     :rtype: Iterator[:py:class:`pacman.model.graphs.common.Slice`]  
     """
 
     # Extract current position, start and stop
-    pos = start = initial_slice.start
-    stop = initial_slice.stop
+    pos = start = initial_slice.lo_atom
+    stop = initial_slice.stop.hi_atom
 
     # Determine the chunk sizes
     chunk = (stop - start) // n_slices

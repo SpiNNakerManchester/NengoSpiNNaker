@@ -10,7 +10,7 @@ class AbstractSupportNengoPartitioner(object):
         pass
 
     @abstractmethod
-    def dtcm_usage_for_slice(self, neuron_slice, n_cores):
+    def dtcm_usage_for_slices(self, slices, n_cores):
         """ compute the dtcm usage as if it was the worse loaded core
         
         :param neuron_slice: 
@@ -19,7 +19,7 @@ class AbstractSupportNengoPartitioner(object):
         """
 
     @abstractmethod
-    def cpu_usage_for_slice(self, neuron_slice, n_cores):
+    def cpu_usage_for_slices(self, slices, n_cores):
         """ Compute the cpu usage as if its was the worse loaded core.
         :param neuron_slice: slice of neurons
         :param n_cores: how many cores are on the chip we're being 

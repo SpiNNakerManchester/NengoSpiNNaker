@@ -34,6 +34,14 @@
                 <param_name>function_of_time_nodes_time_period</param_name>
                 <param_type>NengoNodesAsFunctionOfTimeTimePeriod</param_type>
             </parameter>
+            <parameter>
+                <param_name>nengo_ensemble_profiling</param_name>
+                <param_type>NengoEnsembleProfile</param_type>
+            </parameter>
+            <parameter>
+                <param_name>nengo_ensemble_profiling_n_samples</param_name>
+                <param_type>NengoEnsembleProfileNumSamples</param_type>
+            </parameter>
         </input_definitions>
         <required_inputs>
             <param_name>nengo_network</param_name>
@@ -43,6 +51,8 @@
             <param_name>decoder_cache</param_name>
             <param_name>utilise_extra_core_for_probes</param_name>
             <param_name>nengo_nodes_as_function_of_time</param_name>
+            <param_name>nengo_ensemble_profiling</param_name>
+            <param_name>nengo_ensemble_profiling_n_samples</param_name>
         </required_inputs>
         <outputs>
             <param_type>NengoOperatorGraph</param_type>

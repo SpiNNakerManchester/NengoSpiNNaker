@@ -16,7 +16,8 @@ class NengoMachineGraphGenerator(object):
             system_pre_allocated_resources_inputs,
             system_pre_allocated_resources_algorithms,
             print_timings, do_timings, xml_paths,
-            pacman_executor_provenance_path):
+            pacman_executor_provenance_path,
+            nengo_ensemble_profile, nengo_ensemble_profile_num_samples):
 
         # create data holders
         inputs = dict()
@@ -49,6 +50,9 @@ class NengoMachineGraphGenerator(object):
         inputs["NengoNodesAsFunctionOfTime"] = nengo_nodes_as_function_of_time
         inputs["NengoNodesAsFunctionOfTimeTimePeriod"] = (
             function_of_time_nodes_time_period)
+        inputs["NengoEnsembleProfile"] = nengo_ensemble_profile
+        inputs["NengoEnsembleProfileNumSamples"] = (
+            nengo_ensemble_profile_num_samples)
 
         # add partitioning inputs
         inputs["MemoryMachine"] = spinnaker_machine_for_partitioning

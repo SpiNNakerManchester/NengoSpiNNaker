@@ -13,7 +13,8 @@ class LIFMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
         AcceptsMulticastSignals):
 
-    def __init__(self):
+    def __init__(self, vertex_index, neuron_slices, input_slice, output_slice,
+                learnt_slice):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)

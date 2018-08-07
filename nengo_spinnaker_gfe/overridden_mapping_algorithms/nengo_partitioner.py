@@ -20,8 +20,8 @@ from spinn_utilities.progress_bar import ProgressBar
 
 
 class NengoPartitioner(object):
-    """ partitions the app graph for the nengo_spinnaker_gfe graph, and turns it into a 
-    machine graph recognised by the main tool chain
+    """ partitions the app graph for the nengo_spinnaker_gfe graph, and turns /
+    it into a machine graph recognised by the main tool chain
     
     """
 
@@ -88,7 +88,7 @@ class NengoPartitioner(object):
                         machine_vertex_sink, edge))
 
     def create_slices(self, initial_slice, application_vertex,
-                      max_resources_to_use_per_core, max_cores):
+                      max_resources_to_use_per_core, max_cores, max_cuts):
         """
         
         :param initial_slice: 
@@ -100,12 +100,12 @@ class NengoPartitioner(object):
 
         for sl, in self._create_slices_for_multiple(
                 [initial_slice], application_vertex,
-                max_resources_to_use_per_core, max_cores):
+                max_resources_to_use_per_core, max_cores, max_cuts):
             yield sl
 
     def _create_slices_for_multiple(
             self, initial_slices, application_vertex,
-            max_resources_to_use_per_core, max_cores):
+            max_resources_to_use_per_core, max_cores, user_max_cuts):
         """
         
         :param initial_slices: 
@@ -128,8 +128,12 @@ class NengoPartitioner(object):
         # max atoms = max cuts, as 1 atom per core is the worse you can do
         max_cuts = 0
         for neuron_slice in initial_slices:
-            max_cuts = max(
-                max_cuts, neuron_slice.hi_atom - neuron_slice.lo_atom)
+            if user_max_cuts is None:
+                max_cuts = max(
+                    max_cuts, neuron_slice.hi_atom - neuron_slice.lo_atom)
+            else:
+                max_cuts = user_max_cuts
+
         slices = [initial_slices]
 
         while any(self._constraints_unsatisfied(
@@ -140,15 +144,14 @@ class NengoPartitioner(object):
                 # If we haven't performed any partitioning then we get the first
                 # number of cuts to make.
                 for internal_slices in slices:
-                    for neuron_slice in internal_slices:
-                        dtcm_usage = application_vertex.dtcm_usage_for_slice(
-                            neuron_slice, max_cores)
-                        cpu_usage = application_vertex.cpu_usage_for_slice(
-                            neuron_slice, max_cores)
-                        n_cuts = max(
-                            n_cuts,
-                            dtcm_usage.get_value() / Processor.DTCM_AVAILABLE,
-                            cpu_usage.get_value() / Processor.CLOCK_SPEED)
+                    dtcm_usage = application_vertex.dtcm_usage_for_slices(
+                        internal_slices, max_cores)
+                    cpu_usage = application_vertex.cpu_usage_for_slices(
+                        internal_slices, max_cores)
+                    n_cuts = max(
+                        n_cuts,
+                        dtcm_usage.get_value() / Processor.DTCM_AVAILABLE,
+                        cpu_usage.get_value() / Processor.CLOCK_SPEED)
             else:
                 # Otherwise just increment the number of cuts rather than
                 # honing in on the expensive elements.
@@ -167,16 +170,16 @@ class NengoPartitioner(object):
 
                 for neuron_slice in internal_slices:
                     new_slices.append(list())
-                    for new_neuron_slice in self._divide_slice(
+                    for new_neuron_slice in self.divide_slice(
                             neuron_slice, n_cuts):
                         new_slices[-1].append(new_neuron_slice)
             slices = new_slices
 
         # Yield the partitioned slices
-        return zip(*(self._divide_slice(sl, n_cuts) for sl in initial_slices))
+        return zip(*(self.divide_slice(sl, n_cuts) for sl in initial_slices))
 
     @staticmethod
-    def _divide_slice(initial_slice, n_slices):
+    def divide_slice(initial_slice, n_slices):
         """
         
         :param initial_slice:  A slice which must have `start` and `stop` set.
@@ -207,11 +210,10 @@ class NengoPartitioner(object):
     def _constraints_unsatisfied(
             slices, application_vertex, max_resources_to_use_per_core, n_cores):
         for internal_slices in slices:
-            for neuron_slice in internal_slices:
-                dtcm_usage = application_vertex.dtcm_usage_for_slice(
-                    neuron_slice, n_cores)
-                cpu_usage = application_vertex.cpu_usage_for_slice(
-                    neuron_slice, n_cores)
+                dtcm_usage = application_vertex.dtcm_usage_for_slices(
+                    internal_slices, n_cores)
+                cpu_usage = application_vertex.cpu_usage_for_slices(
+                    internal_slices, n_cores)
 
                 yield not (
                     dtcm_usage >

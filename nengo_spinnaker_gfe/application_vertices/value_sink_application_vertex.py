@@ -1,5 +1,6 @@
 import math
 
+from pacman.model.graphs.common import Slice
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe import helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
@@ -31,11 +32,14 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
     def create_machine_vertices(self, resource_tracker, nengo_partitioner):
         # Make sufficient vertices to ensure that each has a size_in of less
         # than max_width.
+
         n_vertices = int(math.ceil((self._size_in // self.MAX_WIDTH)))
+        if n_vertices == 0:
+            n_vertices = 1
 
         vertices = list()
-        for input_slice in helpful_functions.slice_up_atoms(
-                self._size_in, n_vertices):
+        for input_slice in nengo_partitioner.divide_slice(
+                Slice(0, self._size_in), n_vertices):
             vertices.append(ValueSinkMachineVertex(input_slice=input_slice))
 
         # Return the spec

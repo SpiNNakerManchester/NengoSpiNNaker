@@ -161,7 +161,9 @@ class NengoSimulator(SpiNNaker):
             self.config.getboolean("Node", "optimise_utilise_interposers"),
             self._max_machine_available, system_inputs, system_algorithms,
             self._print_timings, self._do_timings, self._xml_paths,
-            self._pacman_executor_provenance_path)
+            self._pacman_executor_provenance_path,
+            self._extra_inputs["NengoEnsembleProfile"],
+            self._extra_inputs["NengoEnsembleProfileNumSamples"])
 
         # update spinnaker with app graph
         self._machine_graph = nengo_machine_graph

@@ -83,7 +83,8 @@ class NengoApplicationGraphBuilder(object):
             nengo_random_number_generator_seed, decoder_cache,
             utilise_extra_core_for_probes,
             nengo_nodes_as_function_of_time,
-            function_of_time_nodes_time_period):
+            function_of_time_nodes_time_period, nengo_ensemble_profiling,
+            nengo_ensemble_profiling_n_samples):
         """ entrance method to start converting from nengo objects to nengo 
         operator graph (spinnaker app graph, including pass through nodes). 
         
@@ -142,7 +143,8 @@ class NengoApplicationGraphBuilder(object):
             nengo_to_app_graph_map, machine_time_step, host_network,
             nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
-            function_of_time_nodes_time_period, progress_bar)
+            function_of_time_nodes_time_period, progress_bar,
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
         progress_bar.end()
 
         return (nengo_operator_graph, host_network, nengo_to_app_graph_map,
@@ -165,7 +167,8 @@ class NengoApplicationGraphBuilder(object):
             nengo_operator_graph, nengo_to_app_graph_map, machine_time_step,
             host_network, nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
-            function_of_time_nodes_time_period, progress_bar):
+            function_of_time_nodes_time_period, progress_bar,
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples):
         """ Builds an entire sub network from the nengo network. 
         
         :param nengo_network: the nengo network 
@@ -211,7 +214,8 @@ class NengoApplicationGraphBuilder(object):
             self._ensemble_conversion(
                 nengo_ensemble, random_number_generator,
                 utilise_extra_core_for_output_types_probe,
-                nengo_operator_graph, nengo_to_app_graph_map)
+                nengo_operator_graph, nengo_to_app_graph_map,
+                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
 
         # convert from nodes to either pass through nodes or sources.
         for nengo_node in progress_bar.over(nengo_network.nodes, False):
@@ -394,7 +398,8 @@ class NengoApplicationGraphBuilder(object):
     def _ensemble_conversion(
             nengo_ensemble, random_number_generator,
             utilise_extra_core_for_output_types_probe, nengo_operator_graph,
-            nengo_to_app_graph_map):
+            nengo_to_app_graph_map, nengo_ensemble_profiling,
+            nengo_ensemble_profiling_n_samples):
         """  This converts a nengo ensemble into a nengo operator used in the \
         nengo operator graph. 
         
@@ -413,6 +418,13 @@ class NengoApplicationGraphBuilder(object):
             params_from_nengo_ensemble = \
                 ParameterExtractionFromNengoEnsemble(
                     nengo_ensemble, random_number_generator)
+
+            n_profiler_samples = 0
+            if nengo_ensemble_profiling:
+                # If it's not specified, calculate sensible default
+                if nengo_ensemble_profiling_n_samples is None:
+                    n_profiler_samples = None
+
             operator = LIFApplicationVertex(
                 label="LIF neurons for ensemble {}".format(
                     nengo_ensemble.label),
@@ -428,7 +440,8 @@ class NengoApplicationGraphBuilder(object):
                 intercepts=params_from_nengo_ensemble.intercepts,
                 gain=params_from_nengo_ensemble.gain,
                 bias=params_from_nengo_ensemble.bias,
-                n_neurons=nengo_ensemble.n_neurons)
+                n_neurons=nengo_ensemble.n_neurons,
+                n_profiler_samples=n_profiler_samples)
         else:
             raise NeuronTypeConstructorNotFoundException(
                 "could not find a constructor for neuron type {}. I have "
