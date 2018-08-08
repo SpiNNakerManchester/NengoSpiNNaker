@@ -36,6 +36,10 @@ DEFAULT_DT = 0.001
 DEFAULT_TIME_SCALE = 1.0
 SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
 
+# DSG memory calculation
+BYTE_TO_WORD_MULTIPLIER = 4
+BYTES_PER_KEY = 4
+
 # flag constants used around the codebase
 DECODERS_FLAG = "decoders"
 DECODER_OUTPUT_FLAG = "decoded_output"

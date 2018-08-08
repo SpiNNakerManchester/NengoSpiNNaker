@@ -13,6 +13,11 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 class InterposerMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
         AcceptsMulticastSignals):
+
+    __slots__ = [
+        "_resources"
+    ]
+
     """Portion of the rows of the transform assigned to a parallel filter
     group, represents the load assigned to a single processing core.
     """
@@ -25,10 +30,12 @@ class InterposerMachineVertex(
                ('INPUT_ROUTING', 3),
                ('TRANSFORM', 4)])
 
-    def __init__(self, size_in, max_cols, max_row, label, constraints):
+    def __init__(self, size_in, max_cols, max_row, label, constraints,
+                 resources):
         MachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AcceptsMulticastSignals.__init__(self)
+        self._resources = resources
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(self, spec, placement,

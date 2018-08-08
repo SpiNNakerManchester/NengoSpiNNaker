@@ -13,6 +13,10 @@ from spinn_utilities.overrides import overrides
 class ValueSourceMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary):
 
+    __slots__ = [
+        "_resources"
+    ]
+
     DATA_REGIONS = Enum(
         value="DATA_REGIONS",
         names=[('SYSTEM', 0),
@@ -20,10 +24,12 @@ class ValueSourceMachineVertex(
                ('FILTER_ROUTING', 2),
                ('RECORDING', 3)])
 
-    def __init__(self):
+    def __init__(self, resources):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
+
+        self._resources = resources
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
@@ -38,7 +44,7 @@ class ValueSourceMachineVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        pass
+        return self._resources
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):

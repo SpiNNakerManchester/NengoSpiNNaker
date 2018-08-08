@@ -13,12 +13,17 @@ class LIFMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
         AcceptsMulticastSignals):
 
+    __slots__ = [
+        "_resources"
+    ]
+
     def __init__(self, vertex_index, neuron_slices, input_slice, output_slice,
-                learnt_slice):
+                learnt_slice, resources):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AcceptsMulticastSignals.__init__(self)
+        self._resources = resources
 
     @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -37,7 +42,7 @@ class LIFMachineVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        pass
+        return self._resources
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):

@@ -2,7 +2,6 @@ import math
 
 from pacman.model.graphs.common import Slice
 from spinn_utilities.overrides import overrides
-from nengo_spinnaker_gfe import helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
     AbstractNengoApplicationVertex
 

@@ -30,7 +30,7 @@ class SDPReceiverMachineVertex(
         '_n_keys',
 
         #
-        "_managing_outgoing_partition"
+        "_managing_outgoing_partition",
 
     ]
 

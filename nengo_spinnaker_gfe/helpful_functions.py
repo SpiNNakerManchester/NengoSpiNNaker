@@ -26,30 +26,21 @@ def convert_numpy_array_to_s16_15(values):
     return numpy.array(clipped_values, copy=True, dtype=numpy.int32)
 
 
-def slice_up_atoms(initial_slice, n_slices):
-    """Create a set of smaller slices from an original slice.
+def expand_slice(vertex_slice, partition_index, n_dim):
+    """ function used to expand a slice into ........
     
-    :param initial_slice: A slice which must have `start` and `stop` set.
-    :type initial_slice: 
-    :param n_slices:  Number of slices to produce.
-    :type n_slices: int
-    :rtype: Iterator[:py:class:`pacman.model.graphs.common.Slice`]  
+    :param vertex_slice: 
+    :param partition_index: 
+    :param n_dim: 
+    :return: 
     """
+    if partition_index is None:
+        return slice(None)
 
-    # Extract current position, start and stop
-    pos = start = initial_slice.lo_atom
-    stop = initial_slice.stop.hi_atom
+    the_translated_slice = slice(vertex_slice.lo_atom, vertex_slice.hi_atom)
 
-    # Determine the chunk sizes
-    chunk = (stop - start) // n_slices
-    n_larger = (stop - start) % n_slices
-
-    # Yield the larger slices
-    for _ in range(n_larger):
-        yield Slice(pos, pos + chunk + 1)
-        pos += chunk + 1
-
-    # Yield the standard sized slices
-    for _ in range(n_slices - n_larger):
-        yield Slice(pos, pos + chunk)
-        pos += chunk
+    thing = (
+        tuple(slice(None) for _ in range(partition_index)) +
+        (the_translated_slice,) +
+        tuple(slice(None) for _ in range(partition_index + 1, n_dim)))
+    return thing

@@ -15,7 +15,7 @@ from nengo_spinnaker_gfe.nengo_exceptions import \
 
 from nengo_spinnaker_gfe.machine_vertices.interposer_machine_vertex import \
     InterposerMachineVertex
-from spinn_machine import Processor
+from spinn_machine import Processor, SDRAM
 from spinn_utilities.progress_bar import ProgressBar
 
 
@@ -98,12 +98,11 @@ class NengoPartitioner(object):
         :return: 
         """
 
-        for sl, in self._create_slices_for_multiple(
+        return self.create_slices_for_multiple(
                 [initial_slice], application_vertex,
-                max_resources_to_use_per_core, max_cores, max_cuts):
-            yield sl
+                max_resources_to_use_per_core, max_cores, max_cuts)
 
-    def _create_slices_for_multiple(
+    def create_slices_for_multiple(
             self, initial_slices, application_vertex,
             max_resources_to_use_per_core, max_cores, user_max_cuts):
         """
@@ -112,7 +111,8 @@ class NengoPartitioner(object):
         :param application_vertex: 
         :param max_resources_to_use_per_core: 
         :param max_cores: 
-        :return: 
+        :param user_max_cuts:
+        :return: dict of tuple to ResourceContainer
         """
 
         if not isinstance(application_vertex, AbstractSupportNengoPartitioner):
@@ -135,23 +135,31 @@ class NengoPartitioner(object):
                 max_cuts = user_max_cuts
 
         slices = [initial_slices]
+        resources_used = dict()
 
         while any(self._constraints_unsatisfied(
                 slices, application_vertex, max_resources_to_use_per_core,
-                max_cores)):
+                max_cores, resources_used)):
 
+            # clear resources used, as splitting again
+            resources_used = dict()
+
+            # If we haven't performed any partitioning then we get the first
+            # number of cuts to make.
             if n_cuts == 1:
-                # If we haven't performed any partitioning then we get the first
-                # number of cuts to make.
                 for internal_slices in slices:
                     dtcm_usage = application_vertex.dtcm_usage_for_slices(
                         internal_slices, max_cores)
                     cpu_usage = application_vertex.cpu_usage_for_slices(
                         internal_slices, max_cores)
+                    sdram_usage = application_vertex.sdram_usage_for_slices(
+                        internal_slices, max_cores)
+
                     n_cuts = max(
                         n_cuts,
                         dtcm_usage.get_value() / Processor.DTCM_AVAILABLE,
-                        cpu_usage.get_value() / Processor.CLOCK_SPEED)
+                        cpu_usage.get_value() / Processor.CLOCK_SPEED,
+                        sdram_usage.get_value() / SDRAM.DEFAULT_SDRAM_BYTES)
             else:
                 # Otherwise just increment the number of cuts rather than
                 # honing in on the expensive elements.
@@ -175,8 +183,13 @@ class NengoPartitioner(object):
                         new_slices[-1].append(new_neuron_slice)
             slices = new_slices
 
-        # Yield the partitioned slices
-        return zip(*(self.divide_slice(sl, n_cuts) for sl in initial_slices))
+        # map sets of slices to resources used. this allows us to not need to
+        # recall the resources again
+        results = dict()
+        for internal_slices in slices:
+            results[tuple(internal_slices)] = \
+                resources_used[frozenset(internal_slices)]
+        return results
 
     @staticmethod
     def divide_slice(initial_slice, n_slices):
@@ -208,16 +221,17 @@ class NengoPartitioner(object):
 
     @staticmethod
     def _constraints_unsatisfied(
-            slices, application_vertex, max_resources_to_use_per_core, n_cores):
+            slices, application_vertex, max_resources_to_use_per_core,
+            n_cores, resources_used):
         for internal_slices in slices:
-                dtcm_usage = application_vertex.dtcm_usage_for_slices(
+                used_resources = application_vertex.get_resources_for_slices(
                     internal_slices, n_cores)
-                cpu_usage = application_vertex.cpu_usage_for_slices(
-                    internal_slices, n_cores)
+                resources_used[frozenset(internal_slices)] = used_resources
 
                 yield not (
-                    dtcm_usage >
+                    used_resources.dtcm.get_value() >
                     max_resources_to_use_per_core.dtcm.get_value() or
-                    cpu_usage >
-                    max_resources_to_use_per_core.cpu_cycles.get_value()
-                )
+                    used_resources.cpu_cycles.get_value() >
+                    max_resources_to_use_per_core.cpu_cycles.get_value() or
+                    used_resources.sdram.get_value() >
+                    max_resources_to_use_per_core.sdram.size())

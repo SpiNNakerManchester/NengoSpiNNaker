@@ -6,23 +6,17 @@ from spinn_utilities.abstract_base import AbstractBase, abstractmethod
 @add_metaclass(AbstractBase)
 class AbstractSupportNengoPartitioner(object):
 
+    __slots__ = []
+
     def __init__(self):
         pass
 
     @abstractmethod
-    def dtcm_usage_for_slices(self, slices, n_cores):
-        """ compute the dtcm usage as if it was the worse loaded core
+    def get_resources_for_slices(self, slices, n_cores):
+        """ compute the resoruces used as if it was the worse loaded core
         
-        :param neuron_slice: 
-        :param n_cores: 
-        :return: 
-        """
-
-    @abstractmethod
-    def cpu_usage_for_slices(self, slices, n_cores):
-        """ Compute the cpu usage as if its was the worse loaded core.
-        :param neuron_slice: slice of neurons
-        :param n_cores: how many cores are on the chip we're being 
-        partitioned for
-        :return: cpu usage resource
+        :param slices: a list of either the number of neurons, or a set of 
+        slices, specific to the vertex type.  
+        :param n_cores: the number of cores its expected to partition over
+        :return: a resource container
         """
