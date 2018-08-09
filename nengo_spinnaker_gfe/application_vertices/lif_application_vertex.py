@@ -65,7 +65,10 @@ class LIFApplicationVertex(
         "_decoders",
         "_learnt_decoders",
         "_n_output_keys",
-        "_n_learnt_output_keys"]
+        "_n_learnt_output_keys",
+        "_input_filters",
+        "_inhibition_filters",
+        "_modulatory_filters"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -115,7 +118,10 @@ class LIFApplicationVertex(
     VOJA_REGION_RULE_N_ELEMENT = 5
     MATRIX_REGIONS_PARTITION_INDEX = 0
     POPULATION_LENGTH_REGION_SIZE_IN_BYTES = 4
-
+    PROFILER_SAMPLE_SIZE = 2
+    PROFILER_N_SAMPLES_SIZE = 1
+    FILTER_PARAMETERS_SIZE = 4
+    FILTER_N_FILTERS_SIZE = 1
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
@@ -153,14 +159,19 @@ class LIFApplicationVertex(
         self._cluster_learnt_size_out = None
         self._n_profiler_samples = n_profiler_samples
         self._n_neurons_in_current_cluster = None
-        self._learnt_encoder_filters = None
         self._pes_learning_rules = list()
         self._voja_learning_rules = list()
         self._decoders = numpy.array([])
         self._learnt_decoders = None
         self._n_output_keys = 0
         self._n_learnt_output_keys = 0
+        self._input_filters = defaultdict(list)
+        self._inhibition_filters = defaultdict(list)
+        self._modulatory_filters = defaultdict(list)
+        self._learnt_encoder_filters = defaultdict(list)
 
+        # build max resources planned to be used per machine vertex when
+        # partitioning occurs
         self._max_resources_to_use_per_core = ResourceContainer(
             dtcm=DTCMResource(
                 int(math.ceil(
@@ -173,14 +184,17 @@ class LIFApplicationVertex(
                     SDRAM.DEFAULT_SDRAM_BYTES *
                     self.MAX_SDRAM_USAGE_PER_CORE))))
 
+        # the variables probeable
         self._probeable_variables = [
             constants.RECORD_OUTPUT_FLAG, constants.RECORD_SPIKES_FLAG,
             constants.RECORD_VOLTAGE_FLAG, constants.SCALED_ENCODERS_FLAG]
 
+        # update all recordings to false
         self._is_recording_probeable_variable = dict()
         for flag in self._probeable_variables:
             self._is_recording_probeable_variable[flag] = False
 
+        # add extra probes based off recording on core or not
         if not utilise_extra_core_for_output_types_probe:
             self._probeable_variables.append(
                 constants.DECODER_OUTPUT_FLAG)
@@ -257,6 +271,8 @@ class LIFApplicationVertex(
         outgoing_learnt_partitions = list()
         incoming_learnt_edges = list()
         incoming_modulatory_learning_rules = dict()
+        incoming_standard_edges = list()
+        incoming_global_inhibition_edges = list()
 
         # filter incoming partitions
         for in_edge in incoming_edges:
@@ -272,20 +288,24 @@ class LIFApplicationVertex(
                     constants.ENSEMBLE_INPUT_PORT.LEARNT):
                 if in_edge.reception_parameters.learning_rule is not None:
                     incoming_modulatory_learning_rules[
-                        in_edge.reception_parameters.learning_rule] = \
-                            operator_graph.get_outgoing_partition_for_edge(
-                                in_edge)
+                        in_edge.reception_parameters.learning_rule] = in_edge
                 else:
                     incoming_modulatory_learning_rules[
-                        in_edge.input_port.learning_rule] = \
-                             operator_graph.get_outgoing_partition_for_edge(
-                                 in_edge)
+                        in_edge.input_port.learning_rule] = in_edge
 
             # build map of edges and learning rule
             if (in_edge.input_port.destination_input_port ==
                     constants.ENSEMBLE_INPUT_PORT.LEARNT):
                 incoming_learnt_edges.append(
                     (in_edge, in_edge.reception_parameters.learning_rule))
+
+            if (in_edge.input_port.destination_input_port ==
+                    constants.INPUT_PORT.STANDARD):
+                incoming_standard_edges.append(in_edge)
+
+            if (in_edge.input_port.destination_input_port ==
+                    constants.ENSEMBLE_INPUT_PORT.GLOBAL_INHIBITION):
+                incoming_global_inhibition_edges.append(in_edge)
 
         # filter outgoing partitions
         for outgoing_partition in outgoing_partitions:
@@ -307,15 +327,28 @@ class LIFApplicationVertex(
         # convert to cluster sizes
         self._cluster_size_out = self._decoders.shape[0]
         self._cluster_size_in = self._scaled_encoders.shape[1]
-        (self._cluster_learnt_size_out, mod_filters) = \
-            self._determine_cluster_learnt_size_out(
-                outgoing_learnt_partitions, incoming_modulatory_learning_rules,
-                machine_time_step)
+        self._cluster_learnt_size_out = self._determine_cluster_learnt_size_out(
+            outgoing_learnt_partitions, incoming_modulatory_learning_rules,
+            machine_time_step)
 
         # locate incoming voja learning rules
-        self._determine_voja_learning_rules(
+        self._determine_voja_learning_rules_and_modulatory_filters(
             incoming_learnt_edges, incoming_modulatory_learning_rules,
-            mod_filters, operator_graph)
+            operator_graph)
+
+        # create input filters
+        for input_edge in incoming_standard_edges:
+            FilterAndRoutingRegionGenerator.add_filters(
+                self._input_filters, input_edge,
+                operator_graph.get_outgoing_partition_for_edge(input_edge),
+                minimise=True)
+
+        # create inhibition filters
+        for global_inhibition_edge in incoming_global_inhibition_edges:
+            FilterAndRoutingRegionGenerator.add_filters(
+                self._inhibition_filters, global_inhibition_edge,
+                operator_graph.get_outgoing_partition_for_edge(
+                    global_inhibition_edge), minimise=True)
 
         # start the partitioning process, now that all the data required to
         # do so has been deduced
@@ -325,7 +358,7 @@ class LIFApplicationVertex(
 
             # if supporting ensembles over multiple chips, do cluster
             # partitioning. else assume one chip and partition accordingly.
-            cluster_vertices = None
+            cluster_vertices = list()
             if self.ENSEMBLE_PARTITIONING_OVER_MULTIPLE_CHIPS:
                 slices = nengo_partitioner.create_slices(
                     Slice(0, self._n_neurons - 1), self,
@@ -422,8 +455,13 @@ class LIFApplicationVertex(
             dtcm=self._dtcm_usage_for_slices(slices, n_cores),
             sdram=self._sdram_usage_for_slices(slices, n_cores))
 
+    def _sdram_for_filter(self, filters):
+        return ((self.FILTER_N_FILTERS_SIZE + (
+            self.FILTER_PARAMETERS_SIZE * len(filters))) + sum(
+            input_filter.size_in_words() for input_filter in filters))
+
     def _sdram_usage_for_slices(self, slices, n_cores):
-        # pes learning rule region
+        # build slices accordingly
         if len(slices) == 1:
             neuron_slice = slices[0]
             output_slice = Slice(0, int(self._decoders.shape[0]))
@@ -437,7 +475,7 @@ class LIFApplicationVertex(
             output_slice = slices[self.SLICES_POSITIONS.OUTPUT.value]
             input_slice = slices[self.SLICES_POSITIONS.INPUT.value]
 
-
+        # pes learning rule region
         pes_region = (
             self.PES_REGION_N_ELEMENTS + len(
                 self._get_sliced_learning_rules(learnt_output_slice)) +
@@ -485,23 +523,41 @@ class LIFApplicationVertex(
         population_length_region = (
             self.POPULATION_LENGTH_REGION_SIZE_IN_BYTES * n_cores)
 
-        #filter regions
-        #input_filter_region =
+        # filter regions
+        input_filter_region = self._sdram_for_filter(self._input_filters)
+        inhib_filter_region = self._sdram_for_filter(self._inhibition_filters)
+        modulatory_filters_region = self._sdram_for_filter(
+            self._modulatory_filters)
+        learnt_encoder_filters_region = self._sdram_for_filter(
+            self._learnt_encoder_filters)
+
+        # routing regions
         #inputer_routing_region =
-        #inhib_filter_region =
         #inhib_routing_region =
-        #modulatory_filters_region =
         #modulatory_routing_region =
-        #learnt_encoder_filters_region =
         #learnt_encoder_routing_region =
-        #profiler_region =
+
+        # profile region
+        profiler_region = (self.PROFILER_N_SAMPLES_SIZE + (
+            self.PROFILER_SAMPLE_SIZE * self._n_profiler_samples) *
+            constants.BYTE_TO_WORD_MULTIPLIER)
+
+        # recording region
+        #TODO tie into buffering
         recording_region_size = 0
 
-        return SDRAMResource(
+        total = (
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
             bias_region + gain_region + key_region + learnt_key_region +
-            population_length_region )
+            population_length_region + profiler_region + input_filter_region
+            + inhib_filter_region + modulatory_filters_region +
+            learnt_encoder_filters_region)
+
+        if len(slices) == 1:
+            return SDRAMResource(total / n_cores)
+        else:
+            return SDRAMResource(total)
 
     def _dtcm_usage_for_slices(self, slices, n_cores):
 
@@ -600,7 +656,6 @@ class LIFApplicationVertex(
             incoming_modulatory_learning_rules, machine_time_step):
         self._learnt_decoders = numpy.array([])
         self._pes_learning_rules = list()
-        mod_filters = defaultdict(list)
 
         for learnt_outgoing_partition in outgoing_learnt_partitions:
             partition_identifier = learnt_outgoing_partition.identifier
@@ -643,7 +698,7 @@ class LIFApplicationVertex(
             # Otherwise, stack learnt decoders
             # alongside existing matrix
             else:
-                learnt_decoders = numpy.vstack(
+                self._learnt_decoders = numpy.vstack(
                     (self._learnt_decoders, rule_decoders))
 
             decoder_stop = self._learnt_decoders.shape[0]
@@ -656,24 +711,24 @@ class LIFApplicationVertex(
                 decoder_stop=decoder_stop)
             self._pes_learning_rules.append(pes_learning_rule)
 
-            # Add error connection to lists
-            # of modulatory filters and routes
+            # Add error connection to lists of modulatory filters and routes
+            modulatory_edge = incoming_modulatory_learning_rules[
+                transmission_parameter.learning_rule]
             FilterAndRoutingRegionGenerator.add_filters(
-                mod_filters, learnt_outgoing_partition, pes_learning_rule,
-                minimise=False)
+                self._modulatory_filters, modulatory_edge,
+                learnt_outgoing_partition, minimise=False)
 
             # Create a duplicate copy of the original size_in columns of
             # the encoder matrix for modification by this learning rule
             base_encoders = self._encoders_with_gain[:, :self._ensemble_size_in]
             self._encoders_with_gain = numpy.hstack(
                 (self._encoders_with_gain, base_encoders))
-        return self._learnt_decoders.shape[0], mod_filters
+        return self._learnt_decoders.shape[0]
 
-    def _determine_voja_learning_rules(
+    def _determine_voja_learning_rules_and_modulatory_filters(
             self, incoming_learnt_edges_and_learning_rules,
-            incoming_modulatory_learning_rules, mod_filters, operator_graph):
+            incoming_modulatory_learning_rules, operator_graph):
 
-        self._learnt_encoder_filters = defaultdict(list)
         for (edge, learning_rule) in incoming_learnt_edges_and_learning_rules:
 
             if isinstance(learning_rule.learning_rule_type, NengoVoja):
@@ -685,21 +740,23 @@ class LIFApplicationVertex(
                 # If there is a modulatory connection
                 # associated with the learning rule
                 if learning_rule in incoming_modulatory_learning_rules.keys():
-                    outgoing_partition = incoming_modulatory_learning_rules[
+                    learning_edge = incoming_modulatory_learning_rules[
                         learning_rule]
 
                     # Add learning connection to lists
-                    # of modulatory filters and routes
+                    # of modulatory filters and route
                     FilterAndRoutingRegionGenerator.add_filters(
-                        mod_filters, outgoing_partition, voja_learning_rule,
+                        self._modulatory_filters, learning_edge,
+                        operator_graph.get_outgoing_partition_for_edge(
+                            learning_edge),
                         minimise=False)
 
                 # Add learnt connection to list of filters
                 # and routes with learnt encoders
                 FilterAndRoutingRegionGenerator.add_filters(
-                    self._learnt_encoder_filters,
+                    self._learnt_encoder_filters, edge,
                     operator_graph.get_outgoing_partition_for_edge(edge),
-                    voja_learning_rule, minimise=False)
+                    minimise=False)
 
     def _get_decoders_and_n_keys(
             self, standard_outgoing_partitions, minimise=False):
