@@ -156,10 +156,10 @@ class LIFApplicationVertex(
         self._learnt_encoder_filters = None
         self._pes_learning_rules = list()
         self._voja_learning_rules = list()
-        self._decoders = None
+        self._decoders = numpy.array([])
         self._learnt_decoders = None
-        self._n_output_keys = None
-        self._n_learnt_output_keys = None
+        self._n_output_keys = 0
+        self._n_learnt_output_keys = 0
 
         self._max_resources_to_use_per_core = ResourceContainer(
             dtcm=DTCMResource(
@@ -300,8 +300,6 @@ class LIFApplicationVertex(
                 outgoing_learnt_partitions.append(outgoing_partition)
 
         # locate decoders and n keys
-        self._decoders = numpy.array([])
-        self._n_output_keys = 0
         if len(standard_outgoing_partitions) != 0:
             self._decoders, self._n_output_keys = self._get_decoders_and_n_keys(
                 standard_outgoing_partitions, True)
@@ -327,6 +325,7 @@ class LIFApplicationVertex(
 
             # if supporting ensembles over multiple chips, do cluster
             # partitioning. else assume one chip and partition accordingly.
+            cluster_vertices = None
             if self.ENSEMBLE_PARTITIONING_OVER_MULTIPLE_CHIPS:
                 slices = nengo_partitioner.create_slices(
                     Slice(0, self._n_neurons - 1), self,
@@ -348,8 +347,14 @@ class LIFApplicationVertex(
             n_atoms_partitioned += self._n_neurons_in_current_cluster
 
             # update the resource tracker to take out a valid chip from the
-            # avilable set.
-            resource_tracker.allocate_constrained_group_resources()
+            # available set.
+            group_resource = list()
+            for vertex in cluster_vertices:
+                group_resource.append(
+                    (vertex.resources_required, vertex.constraints))
+
+            resource_tracker.allocate_constrained_group_resources(
+                group_resource)
         return machine_vertices
 
     def _create_cluster_and_verts(
@@ -372,17 +377,16 @@ class LIFApplicationVertex(
                 max_cores, max_cores))
 
         neuron_slices = list()
-        for (_, neuron_slice, _, _) in all_slices_and_resources:
+        for ((_, neuron_slice, _, _), used_resources) in \
+                all_slices_and_resources:
             neuron_slices.append(neuron_slice)
 
         for vertex_index, (
-                input_slice, neuron_slice, output_slice, learnt_slice) in \
-                enumerate(all_slices_and_resources):
+                (input_slice, neuron_slice, output_slice, learnt_slice),
+                used_resources) in enumerate(all_slices_and_resources):
             vertex = LIFMachineVertex(
                 vertex_index, neuron_slices, input_slice, output_slice,
-                learnt_slice, all_slices_and_resources[
-                    tuple(input_slice, neuron_slice, output_slice,
-                          learnt_slice)])
+                learnt_slice, used_resources)
             cluster_vertices.append(vertex)
         return cluster_vertices
 
@@ -423,7 +427,7 @@ class LIFApplicationVertex(
         if len(slices) == 1:
             neuron_slice = slices[0]
             output_slice = Slice(0, int(self._decoders.shape[0]))
-            learnt_output_slice = Slice(0, len(self._learnt_encoder_filter))
+            learnt_output_slice = Slice(0, len(self._learnt_encoder_filters))
             input_slice = Slice(0, int(self._encoders_with_gain.shape[1]))
 
         else:
@@ -537,8 +541,9 @@ class LIFApplicationVertex(
                     size_out + size_learnt_out))
             neurons_cost = n_neurons * self.DTCM_BYTES_PER_NEURON
 
-            return ((encoder_cost + decoder_cost + neurons_cost) *
-                    constants.BYTE_TO_WORD_MULTIPLIER)
+            return DTCMResource(
+                (encoder_cost + decoder_cost + neurons_cost) *
+                constants.BYTE_TO_WORD_MULTIPLIER)
 
     def _cpu_usage_for_slices(self, slices, n_cores):
         # handles clusters
@@ -596,6 +601,7 @@ class LIFApplicationVertex(
         self._learnt_decoders = numpy.array([])
         self._pes_learning_rules = list()
         mod_filters = defaultdict(list)
+
         for learnt_outgoing_partition in outgoing_learnt_partitions:
             partition_identifier = learnt_outgoing_partition.identifier
             transmission_parameter = partition_identifier.transmission_parameter
