@@ -135,31 +135,31 @@ class NengoPartitioner(object):
                 max_cuts = user_max_cuts
 
         slices = [initial_slices]
-        resources_used = dict()
+        resources_used = list()
 
         while any(self._constraints_unsatisfied(
                 slices, application_vertex, max_resources_to_use_per_core,
                 max_cores, resources_used)):
 
             # clear resources used, as splitting again
-            resources_used = dict()
+            resources_used = list()
 
             # If we haven't performed any partitioning then we get the first
             # number of cuts to make.
             if n_cuts == 1:
                 for internal_slices in slices:
-                    dtcm_usage = application_vertex.dtcm_usage_for_slices(
-                        internal_slices, max_cores)
-                    cpu_usage = application_vertex.cpu_usage_for_slices(
-                        internal_slices, max_cores)
-                    sdram_usage = application_vertex.sdram_usage_for_slices(
-                        internal_slices, max_cores)
+                    used_resources = \
+                        application_vertex.get_resources_for_slices(
+                            internal_slices, max_cores)
 
                     n_cuts = max(
                         n_cuts,
-                        dtcm_usage.get_value() / Processor.DTCM_AVAILABLE,
-                        cpu_usage.get_value() / Processor.CLOCK_SPEED,
-                        sdram_usage.get_value() / SDRAM.DEFAULT_SDRAM_BYTES)
+                        used_resources.dtcm.get_value() /
+                        Processor.DTCM_AVAILABLE,
+                        used_resources.cpu_cycles.get_value() /
+                        Processor.CLOCK_SPEED,
+                        used_resources.sdram.get_value() /
+                        SDRAM.DEFAULT_SDRAM_BYTES)
             else:
                 # Otherwise just increment the number of cuts rather than
                 # honing in on the expensive elements.
@@ -185,10 +185,9 @@ class NengoPartitioner(object):
 
         # map sets of slices to resources used. this allows us to not need to
         # recall the resources again
-        results = dict()
-        for internal_slices in slices:
-            results[tuple(internal_slices)] = \
-                resources_used[frozenset(internal_slices)]
+        results = list()
+        for internal_slices, used_resources in zip(slices, resources_used):
+            results.append((internal_slices, used_resources))
         return results
 
     @staticmethod
@@ -226,12 +225,12 @@ class NengoPartitioner(object):
         for internal_slices in slices:
                 used_resources = application_vertex.get_resources_for_slices(
                     internal_slices, n_cores)
-                resources_used[frozenset(internal_slices)] = used_resources
+                resources_used.append(used_resources)
 
-                yield not (
+                yield (
                     used_resources.dtcm.get_value() >
                     max_resources_to_use_per_core.dtcm.get_value() or
                     used_resources.cpu_cycles.get_value() >
                     max_resources_to_use_per_core.cpu_cycles.get_value() or
                     used_resources.sdram.get_value() >
-                    max_resources_to_use_per_core.sdram.size())
+                    max_resources_to_use_per_core.sdram.get_value())
