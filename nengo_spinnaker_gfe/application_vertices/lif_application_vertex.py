@@ -68,7 +68,11 @@ class LIFApplicationVertex(
         "_n_learnt_output_keys",
         "_input_filters",
         "_inhibition_filters",
-        "_modulatory_filters"]
+        "_modulatory_filters",
+        "_inputs_n_keys",
+        "_inhibition_n_keys",
+        "_modulatory_n_keys",
+        "_learnt_encoders_n_keys"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -122,6 +126,8 @@ class LIFApplicationVertex(
     PROFILER_N_SAMPLES_SIZE = 1
     FILTER_PARAMETERS_SIZE = 4
     FILTER_N_FILTERS_SIZE = 1
+    ROUTING_N_ROUTES_SIZE = 1
+    ROUTING_ENTRIES_PER_ROUTE = 4
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
@@ -165,6 +171,10 @@ class LIFApplicationVertex(
         self._learnt_decoders = None
         self._n_output_keys = 0
         self._n_learnt_output_keys = 0
+        self._inputs_n_keys = 0
+        self._inhibition_n_keys = 0
+        self._modulatory_n_keys = 0
+        self._learnt_encoders_n_keys = 0
         self._input_filters = defaultdict(list)
         self._inhibition_filters = defaultdict(list)
         self._modulatory_filters = defaultdict(list)
@@ -251,6 +261,8 @@ class LIFApplicationVertex(
                 return True
             else:
                 return False
+
+    
 
     @inject_items({"operator_graph": "NengoOperatorGraph",
                    "machine_time_step": "MachineTimeStep"})
@@ -342,6 +354,7 @@ class LIFApplicationVertex(
                 self._input_filters, input_edge,
                 operator_graph.get_outgoing_partition_for_edge(input_edge),
                 minimise=True)
+            self._inputs_n_keys += 1
 
         # create inhibition filters
         for global_inhibition_edge in incoming_global_inhibition_edges:
@@ -349,6 +362,7 @@ class LIFApplicationVertex(
                 self._inhibition_filters, global_inhibition_edge,
                 operator_graph.get_outgoing_partition_for_edge(
                     global_inhibition_edge), minimise=True)
+            self._inhibition_n_keys += 1
 
         # start the partitioning process, now that all the data required to
         # do so has been deduced
@@ -386,6 +400,8 @@ class LIFApplicationVertex(
                 group_resource.append(
                     (vertex.resources_required, vertex.constraints))
 
+            # allocate resources to resource tracker, to ensure next vertex
+            # doesnt partition on incorrect data
             resource_tracker.allocate_constrained_group_resources(
                 group_resource)
         return machine_vertices
@@ -456,9 +472,22 @@ class LIFApplicationVertex(
             sdram=self._sdram_usage_for_slices(slices, n_cores))
 
     def _sdram_for_filter(self, filters):
-        return ((self.FILTER_N_FILTERS_SIZE + (
-            self.FILTER_PARAMETERS_SIZE * len(filters))) + sum(
-            input_filter.size_in_words() for input_filter in filters))
+        total = 0
+        total_n_filters = 0
+        for outgoing_partition in filters:
+            for input_filter in filters[outgoing_partition]:
+                total += input_filter.size_words()
+                total_n_filters += 1
+        total += (
+            (self.FILTER_N_FILTERS_SIZE + (
+                self.FILTER_PARAMETERS_SIZE * total_n_filters)) *
+            constants.BYTE_TO_WORD_MULTIPLIER)
+        return total
+
+    def _sdram_for_routing_region(self, n_keys):
+        return ((self.ROUTING_N_ROUTES_SIZE + (
+            self.ROUTING_ENTRIES_PER_ROUTE * n_keys)) *
+                constants.BYTE_TO_WORD_MULTIPLIER)
 
     def _sdram_usage_for_slices(self, slices, n_cores):
         # build slices accordingly
@@ -466,14 +495,12 @@ class LIFApplicationVertex(
             neuron_slice = slices[0]
             output_slice = Slice(0, int(self._decoders.shape[0]))
             learnt_output_slice = Slice(0, len(self._learnt_encoder_filters))
-            input_slice = Slice(0, int(self._encoders_with_gain.shape[1]))
 
         else:
             neuron_slice = slices[self.SLICES_POSITIONS.NEURON.value]
             learnt_output_slice = slices[
                 self.SLICES_POSITIONS.LEARNT_OUTPUT.value]
             output_slice = slices[self.SLICES_POSITIONS.OUTPUT.value]
-            input_slice = slices[self.SLICES_POSITIONS.INPUT.value]
 
         # pes learning rule region
         pes_region = (
@@ -532,10 +559,14 @@ class LIFApplicationVertex(
             self._learnt_encoder_filters)
 
         # routing regions
-        #inputer_routing_region =
-        #inhib_routing_region =
-        #modulatory_routing_region =
-        #learnt_encoder_routing_region =
+        input_routing_region = \
+            self._sdram_for_routing_region(self._inputs_n_keys)
+        inhib_routing_region = \
+            self._sdram_for_routing_region(self._inhibition_n_keys)
+        modulatory_routing_region = \
+            self._sdram_for_routing_region(self._modulatory_n_keys)
+        learnt_encoder_routing_region = \
+            self._sdram_for_routing_region(self._learnt_encoders_n_keys)
 
         # profile region
         profiler_region = (self.PROFILER_N_SAMPLES_SIZE + (
@@ -552,7 +583,9 @@ class LIFApplicationVertex(
             bias_region + gain_region + key_region + learnt_key_region +
             population_length_region + profiler_region + input_filter_region
             + inhib_filter_region + modulatory_filters_region +
-            learnt_encoder_filters_region)
+            learnt_encoder_filters_region + input_routing_region +
+            inhib_routing_region + modulatory_routing_region +
+            learnt_encoder_routing_region + recording_region_size)
 
         if len(slices) == 1:
             return SDRAMResource(total / n_cores)
@@ -560,7 +593,7 @@ class LIFApplicationVertex(
             return SDRAMResource(total)
 
     def _dtcm_usage_for_slices(self, slices, n_cores):
-
+        # handles clusters
         if len(slices) == 1:
             neuron_slice = slices[0]
             size_learnt_out_per_core = \
@@ -579,7 +612,7 @@ class LIFApplicationVertex(
             return DTCMResource(
                 (encoder_cost + decoder_cost + neurons_cost) *
                 constants.BYTE_TO_WORD_MULTIPLIER)
-        else:
+        else:  # handling core size chunks
             """Get the amount of memory required."""
             neuron_slice = slices[self.SLICES_POSITIONS.NEURON.value]
             output_slice = slices[self.SLICES_POSITIONS.OUTPUT.value]
@@ -626,7 +659,7 @@ class LIFApplicationVertex(
                     n_neurons, size_out_per_core) +
                 self._get_decode_and_transmit_cycles(
                     n_neurons, size_learnt_out_per_core))
-        else: # handling core size chunks
+        else:  # handling core size chunks
             filtered_dims_slice = slices[self.SLICES_POSITIONS.INPUT.value]
             neuron_slice = slices[self.SLICES_POSITIONS.NEURON.value]
             output_slice = slices[self.SLICES_POSITIONS.OUTPUT.value]
@@ -717,6 +750,7 @@ class LIFApplicationVertex(
             FilterAndRoutingRegionGenerator.add_filters(
                 self._modulatory_filters, modulatory_edge,
                 learnt_outgoing_partition, minimise=False)
+            self._modulatory_n_keys += 1
 
             # Create a duplicate copy of the original size_in columns of
             # the encoder matrix for modification by this learning rule
@@ -750,6 +784,7 @@ class LIFApplicationVertex(
                         operator_graph.get_outgoing_partition_for_edge(
                             learning_edge),
                         minimise=False)
+                    self._modulatory_n_keys += 1
 
                 # Add learnt connection to list of filters
                 # and routes with learnt encoders
@@ -757,6 +792,7 @@ class LIFApplicationVertex(
                     self._learnt_encoder_filters, edge,
                     operator_graph.get_outgoing_partition_for_edge(edge),
                     minimise=False)
+                self._learnt_encoders_n_keys += 1
 
     def _get_decoders_and_n_keys(
             self, standard_outgoing_partitions, minimise=False):
