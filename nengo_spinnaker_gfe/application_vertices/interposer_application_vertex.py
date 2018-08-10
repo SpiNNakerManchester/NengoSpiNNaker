@@ -131,7 +131,8 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
                    "output_signals", "machine_time_step", "filter_region",
                    "filter_routing_region"])
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, output_signals,
+            self, resource_tracker, nengo_partitioner,
+            machine_graph, output_signals,
             machine_time_step, filter_region, filter_routing_region):
         """Partition the transform matrix into groups of rows and assign each
         group of rows to a core for computation.

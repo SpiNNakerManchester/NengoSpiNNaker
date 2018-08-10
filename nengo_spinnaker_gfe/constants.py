@@ -38,6 +38,7 @@ SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
 
 # DSG memory calculation
 BYTE_TO_WORD_MULTIPLIER = 4
+WORD_TO_BIT_CONVERSION = 32
 BYTES_PER_KEY = 4
 
 # flag constants used around the codebase

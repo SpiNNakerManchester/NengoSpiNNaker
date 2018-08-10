@@ -55,6 +55,10 @@ class SDPTransmitterApplicationVertex(
             self._output = new_output
 
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices)
-    def create_machine_vertices(self, resource_tracker, nengo_partitioner):
+    def create_machine_vertices(
+            self, resource_tracker, nengo_partitioner, machine_graph):
         """Create vertices that will simulate the SDPTransmitter."""
-        return SDPTransmitterMachineVertex(self._size_in)
+        machine_vertex = SDPTransmitterMachineVertex(self._size_in)
+        resource_tracker.allocate_resources(machine_vertex.resources_required)
+        return machine_vertex
+

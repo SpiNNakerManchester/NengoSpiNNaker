@@ -39,6 +39,7 @@ from nengo_spinnaker_gfe.utility_objects. \
 
 from nengo_spinnaker_gfe.application_vertices.\
     pass_through_application_vertex import PassThroughApplicationVertex
+from spinn_utilities.progress_bar import ProgressBar
 
 
 class NengoUtiliseInterposers(object):
@@ -60,15 +61,23 @@ class NengoUtiliseInterposers(object):
         :return: 
         """
 
+        progress_bar = ProgressBar(
+            total_number_of_things_to_do=2,
+            string_describing_what_being_progressed=(
+                "Inserting Interposers where suitable."))
+
         # add interposers as required
         interposers, interposer_application_graph = \
             self._insert_interposers(
                 nengo_operator_graph, random_number_generator)
+        progress_bar.update()
 
         # compress interposers when applicable
         stacked_interposer_graph = self._stack_interposers(
             interposer_application_graph, interposers, random_number_generator,
             seed=seed)
+        progress_bar.update()
+        progress_bar.end()
 
         # return optimised app graph
         return stacked_interposer_graph

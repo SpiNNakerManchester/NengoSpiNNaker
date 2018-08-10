@@ -132,6 +132,9 @@ class EnsembleTransmissionParameters(
     def full_decoders(self):
         """Get the matrix corresponding to a combination of the decoders and
         the transform applied by the connection.
+        
+        @:return numpy array
+        @:rtype numpy.array
         """
         return numpy.dot(self.full_transform(slice_in=False, slice_out=False),
                          self._decoders)

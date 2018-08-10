@@ -28,7 +28,8 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
         return self._size_in
 
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices)
-    def create_machine_vertices(self, resource_tracker, nengo_partitioner):
+    def create_machine_vertices(self, resource_tracker, nengo_partitioner,
+                                machine_graph):
         # Make sufficient vertices to ensure that each has a size_in of less
         # than max_width.
 
@@ -39,7 +40,10 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
         vertices = list()
         for input_slice in nengo_partitioner.divide_slice(
                 Slice(0, self._size_in), n_vertices):
-            vertices.append(ValueSinkMachineVertex(input_slice=input_slice))
+            machine_vertex = ValueSinkMachineVertex(input_slice=input_slice)
+            vertices.append(machine_vertex)
+            resource_tracker.allocate_resources(
+                machine_vertex.resources_required)
 
         # Return the spec
         return vertices

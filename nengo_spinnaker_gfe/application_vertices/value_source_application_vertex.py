@@ -76,5 +76,6 @@ class ValueSourceApplicationVertex(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments="operator_graph")
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, operator_graph):
+            self, resource_tracker, nengo_partitioner,
+            machine_graph, operator_graph):
         pass

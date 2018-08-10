@@ -9,6 +9,12 @@ from nengo.learning_rules import PES as NengoPES
 from nengo.learning_rules import Voja as NengoVoja
 from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
+from nengo_spinnaker_gfe.graph_components.constant_sdram_machine_partition import \
+    ConstantSDRAMMachinePartition
+from nengo_spinnaker_gfe.graph_components.sdram_machine_edge import \
+    SDRAMMachineEdge
+from nengo_spinnaker_gfe.graph_components.segmented_input_sdram_machine_partition import \
+    SegmentedInputSDRAMMachinePartition
 from nengo_spinnaker_gfe.learning_rules.pes_learning_rule import PESLearningRule
 from nengo_spinnaker_gfe.learning_rules.voja_learning_rule import \
     VojaLearningRule
@@ -128,6 +134,14 @@ class LIFApplicationVertex(
     FILTER_N_FILTERS_SIZE = 1
     ROUTING_N_ROUTES_SIZE = 1
     ROUTING_ENTRIES_PER_ROUTE = 4
+
+    # shared sdram constants
+    SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
+
+    SDRAM_OUTGOING_INPUT = "SDRAM_LINK_FOR_INPUT_VECTOR"
+    SDRAM_OUTGOING_LEARNT = "SDRAM_LINK_FOR_LEARNT_VECTOR"
+    SDRAM_OUTGOING_SPIKE_VECTOR = "SDRAM_LINK_FOR_SPIKE"
+    SDRAM_OUTGOING_SEMAPHORE = "SDRAM_LINK_FOR_SEMAPHORE"
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
@@ -262,22 +276,9 @@ class LIFApplicationVertex(
             else:
                 return False
 
-    
-
-    @inject_items({"operator_graph": "NengoOperatorGraph",
-                   "machine_time_step": "MachineTimeStep"})
-    @overrides(
-        AbstractNengoApplicationVertex.create_machine_vertices,
-        additional_arguments=["operator_graph", "machine_time_step"])
-    def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner,
-            operator_graph, machine_time_step):
-
-        machine_vertices = list()
-
-        outgoing_partitions = operator_graph.\
-            get_outgoing_edge_partitions_starting_at_vertex(self)
-        incoming_edges = operator_graph.get_edges_ending_at_vertex(self)
+    def _create_internal_data_maps(
+            self, outgoing_partitions, incoming_edges, operator_graph,
+            machine_time_step):
 
         standard_outgoing_partitions = list()
         outgoing_learnt_partitions = list()
@@ -296,8 +297,8 @@ class LIFApplicationVertex(
             # locate all modulating incoming partitions learning rules
             if (in_edge.input_port.destination_input_port ==
                     constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
-                    in_edge.input_port.destination_input_port ==
-                    constants.ENSEMBLE_INPUT_PORT.LEARNT):
+                        in_edge.input_port.destination_input_port ==
+                        constants.ENSEMBLE_INPUT_PORT.LEARNT):
                 if in_edge.reception_parameters.learning_rule is not None:
                     incoming_modulatory_learning_rules[
                         in_edge.reception_parameters.learning_rule] = in_edge
@@ -364,6 +365,62 @@ class LIFApplicationVertex(
                     global_inhibition_edge), minimise=True)
             self._inhibition_n_keys += 1
 
+    @overrides(AbstractSupportNengoPartitioner.get_shared_resources_for_slices)
+    def get_shared_resources_for_slices(self, slices):
+
+        # deduce the shared sdram requirements per cluster.
+        shared_sdram_requirements = (
+            self.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES +
+            (self._ensemble_size_in * constants.BYTE_TO_WORD_MULTIPLIER))
+        for _ in range(len(self._learnt_encoder_filters)):
+            shared_sdram_requirements += (
+                self._ensemble_size_in * constants.BYTE_TO_WORD_MULTIPLIER)
+        shared_sdram_requirements += self._get_bytes_for_unpacked_spike_vector(
+            slices)
+
+        shared_sdram_requirements = SDRAMResource(shared_sdram_requirements)
+        return ResourceContainer(sdram=shared_sdram_requirements)
+
+    def _get_bytes_for_unpacked_spike_vector(self, slices):
+        """Compute the number of bytes necessary to store the unpacked spike \
+        vector for the given ranges of neurons.
+        """
+        words = 0
+
+        for internal_slices in slices:
+            # Get the number of neurons
+            neuron_slice = internal_slices[self.SLICES_POSITIONS.NEURON.value]
+
+            n_neurons = neuron_slice.hi_atom - neuron_slice.lo_atom
+
+            # Update the word count, padding to allow an integral number of \
+            # words for each slice.
+            words += math.ceil(n_neurons // constants.WORD_TO_BIT_CONVERSION)
+
+        # Multiply to get bytes
+        return words * constants.BYTE_TO_WORD_MULTIPLIER
+
+
+    @inject_items({"operator_graph": "NengoOperatorGraph",
+                   "machine_time_step": "MachineTimeStep"})
+    @overrides(
+        AbstractNengoApplicationVertex.create_machine_vertices,
+        additional_arguments=["operator_graph", "machine_time_step"])
+    def create_machine_vertices(
+            self, resource_tracker, nengo_partitioner, machine_graph,
+            operator_graph, machine_time_step):
+
+        machine_vertices = list()
+
+        outgoing_partitions = operator_graph.\
+            get_outgoing_edge_partitions_starting_at_vertex(self)
+        incoming_edges = operator_graph.get_edges_ending_at_vertex(self)
+
+        # build a bunch of maps and data objects used during partitioning
+        self._create_internal_data_maps(
+            outgoing_partitions, incoming_edges, operator_graph,
+            machine_time_step)
+
         # start the partitioning process, now that all the data required to
         # do so has been deduced
         n_atoms_partitioned = 0
@@ -387,7 +444,8 @@ class LIFApplicationVertex(
             else:
                 self._n_neurons_in_current_cluster = self._n_neurons
                 cluster_vertices = self._create_cluster_and_verts(
-                    Slice(0, self._n_neurons - 1), max_cores, nengo_partitioner)
+                    Slice(0, self._n_neurons - 1), max_cores,
+                    nengo_partitioner)
                 machine_vertices.extend(cluster_vertices)
 
             # update the atom tracker
@@ -404,7 +462,70 @@ class LIFApplicationVertex(
             # doesnt partition on incorrect data
             resource_tracker.allocate_constrained_group_resources(
                 group_resource)
+
+            # add sdram edges as required
+            self._add_sdram_outgoing_partitions_and_edges(
+                machine_graph, cluster_vertices)
+
         return machine_vertices
+
+    def _add_sdram_outgoing_partitions_and_edges(
+            self, machine_graph, cluster_vertices):
+
+        pre_vertex_for_sdram_edges = cluster_vertices[0]
+
+        # handle input vector
+        sdram_outgoing_partition = SegmentedInputSDRAMMachinePartition(
+            identifier=self.SDRAM_OUTGOING_INPUT,
+            label=self.SDRAM_OUTGOING_INPUT)
+        machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
+        for post_vertex in cluster_vertices:
+            edge = SDRAMMachineEdge(
+                pre_vertex=pre_vertex_for_sdram_edges,
+                post_vertex=post_vertex,
+                sdram_size=(
+                    post_vertex.input_slice.n_atoms *
+                    constants.BYTE_TO_WORD_MULTIPLIER),
+                label="SDRAM_EDGE_FOR_INPUT_VECTOR_FOR_BITS{}:{}".format(
+                    post_vertex.input_slice.lo_atom,
+                    post_vertex.input_slice.hi_atom))
+            machine_graph.add_edge(
+                edge, self.SDRAM_OUTGOING_INPUT)
+
+        # handle learnt encoders shared sdram
+        for learnt_encoder_filter in self._learnt_encoder_filters:
+            identifier = (self.SDRAM_OUTGOING_LEARNT, learnt_encoder_filter)
+            sdram_outgoing_partition = SegmentedInputSDRAMMachinePartition(
+                identifier=identifier,
+                label=(self.SDRAM_OUTGOING_LEARNT + "{}".format(
+                    learnt_encoder_filter)))
+            machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
+            for post_vertex in cluster_vertices:
+                edge = SDRAMMachineEdge(
+                    pre_vertex=pre_vertex_for_sdram_edges,
+                    post_vertex=post_vertex,
+                    sdram_size=(post_vertex.input_slice.n_atoms *
+                                constants.BYTE_TO_WORD_MULTIPLIER),
+                    label="SDRAM_EDGE_FOR_INPUT_VECTOR_FOR_BITS{}:{}".format(
+                        post_vertex.input_slice.lo_atom,
+                        post_vertex.input_slice.hi_atom))
+                machine_graph.add_edge(edge, identifier)
+
+        # handle spike vector
+
+
+        # handle semaphore sdram
+        sdram_outgoing_partition = ConstantSDRAMMachinePartition(
+            identifier=self.SDRAM_OUTGOING_SEMAPHORE,
+            label=self.SDRAM_OUTGOING_SEMAPHORE)
+        machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
+        for post_vertex in cluster_vertices:
+            edge = SDRAMMachineEdge(
+                pre_vertex=pre_vertex_for_sdram_edges,
+                post_vertex=post_vertex,
+                sdram_size=self.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES,
+                label="SDRAM_EDGE_FOR_SEMAPHORE")
+            machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SEMAPHORE)
 
     def _create_cluster_and_verts(
             self, neuron_slice, max_cores, nengo_partitioner):
@@ -418,12 +539,10 @@ class LIFApplicationVertex(
             Slice(0, int(self._decoders.shape[0])),  # Outputs
             Slice(0, len(self._learnt_encoder_filters))  # Learnt output
         ]
-
         # create core sized partitions
-        all_slices_and_resources = list(
-            nengo_partitioner.create_slices_for_multiple(
-                sliced_objects, self, self._max_resources_to_use_per_core,
-                max_cores, max_cores))
+        all_slices_and_resources = nengo_partitioner.create_slices_for_multiple(
+            sliced_objects, self, self._max_resources_to_use_per_core,
+            max_cores, max_cores)
 
         neuron_slices = list()
         for ((_, neuron_slice, _, _), used_resources) in \
@@ -574,7 +693,7 @@ class LIFApplicationVertex(
             constants.BYTE_TO_WORD_MULTIPLIER)
 
         # recording region
-        #TODO tie into buffering
+        # TODO tie into buffering
         recording_region_size = 0
 
         total = (

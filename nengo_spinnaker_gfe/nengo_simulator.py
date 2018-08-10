@@ -166,15 +166,13 @@ class NengoSimulator(SpiNNaker):
             self._extra_inputs["NengoEnsembleProfileNumSamples"])
 
         # update spinnaker with app graph
-        self._machine_graph = nengo_machine_graph
+        self._original_machine_graph = nengo_machine_graph
 
         # add the extra outputs as new inputs
         self.update_extra_inputs(
             {"NengoHostGraph": host_network,
              "NengoGraphToAppGraphMap": nengo_to_app_graph_map,
              "NengoRandomNumberGenerator": random_number_generator})
-
-
 
     def __enter__(self):
         """Enter a context which will close the simulator when exited."""

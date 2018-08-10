@@ -61,3 +61,9 @@ class NotPartitionable(NengoException):
 class NotRecognisedFilterType(NengoException):
     """ raised when the filter builder does not recognise the type of filter. 
     """
+
+
+class NengoSDRAMSizeException(NengoException):
+    """ raised when a constant SDRAM partition discovers its edges have 
+    inconsistent size requests
+    """

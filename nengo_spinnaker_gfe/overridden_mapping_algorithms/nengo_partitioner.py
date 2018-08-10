@@ -25,12 +25,19 @@ class NengoPartitioner(object):
     
     """
 
+    __slots__ = [
+        "_resource_tracker"
+    ]
+
+    def __init__(self):
+        self._resource_tracker = None
+
     def __call__(self, nengo_operator_graph, machine,
                  pre_allocated_resources=None):
         machine_graph = MachineGraph(label=constants.MACHINE_GRAPH_LABEL)
         graph_mapper = GraphMapper()
 
-        resource_tracker = ResourceTracker(
+        self._resource_tracker = ResourceTracker(
             machine, preallocated_resources=pre_allocated_resources)
 
         progress_bar = ProgressBar(
@@ -45,11 +52,10 @@ class NengoPartitioner(object):
 
             # create the machine verts
             machine_vertices = operator.create_machine_vertices(
-                resource_tracker, self)
+                self._resource_tracker, self, machine_graph)
 
             # update data objects
             for machine_vertex in machine_vertices:
-                machine_graph.add_vertex(machine_vertex)
                 graph_mapper.add_vertex_mapping(
                     machine_vertex=machine_vertex, application_vertex=operator)
 
@@ -87,14 +93,16 @@ class NengoPartitioner(object):
                     "it received a connection from {}".format(
                         machine_vertex_sink, edge))
 
-    def create_slices(self, initial_slice, application_vertex,
-                      max_resources_to_use_per_core, max_cores, max_cuts):
+    def create_slices(
+            self, initial_slice, application_vertex,
+            max_resources_to_use_per_core, max_cores, max_cuts):
         """
         
         :param initial_slice: 
         :param application_vertex: 
         :param max_resources_to_use_per_core: 
         :param max_cores: 
+        :param max_cuts:
         :return: 
         """
 
@@ -137,9 +145,9 @@ class NengoPartitioner(object):
         slices = [initial_slices]
         resources_used = list()
 
-        while any(self._constraints_unsatisfied(
+        while self._constraints_unsatisfied(
                 slices, application_vertex, max_resources_to_use_per_core,
-                max_cores, resources_used)):
+                max_cores, resources_used):
 
             # clear resources used, as splitting again
             resources_used = list()
@@ -218,19 +226,35 @@ class NengoPartitioner(object):
             yield Slice(pos, pos + chunk)
             pos += chunk
 
-    @staticmethod
     def _constraints_unsatisfied(
-            slices, application_vertex, max_resources_to_use_per_core,
+            self, slices, application_vertex, max_resources_to_use_per_core,
             n_cores, resources_used):
-        for internal_slices in slices:
-                used_resources = application_vertex.get_resources_for_slices(
-                    internal_slices, n_cores)
-                resources_used.append(used_resources)
 
-                yield (
-                    used_resources.dtcm.get_value() >
-                    max_resources_to_use_per_core.dtcm.get_value() or
-                    used_resources.cpu_cycles.get_value() >
-                    max_resources_to_use_per_core.cpu_cycles.get_value() or
-                    used_resources.sdram.get_value() >
-                    max_resources_to_use_per_core.sdram.get_value())
+        max_sdram_usage = (
+            application_vertex.get_shared_resources_for_slices(
+                slices)).sdram.get_value()
+        failed = False
+        for internal_slices in slices:
+            used_resources = application_vertex.get_resources_for_slices(
+                internal_slices, n_cores)
+            resources_used.append(used_resources)
+            max_sdram_usage += used_resources.sdram.get_value()
+
+            failed = (
+                used_resources.dtcm.get_value() >
+                max_resources_to_use_per_core.dtcm.get_value() or
+                used_resources.cpu_cycles.get_value() >
+                max_resources_to_use_per_core.cpu_cycles.get_value() or
+                used_resources.sdram.get_value() >
+                max_resources_to_use_per_core.sdram.get_value())
+            if failed:
+                break
+
+        # if still valid, check that all sdram allocated including shared
+        # will be acceptable
+        if not failed:
+            max_available_resources = self._resource_tracker.\
+                get_maximum_resources_available()
+            failed = max_sdram_usage > max_available_resources.sdram.get_value()
+        return failed
+
