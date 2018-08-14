@@ -238,7 +238,6 @@ class NengoSimulator(SpiNNaker):
         # update spinnaker with app graph
         self._original_machine_graph = machine_graph
 
-
     def close(self, turn_off_machine=None, clear_routing_tables=None,
               clear_tags=None):
         """Clean the SpiNNaker board and prevent further simulation."""
