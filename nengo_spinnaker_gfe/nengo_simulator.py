@@ -3,13 +3,15 @@ import os
 
 import numpy
 from nengo.cache import NoDecoderCache
+from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
+    NengoMachineGraphGenerator
 
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.utilities.utility_objs import ExecutableFinder
 
 from nengo_spinnaker_gfe import binaries, constants
-from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
-    NengoMachineGraphGenerator
+from nengo_spinnaker_gfe.utility_objects.\
+    nengo_application_graph_generator import NengoApplicationGraphGenerator
 
 from spinnaker_graph_front_end.spinnaker import SpiNNaker
 
@@ -40,6 +42,8 @@ class NengoSimulator(SpiNNaker):
     """
 
     __slots__ = [
+
+        "_nengo_operator_graph"
     ]
 
     CONFIG_FILE_NAME = "nengo_spinnaker.cfg"
@@ -144,14 +148,11 @@ class NengoSimulator(SpiNNaker):
         # build app graph, machine graph, as the main tools expect an
         # application / machine graph level, and cannot go from random to app
         #  graph.
-        self._get_max_available_machine()
-        nengo_app_graph_generator = NengoMachineGraphGenerator()
-        system_inputs, system_algorithms = \
-            self._get_system_functionality_algorithms_and_inputs()
+        nengo_app_graph_generator = NengoApplicationGraphGenerator()
 
-        (nengo_machine_graph, nengo_application_graph, host_network,
-         nengo_to_app_graph_map, random_number_generator,
-         nengo_graph_mapper) = nengo_app_graph_generator(
+        (self._nengo_operator_graph, host_network,
+         nengo_to_app_graph_map, random_number_generator) = \
+            nengo_app_graph_generator(
             self._extra_inputs["NengoModel"], self.machine_time_step,
             self._extra_inputs["NengoRandomNumberGeneratorSeed"],
             self._extra_inputs["NengoDecoderCache"],
@@ -159,14 +160,10 @@ class NengoSimulator(SpiNNaker):
             self._extra_inputs["NengoNodesAsFunctionOfTime"],
             self._extra_inputs["NengoNodesAsFunctionOfTimeTimePeriod"],
             self.config.getboolean("Node", "optimise_utilise_interposers"),
-            self._max_machine_available, system_inputs, system_algorithms,
             self._print_timings, self._do_timings, self._xml_paths,
             self._pacman_executor_provenance_path,
             self._extra_inputs["NengoEnsembleProfile"],
             self._extra_inputs["NengoEnsembleProfileNumSamples"])
-
-        # update spinnaker with app graph
-        self._original_machine_graph = nengo_machine_graph
 
         # add the extra outputs as new inputs
         self.update_extra_inputs(
@@ -199,11 +196,48 @@ class NengoSimulator(SpiNNaker):
     def _run_steps(self, steps):
         """Simulate for the given number of steps."""
 
-        # run the rest of the tools
+        self._generate_machine_graph(steps)
+
         SpiNNaker.run(self, steps)
 
         # extract data
         self._extract_data()
+
+    def _generate_machine_graph(self, steps):
+        """ generate the machine graph in context of pre allocated system 
+        resoruces
+        
+        :param steps: 
+        :return: 
+        """
+
+        self._get_max_available_machine()
+
+        # get pre alloc res for allowing graph partitioning to operate correctly
+        (system_pre_alloc_res_inputs,
+         system_pre_alloc_res_algorithms) = \
+            self._get_system_functionality_algorithms_and_inputs()
+
+        machine_graph_generator = NengoMachineGraphGenerator()
+        machine_graph, nengo_graph_mapper = machine_graph_generator(
+            system_pre_allocated_resources_inputs=system_pre_alloc_res_inputs,
+            max_machine_outputs=self._max_machine_outputs,
+            max_machine_available=self._max_machine_available,
+            steps=steps,
+            partitioning_algorithm=self.config.get_str(
+                "Mapping", "application_to_machine_graph_algorithms"),
+            system_pre_alloc_res_algorithms=system_pre_alloc_res_algorithms,
+            print_timings=self._print_timings,
+            do_timings=self._do_timings,
+            nengo_operator_graph=self._nengo_operator_graph,
+            xml_paths=self._xml_paths,
+            machine_time_step=self._machine_time_step,
+            pacman_executor_provenance_path=(
+                self._pacman_executor_provenance_path))
+
+        # update spinnaker with app graph
+        self._original_machine_graph = machine_graph
+
 
     def close(self, turn_off_machine=None, clear_routing_tables=None,
               clear_tags=None):
