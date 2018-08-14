@@ -25,7 +25,17 @@ class ValueSinkMachineVertex(
 
     __slots__ = [
         #
-        '_input_slice'
+        '_input_slice',
+        #
+        "_minimum_buffer_sdram",
+        #
+        "_maximum_sdram_for_buffering",
+        #
+        "_using_auto_pause_and_resume",
+        #
+        "_receive_buffer_host",
+        #
+        "_receive_buffer_port"
     ]
 
     DATA_REGIONS = Enum(
@@ -37,14 +47,23 @@ class ValueSinkMachineVertex(
                ('RECORDING', 4)])
 
     SLICE_DATA_SDRAM_REQUIREMENT = 8
+    SDRAM_RECORDING_SDRAM_PER_ATOM = 4
 
-    def __init__(self, input_slice):
+    def __init__(
+            self, input_slice, minimum_buffer_sdram, receive_buffer_host,
+            maximum_sdram_for_buffering, using_auto_pause_and_resume,
+            receive_buffer_port):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AcceptsMulticastSignals.__init__(self)
         AbstractReceiveBuffersToHost.__init__(self)
         self._input_slice = input_slice
+        self._minimum_buffer_sdram = minimum_buffer_sdram
+        self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
+        self._using_auto_pause_and_resume = using_auto_pause_and_resume
+        self._receive_buffer_host = receive_buffer_host
+        self._receive_buffer_port = receive_buffer_port
 
     @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -110,13 +129,17 @@ class ValueSinkMachineVertex(
             cpu_cycles=CPUCyclesPerTickResource(0))
 
         recording_sizes = recording_utilities.get_recording_region_sizes(
-            self._get_buffered_sdram(self._input_slice, n_machine_time_steps),
+            [self._get_buffered_sdram(self._input_slice, n_machine_time_steps)],
             self._minimum_buffer_sdram, self._maximum_sdram_for_buffering,
             self._using_auto_pause_and_resume)
         container.extend(recording_utilities.get_recording_resources(
             recording_sizes, self._receive_buffer_host,
             self._receive_buffer_port))
         return container
+
+    def _get_buffered_sdram(self, input_slice, n_machine_time_steps):
+        return (self.SDRAM_RECORDING_SDRAM_PER_ATOM * input_slice.n_atoms *
+                n_machine_time_steps)
 
     @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
     def get_minimum_buffer_sdram_usage(self):

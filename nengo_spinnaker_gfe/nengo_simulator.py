@@ -233,7 +233,17 @@ class NengoSimulator(SpiNNaker):
             xml_paths=self._xml_paths,
             machine_time_step=self._machine_time_step,
             pacman_executor_provenance_path=(
-                self._pacman_executor_provenance_path))
+                self._pacman_executor_provenance_path),
+            receive_buffer_port=helpful_functions.read_config_int(
+                self._config, "Buffers", "receive_buffer_port"),
+            receive_buffer_host=self._config.get(
+                "Buffers", "receive_buffer_host"),
+            minimum_buffer_sdram=self._config.getint(
+                "Buffers", "minimum_buffer_sdram"),
+            maximum_sdram_for_sink_vertex_buffing=self._config.getint(
+                "Buffers", "sink_vertex_max_sdram_for_buffing"),
+            using_auto_pause_and_resume=self._config.getboolean(
+                "Buffers", "use_auto_pause_and_resume"))
 
         # update spinnaker with app graph
         self._original_machine_graph = machine_graph
