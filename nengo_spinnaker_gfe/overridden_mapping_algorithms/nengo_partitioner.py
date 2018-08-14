@@ -51,13 +51,8 @@ class NengoPartitioner(object):
                 nengo_operator_graph.vertices, False):
 
             # create the machine verts
-            machine_vertices = operator.create_machine_vertices(
-                self._resource_tracker, self, machine_graph)
-
-            # update data objects
-            for machine_vertex in machine_vertices:
-                graph_mapper.add_vertex_mapping(
-                    machine_vertex=machine_vertex, application_vertex=operator)
+            operator.create_machine_vertices(
+                self._resource_tracker, self, machine_graph, graph_mapper)
 
         # Construct edges from the application edges
         for edge in progress_bar.over(nengo_operator_graph.edges):
