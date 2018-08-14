@@ -1,5 +1,5 @@
 from enum import Enum
-from pacman.executor.injection_decorator import inject
+from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     CPUCyclesPerTickResource, DTCMResource
@@ -68,7 +68,7 @@ class ValueSinkMachineVertex(
 
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
 
-        filter_region, filter_routing_region = make_filter_regions(
+        """filter_region, filter_routing_region = make_filter_regions(
             signals_conns, model.dt, True, model.keyspaces.filter_routing_tag)
 
 
@@ -90,14 +90,14 @@ class ValueSinkMachineVertex(
         spec.reserve_memory_region(
             self.DATA_REGIONS.ROUTING.value(),
             XXXXXXXX,
-            label="routing region")
+            label="routing region")"""
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @inject({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
     @overrides(
         MachineVertex.resources_required,
         additional_arguments=["n_machine_time_steps"])
@@ -116,6 +116,7 @@ class ValueSinkMachineVertex(
         container.extend(recording_utilities.get_recording_resources(
             recording_sizes, self._receive_buffer_host,
             self._receive_buffer_port))
+        return container
 
     @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
     def get_minimum_buffer_sdram_usage(self):

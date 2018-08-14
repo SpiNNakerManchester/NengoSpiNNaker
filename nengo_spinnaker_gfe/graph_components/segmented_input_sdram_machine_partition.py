@@ -10,11 +10,12 @@ class SegmentedInputSDRAMMachinePartition(OutgoingEdgePartition):
         "_sdram_base_address"
     ]
 
-    def __init__(self, identifier, label):
+    def __init__(self, identifier, pre_vertex, label):
         OutgoingEdgePartition.__init__(
             self,  identifier=identifier, allowed_edge_types=SDRAMMachineEdge,
             label=label)
         self._sdram_base_address = None
+        self._pre_vertex = pre_vertex
 
     def total_sdram_requirements(self):
         total = 0
