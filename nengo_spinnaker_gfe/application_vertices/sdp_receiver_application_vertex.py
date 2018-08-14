@@ -56,12 +56,10 @@ class SDPReceiverApplicationVertex(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments="operator_graph")
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner,
-            machine_graph, operator_graph):
+            self, resource_tracker, nengo_partitioner, machine_graph,
+            graph_mapper, operator_graph):
         # Get all outgoing signals and their associated transmission
         # connection_parameters
-
-        machine_verts = list()
 
         outgoing_partitions = operator_graph.\
             get_outgoing_edge_partitions_starting_at_vertex(self)
@@ -74,7 +72,9 @@ class SDPReceiverApplicationVertex(
 
                 # Create a vertex for this connection
                 machine_vertex = SDPReceiverMachineVertex(outgoing_partition)
-                machine_verts.append(machine_vertex)
+                machine_graph.add_vertex(machine_vertex)
+                graph_mapper.add_vertex_mapping(
+                    machine_vertex=machine_vertex, application_vertex=self)
 
                 # Allocate resources for this vertex
                 resource_tracker.allocate_constrained_resources(
@@ -85,5 +85,3 @@ class SDPReceiverApplicationVertex(
                     "The SDP receiver does not know what to do with output"
                     " port {}".format(
                         outgoing_partition.identifier.source_port))
-
-        return machine_verts

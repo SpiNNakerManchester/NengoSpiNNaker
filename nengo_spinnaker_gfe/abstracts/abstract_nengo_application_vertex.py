@@ -47,7 +47,8 @@ class AbstractNengoApplicationVertex(
 
     @abstractmethod
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph):
+            self, resource_tracker, nengo_partitioner, machine_graph,
+            graph_mapper):
         """
         
         :return: 

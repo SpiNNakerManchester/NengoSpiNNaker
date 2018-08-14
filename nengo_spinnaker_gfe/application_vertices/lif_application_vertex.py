@@ -15,6 +15,8 @@ from nengo_spinnaker_gfe.graph_components.sdram_machine_edge import \
     SDRAMMachineEdge
 from nengo_spinnaker_gfe.graph_components.segmented_input_sdram_machine_partition import \
     SegmentedInputSDRAMMachinePartition
+from nengo_spinnaker_gfe.graph_components.segmented_spikes_sdram_machine_partition import \
+    SegmentedSpikesSDRAMMachinePartition
 from nengo_spinnaker_gfe.learning_rules.pes_learning_rule import PESLearningRule
 from nengo_spinnaker_gfe.learning_rules.voja_learning_rule import \
     VojaLearningRule
@@ -408,7 +410,7 @@ class LIFApplicationVertex(
         additional_arguments=["operator_graph", "machine_time_step"])
     def create_machine_vertices(
             self, resource_tracker, nengo_partitioner, machine_graph,
-            operator_graph, machine_time_step):
+            graph_mapper, operator_graph, machine_time_step):
 
         machine_vertices = list()
 
@@ -457,6 +459,9 @@ class LIFApplicationVertex(
             for vertex in cluster_vertices:
                 group_resource.append(
                     (vertex.resources_required, vertex.constraints))
+                machine_graph.add_vertex(vertex)
+                graph_mapper.add_vertex_mapping(
+                    machine_vertex=vertex, application_vertex=self)
 
             # allocate resources to resource tracker, to ensure next vertex
             # doesnt partition on incorrect data
@@ -477,7 +482,8 @@ class LIFApplicationVertex(
         # handle input vector
         sdram_outgoing_partition = SegmentedInputSDRAMMachinePartition(
             identifier=self.SDRAM_OUTGOING_INPUT,
-            label=self.SDRAM_OUTGOING_INPUT)
+            label=self.SDRAM_OUTGOING_INPUT,
+            pre_vertex=pre_vertex_for_sdram_edges)
         machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
         for post_vertex in cluster_vertices:
             edge = SDRAMMachineEdge(
@@ -498,7 +504,8 @@ class LIFApplicationVertex(
             sdram_outgoing_partition = SegmentedInputSDRAMMachinePartition(
                 identifier=identifier,
                 label=(self.SDRAM_OUTGOING_LEARNT + "{}".format(
-                    learnt_encoder_filter)))
+                    learnt_encoder_filter)),
+                pre_vertex=pre_vertex_for_sdram_edges)
             machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
             for post_vertex in cluster_vertices:
                 edge = SDRAMMachineEdge(
@@ -512,12 +519,29 @@ class LIFApplicationVertex(
                 machine_graph.add_edge(edge, identifier)
 
         # handle spike vector
-
+        sdram_outgoing_partition = SegmentedSpikesSDRAMMachinePartition(
+            identifier=self.SDRAM_OUTGOING_SPIKE_VECTOR,
+            label=self.SDRAM_OUTGOING_SPIKE_VECTOR,
+            pre_vertex=pre_vertex_for_sdram_edges)
+        machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
+        for post_vertex in cluster_vertices:
+            edge = SDRAMMachineEdge(
+                pre_vertex=pre_vertex_for_sdram_edges,
+                post_vertex=post_vertex,
+                sdram_size=(
+                    math.ceil(post_vertex.neuron_slice.n_atoms /
+                              constants.WORD_TO_BIT_CONVERSION) *
+                    constants.BYTE_TO_WORD_MULTIPLIER),
+                label="SDRAM_EDGE_FOR_SPIKE_VECTOR_FOR_BITS{}:{}".format(
+                    post_vertex.input_slice.lo_atom,
+                    post_vertex.input_slice.hi_atom))
+            machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SPIKE_VECTOR)
 
         # handle semaphore sdram
         sdram_outgoing_partition = ConstantSDRAMMachinePartition(
             identifier=self.SDRAM_OUTGOING_SEMAPHORE,
-            label=self.SDRAM_OUTGOING_SEMAPHORE)
+            label=self.SDRAM_OUTGOING_SEMAPHORE,
+            pre_vertex=pre_vertex_for_sdram_edges)
         machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
         for post_vertex in cluster_vertices:
             edge = SDRAMMachineEdge(
@@ -553,7 +577,7 @@ class LIFApplicationVertex(
                 (input_slice, neuron_slice, output_slice, learnt_slice),
                 used_resources) in enumerate(all_slices_and_resources):
             vertex = LIFMachineVertex(
-                vertex_index, neuron_slices, input_slice, output_slice,
+                vertex_index, neuron_slice, input_slice, output_slice,
                 learnt_slice, used_resources)
             cluster_vertices.append(vertex)
         return cluster_vertices
