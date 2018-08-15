@@ -1,6 +1,9 @@
 import numpy
 from data_specification.enums import DataType
 from enum import Enum
+
+from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
+    AcceptsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource
@@ -17,12 +20,13 @@ from nengo_spinnaker_gfe import constants as nengo_constants
 from nengo_spinnaker_gfe import helpful_functions
 from spinnman.messages.sdp import SDPMessage, SDPHeader
 
-from nengo_spinnaker_gfe.constraints.nengo_key_constraint import NengoKeyConstraint
+from nengo_spinnaker_gfe.constraints.nengo_key_constraint import \
+    NengoKeyConstraint
 
 
 class SDPReceiverMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractProvidesNKeysForPartition,
+        AbstractProvidesNKeysForPartition, AcceptsMulticastSignals,
         AbstractProvidesOutgoingPartitionConstraints):
 
     __slots__ = [
@@ -108,6 +112,10 @@ class SDPReceiverMachineVertex(
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
+
+    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    def accepts_multicast_signals(self, transmission_params):
+        return True
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(

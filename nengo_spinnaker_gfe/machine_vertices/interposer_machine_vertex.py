@@ -1,5 +1,10 @@
 from enum import Enum
+
+from nengo_spinnaker_gfe import constants, helpful_functions
+from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
+    TransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
+from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
@@ -12,10 +17,17 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 
 class InterposerMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AcceptsMulticastSignals):
+        AcceptsMulticastSignals, TransmitsMulticastSignals):
 
     __slots__ = [
-        "_resources"
+        "_size_in",
+        "_output_slice",
+        "_transform_data",
+        "_n_keys",
+        "_filter_keys",
+        "_output_slices",
+        "_machine_time_step",
+        "_filters"
     ]
 
     """Portion of the rows of the transform assigned to a parallel filter
@@ -30,14 +42,22 @@ class InterposerMachineVertex(
                ('INPUT_ROUTING', 3),
                ('TRANSFORM', 4)])
 
+    SYSTEM_DATA_ITEMS = 4
+
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
-            output_slices, machine_time_step, filters, label, constraints,
-            resources):
+            output_slices, machine_time_step, filters, label, constraints):
         MachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AcceptsMulticastSignals.__init__(self)
-        self._resources = resources
+        self._size_in = size_in
+        self._output_slice = output_slice
+        self._transform_data = transform_data
+        self._n_keys = n_keys
+        self._filter_keys = filter_keys
+        self._output_slices = output_slices
+        self._machine_time_step = machine_time_step
+        self._filters = filters
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(self, spec, placement,
@@ -59,8 +79,27 @@ class InterposerMachineVertex(
     @property
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
-        pass
+        return self.generate_static_resources(
+            self._transform_data, self._n_keys, self._filters)
+
+    @staticmethod
+    def generate_static_resources(transform_data, n_keys, filters):
+        sdram = (
+            (InterposerMachineVertex.SYSTEM_DATA_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER) +
+            transform_data.nbytes + (constants.BYTES_PER_KEY * n_keys) +
+            helpful_functions.sdram_size_in_bytes_for_filter_region(filters) +
+            helpful_functions.sdram_size_in_bytes_for_routing_region(n_keys))
+        return ResourceContainer(sdram=SDRAMResource(sdram))
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
+
+    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    def accepts_multicast_signals(self, transmission_params):
+        return
+
+    @overrides(TransmitsMulticastSignals.transmits_multicast_signals)
+    def transmits_multicast_signals(self, transmission_params):
+        return

@@ -96,27 +96,10 @@ class ValueSourceApplicationVertex(
             Slice(0, len(outgoing_partitions)), n_machine_verts)
 
         for vertex_partition_slice in vertex_partition_slices:
-            resources = self._generate_resources(
-                vertex_partition_slice, n_machine_time_steps)
             machine_vertex = ValueSourceMachineVertex(
-                vertex_partition_slice, resources)
-            resource_tracker.allocate_resources(resources)
+                vertex_partition_slice, n_machine_time_steps)
+            resource_tracker.allocate_resources(
+                machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)
             graph_mapper.add_vertex_mapping(
                 machine_vertex=machine_vertex, application_vertex=self)
-
-    def _generate_resources(
-            self, outgoing_partition_slice, n_machine_time_steps):
-        sdram = (
-            # system region
-            (self.SYSTEM_REGION_DATA_ITEMS *
-             constants.BYTE_TO_WORD_MULTIPLIER) +
-            # key region
-            (outgoing_partition_slice.n_atoms * constants.BYTES_PER_KEY) +
-            # output region
-            (outgoing_partition_slice.n_atoms * n_machine_time_steps) *
-            constants.BYTE_TO_WORD_MULTIPLIER)
-
-        return ResourceContainer(sdram=SDRAMResource(sdram))
-
-

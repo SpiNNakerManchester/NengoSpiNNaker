@@ -12,7 +12,6 @@ from nengo_spinnaker_gfe.nengo_filters.\
     FilterAndRoutingRegionGenerator
 from pacman.executor.injection_decorator import inject
 from pacman.model.graphs.common import Slice
-from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_utilities.overrides import overrides
 
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
@@ -109,8 +108,6 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
 
     MAX_COLUMNS_SUPPORTED = 128
     MAX_ROWS_SUPPORTED = 64
-
-    SYSTEM_DATA_ITEMS = 4
 
     def __init__(self, size_in, label, rng, seed):
         """Create a new parallel Filter.
@@ -220,29 +217,20 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
                     constants.MATRIX_CONVERSION_PARTITIONING.ROWS)
 
             # build machine vertex
-            resources = self._generate_resources(
-                transform_data, n_keys, filters)
             machine_vertex = InterposerMachineVertex(
                 filter_slice, output_slice, transform_data, n_keys, filter_keys,
                 output_slices, machine_time_step, filters,
                 "interposer_with-slice{}:{}_for_interposer{}".format(
                     filter_slice.lo_atom, filter_slice.hi_atom, self),
-                self.constraints, resources)
+                self.constraints)
 
             # update graph objects
             machine_graph.add_vertex(machine_vertex)
             graph_mapper.add_vertex_mapping(
                 machine_vertex=machine_vertex, application_vertex=self)
-            resource_tracker.allocate_resources(resources)
+            resource_tracker.allocate_resources(
+                machine_vertex.resources_required)
         return self.cores
-
-    def _generate_resources(self, transform_data, n_keys, filters):
-        sdram = (
-            (self.SYSTEM_DATA_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER) +
-            transform_data.nbytes + (constants.BYTES_PER_KEY * n_keys) +
-            helpful_functions.sdram_size_in_bytes_for_filter_region(filters) +
-            helpful_functions.sdram_size_in_bytes_for_routing_region(n_keys))
-        return ResourceContainer(sdram=SDRAMResource(sdram))
 
     def add_constraint(self, constraint):
         self._constraints.add(constraint)

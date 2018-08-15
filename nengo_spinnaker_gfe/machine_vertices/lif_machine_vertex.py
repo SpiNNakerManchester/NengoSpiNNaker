@@ -1,3 +1,5 @@
+from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
+    TransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
@@ -11,18 +13,19 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 
 class LIFMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AcceptsMulticastSignals):
+        AcceptsMulticastSignals, TransmitsMulticastSignals):
 
     __slots__ = [
         "_resources",
         "_neuron_slice",
         "_input_slice",
         "_output_slice",
-        "_learnt_slice"
+        "_learnt_slice",
+        "_n_profiler_samples"
     ]
 
     def __init__(self, vertex_index, neuron_slice, input_slice, output_slice,
-                learnt_slice, resources):
+                learnt_slice, resources, n_profiler_samples):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -32,6 +35,7 @@ class LIFMachineVertex(
         self._input_slice = input_slice
         self._output_slice = output_slice
         self._learnt_slice = learnt_slice
+        self._n_profiler_samples = n_profiler_samples
 
     @property
     def neuron_slice(self):
@@ -53,6 +57,10 @@ class LIFMachineVertex(
     def accepts_multicast_signals(self, transmission_params):
         return True
 
+    @overrides(TransmitsMulticastSignals.transmits_multicast_signals)
+    def transmits_multicast_signals(self, transmission_params):
+        return True
+
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
@@ -70,4 +78,7 @@ class LIFMachineVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        pass
+        if self._n_profiler_samples > 0:
+            return "lif_profiled.aplx"
+        else:
+            return "lif.aplx"

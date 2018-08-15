@@ -573,7 +573,7 @@ class LIFApplicationVertex(
                 used_resources) in enumerate(all_slices_and_resources):
             vertex = LIFMachineVertex(
                 vertex_index, neuron_slice, input_slice, output_slice,
-                learnt_slice, used_resources)
+                learnt_slice, used_resources, self._n_profiler_samples)
             cluster_vertices.append(vertex)
         return cluster_vertices
 

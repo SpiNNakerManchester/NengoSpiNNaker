@@ -1,5 +1,7 @@
 from enum import Enum
 
+from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
+    AcceptsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     CPUCyclesPerTickResource, DTCMResource
@@ -13,7 +15,8 @@ from spinn_utilities.overrides import overrides
 
 
 class SDPTransmitterMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary):
+        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
+        AcceptsMulticastSignals):
 
     __slots__ = [
         #
@@ -54,6 +57,10 @@ class SDPTransmitterMachineVertex(
             ),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0))
+
+    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    def accepts_multicast_signals(self, transmission_params):
+        return True
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
