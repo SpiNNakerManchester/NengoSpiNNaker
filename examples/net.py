@@ -3,7 +3,7 @@ import nengo
 
 import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
 import nengo_spinnaker as mundy_nengo
-USE_GFE = True
+USE_GFE = False
 
 def create_model():
 
@@ -38,5 +38,6 @@ if __name__ == '__main__':
     if USE_GFE:
         sim = gfe_nengo.NengoSimulator(network)
     else:
+
         sim = mundy_nengo.Simulator(network)
     sim.run(100)

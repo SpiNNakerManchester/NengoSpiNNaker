@@ -14,7 +14,9 @@ class ValueSourceMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary):
 
     __slots__ = [
-        "_resources"
+        "_resources",
+        "_outgoing_partition_slice"
+
     ]
 
     DATA_REGIONS = Enum(
@@ -24,11 +26,11 @@ class ValueSourceMachineVertex(
                ('FILTER_ROUTING', 2),
                ('RECORDING', 3)])
 
-    def __init__(self, resources):
+    def __init__(self, outgoing_partition_slice, resources):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
-
+        self._outgoing_partition_slice = outgoing_partition_slice
         self._resources = resources
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)

@@ -1,6 +1,12 @@
 import logging
+import math
 
+from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.machine_vertices.value_source_machine_vertex import \
+    ValueSourceMachineVertex
 from pacman.executor.injection_decorator import inject_items
+from pacman.model.graphs.common import Slice
+from pacman.model.resources import SDRAMResource, ResourceContainer
 from spinn_utilities.log import FormatAdapter
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe.abstracts. \
@@ -29,6 +35,9 @@ class ValueSourceApplicationVertex(
     ]
 
     PROBEABLE_ATTRIBUTES = ['output']
+
+    MAX_CHANNELS_PER_MACHINE_VERTEX = 10
+    SYSTEM_REGION_DATA_ITEMS = 6
 
     def __init__(
             self, label, rng, nengo_output_function, size_out, update_period,
@@ -71,11 +80,43 @@ class ValueSourceApplicationVertex(
     def recording_of(self):
         return self._recording_of
 
-    @inject_items({"operator_graph": "NengoOperatorGraph"})
+    @inject_items({"operator_graph": "NengoOperatorGraph",
+                   "n_machine_time_steps": "TotalMachineTimeSteps"})
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
-        additional_arguments="operator_graph")
+        additional_arguments=["operator_graph", "n_machine_time_steps"])
     def create_machine_vertices(
             self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper, operator_graph):
-        pass
+            graph_mapper, operator_graph, n_machine_time_steps):
+        outgoing_partitions = \
+            operator_graph.get_outgoing_edge_partitions_starting_at_vertex(self)
+        n_machine_verts = math.ceil(
+            len(outgoing_partitions) / self.MAX_CHANNELS_PER_MACHINE_VERTEX)
+        vertex_partition_slices = nengo_partitioner.divide_slice(
+            Slice(0, len(outgoing_partitions)), n_machine_verts)
+
+        for vertex_partition_slice in vertex_partition_slices:
+            resources = self._generate_resources(
+                vertex_partition_slice, n_machine_time_steps)
+            machine_vertex = ValueSourceMachineVertex(
+                vertex_partition_slice, resources)
+            resource_tracker.allocate_resources(resources)
+            machine_graph.add_vertex(machine_vertex)
+            graph_mapper.add_vertex_mapping(
+                machine_vertex=machine_vertex, application_vertex=self)
+
+    def _generate_resources(
+            self, outgoing_partition_slice, n_machine_time_steps):
+        sdram = (
+            # system region
+            (self.SYSTEM_REGION_DATA_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER) +
+            # key region
+            (outgoing_partition_slice.n_atoms * constants.BYTES_PER_KEY) +
+            # output region
+            (outgoing_partition_slice.n_atoms * n_machine_time_steps) *
+            constants.BYTE_TO_WORD_MULTIPLIER)
+
+        return ResourceContainer(sdram=SDRAMResource(sdram))
+
+

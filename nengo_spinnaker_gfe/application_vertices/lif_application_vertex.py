@@ -9,13 +9,16 @@ from nengo.learning_rules import PES as NengoPES
 from nengo.learning_rules import Voja as NengoVoja
 from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
-from nengo_spinnaker_gfe.graph_components.constant_sdram_machine_partition import \
+from nengo_spinnaker_gfe.graph_components.\
+    constant_sdram_machine_partition import \
     ConstantSDRAMMachinePartition
 from nengo_spinnaker_gfe.graph_components.sdram_machine_edge import \
     SDRAMMachineEdge
-from nengo_spinnaker_gfe.graph_components.segmented_input_sdram_machine_partition import \
+from nengo_spinnaker_gfe.graph_components.\
+    segmented_input_sdram_machine_partition import \
     SegmentedInputSDRAMMachinePartition
-from nengo_spinnaker_gfe.graph_components.segmented_spikes_sdram_machine_partition import \
+from nengo_spinnaker_gfe.graph_components.\
+    segmented_spikes_sdram_machine_partition import \
     SegmentedSpikesSDRAMMachinePartition
 from nengo_spinnaker_gfe.learning_rules.pes_learning_rule import PESLearningRule
 from nengo_spinnaker_gfe.learning_rules.voja_learning_rule import \
@@ -128,14 +131,9 @@ class LIFApplicationVertex(
     PES_REGION_SLICED_RULE_N_ELEMENTS = 6
     VOJA_REGION_N_ELEMENTS = 2
     VOJA_REGION_RULE_N_ELEMENT = 5
-    MATRIX_REGIONS_PARTITION_INDEX = 0
     POPULATION_LENGTH_REGION_SIZE_IN_BYTES = 4
     PROFILER_SAMPLE_SIZE = 2
     PROFILER_N_SAMPLES_SIZE = 1
-    FILTER_PARAMETERS_SIZE = 4
-    FILTER_N_FILTERS_SIZE = 1
-    ROUTING_N_ROUTES_SIZE = 1
-    ROUTING_ENTRIES_PER_ROUTE = 4
 
     # shared sdram constants
     SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
@@ -402,7 +400,6 @@ class LIFApplicationVertex(
         # Multiply to get bytes
         return words * constants.BYTE_TO_WORD_MULTIPLIER
 
-
     @inject_items({"operator_graph": "NengoOperatorGraph",
                    "machine_time_step": "MachineTimeStep"})
     @overrides(
@@ -471,8 +468,6 @@ class LIFApplicationVertex(
             # add sdram edges as required
             self._add_sdram_outgoing_partitions_and_edges(
                 machine_graph, cluster_vertices)
-
-        return machine_vertices
 
     def _add_sdram_outgoing_partitions_and_edges(
             self, machine_graph, cluster_vertices):
@@ -614,24 +609,6 @@ class LIFApplicationVertex(
             dtcm=self._dtcm_usage_for_slices(slices, n_cores),
             sdram=self._sdram_usage_for_slices(slices, n_cores))
 
-    def _sdram_for_filter(self, filters):
-        total = 0
-        total_n_filters = 0
-        for outgoing_partition in filters:
-            for input_filter in filters[outgoing_partition]:
-                total += input_filter.size_words()
-                total_n_filters += 1
-        total += (
-            (self.FILTER_N_FILTERS_SIZE + (
-                self.FILTER_PARAMETERS_SIZE * total_n_filters)) *
-            constants.BYTE_TO_WORD_MULTIPLIER)
-        return total
-
-    def _sdram_for_routing_region(self, n_keys):
-        return ((self.ROUTING_N_ROUTES_SIZE + (
-            self.ROUTING_ENTRIES_PER_ROUTE * n_keys)) *
-                constants.BYTE_TO_WORD_MULTIPLIER)
-
     def _sdram_usage_for_slices(self, slices, n_cores):
         # build slices accordingly
         if len(slices) == 1:
@@ -664,25 +641,26 @@ class LIFApplicationVertex(
 
         # matrix based regions
         decoders_region = self._decoders[helpful_functions.expand_slice(
-            output_slice, self.MATRIX_REGIONS_PARTITION_INDEX,
+            output_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._decoders.ndim)].nbytes
 
         learnt_decoders_region = self._learnt_decoders[
             helpful_functions.expand_slice(
-                learnt_output_slice, self.MATRIX_REGIONS_PARTITION_INDEX,
+                learnt_output_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
                 self._learnt_decoders.ndim)].nbytes
 
         encoders_region = self._encoders_with_gain[
             helpful_functions.expand_slice(
-                neuron_slice, self.MATRIX_REGIONS_PARTITION_INDEX,
+                neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
                 self._encoders_with_gain.ndim)].nbytes
 
         bias_region = self._bias[helpful_functions.expand_slice(
-            neuron_slice, self.MATRIX_REGIONS_PARTITION_INDEX,
+            neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._bias.ndim)].nbytes
 
         gain_region = self._gain[helpful_functions.expand_slice(
-            neuron_slice, self.MATRIX_REGIONS_PARTITION_INDEX,
+            neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._gain.ndim)].nbytes
 
         # basic key regions
@@ -694,22 +672,24 @@ class LIFApplicationVertex(
             self.POPULATION_LENGTH_REGION_SIZE_IN_BYTES * n_cores)
 
         # filter regions
-        input_filter_region = self._sdram_for_filter(self._input_filters)
-        inhib_filter_region = self._sdram_for_filter(self._inhibition_filters)
-        modulatory_filters_region = self._sdram_for_filter(
-            self._modulatory_filters)
-        learnt_encoder_filters_region = self._sdram_for_filter(
-            self._learnt_encoder_filters)
+        input_filter_region = helpful_functions.\
+            sdram_size_in_bytes_for_filter_region(self._input_filters)
+        inhib_filter_region = helpful_functions.\
+            sdram_size_in_bytes_for_filter_region(self._inhibition_filters)
+        modulatory_filters_region = helpful_functions.\
+            sdram_size_in_bytes_for_filter_region(self._modulatory_filters)
+        learnt_encoder_filters_region = helpful_functions.\
+            sdram_size_in_bytes_for_filter_region(self._learnt_encoder_filters)
 
         # routing regions
-        input_routing_region = \
-            self._sdram_for_routing_region(self._inputs_n_keys)
-        inhib_routing_region = \
-            self._sdram_for_routing_region(self._inhibition_n_keys)
-        modulatory_routing_region = \
-            self._sdram_for_routing_region(self._modulatory_n_keys)
-        learnt_encoder_routing_region = \
-            self._sdram_for_routing_region(self._learnt_encoders_n_keys)
+        input_routing_region = helpful_functions.\
+            sdram_size_in_bytes_for_routing_region(self._inputs_n_keys)
+        inhib_routing_region = helpful_functions.\
+            sdram_size_in_bytes_for_routing_region(self._inhibition_n_keys)
+        modulatory_routing_region = helpful_functions.\
+            sdram_size_in_bytes_for_routing_region(self._modulatory_n_keys)
+        learnt_encoder_routing_region = helpful_functions.\
+            sdram_size_in_bytes_for_routing_region(self._learnt_encoders_n_keys)
 
         # profile region
         profiler_region = (self.PROFILER_N_SAMPLES_SIZE + (

@@ -1,10 +1,9 @@
 import numpy as np
-
 import nengo
-
 import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
 import nengo_spinnaker as mundy_nengo
-USE_GFE = True
+
+USE_GFE = False
 
 def create_model():
     dimension = 9

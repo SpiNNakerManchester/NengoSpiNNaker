@@ -1,7 +1,7 @@
 from data_specification.enums import DataType
 import numpy
 
-from pacman.model.graphs.common import Slice
+from nengo_spinnaker_gfe import constants
 
 
 def get_seed(nengo_object):
@@ -26,21 +26,40 @@ def convert_numpy_array_to_s16_15(values):
     return numpy.array(clipped_values, copy=True, dtype=numpy.int32)
 
 
-def expand_slice(vertex_slice, partition_index, n_dim):
-    """ function used to expand a slice into ........
-    
-    :param vertex_slice: 
-    :param partition_index: 
-    :param n_dim: 
-    :return: 
-    """
-    if partition_index is None:
+def convert_transform_to_machine_vertex_level(
+        transform, matrix_slice, sliced_dimension):
+    fixed_point_transform = convert_numpy_array_to_s16_15(transform)
+    sliced_transform = fixed_point_transform[
+        expand_slice(
+            matrix_slice, sliced_dimension, fixed_point_transform.ndim)]
+    return sliced_transform
+
+
+def expand_slice(matrix_slice, sliced_dimension, n_dim):
+    if sliced_dimension is None:
         return slice(None)
 
-    the_translated_slice = slice(vertex_slice.lo_atom, vertex_slice.hi_atom)
+    return (
+        tuple(slice(None) for _ in range(sliced_dimension.value)) +
+        (matrix_slice,) +
+        tuple(slice(None) for _ in range(sliced_dimension.value + 1, n_dim)))
 
-    thing = (
-        tuple(slice(None) for _ in range(partition_index)) +
-        (the_translated_slice,) +
-        tuple(slice(None) for _ in range(partition_index + 1, n_dim)))
-    return thing
+
+def sdram_size_in_bytes_for_filter_region(filters):
+    total = 0
+    total_n_filters = 0
+    for outgoing_partition in filters:
+        for input_filter in filters[outgoing_partition]:
+            total += input_filter.size_words()
+            total_n_filters += 1
+    total += (
+        (constants.FILTER_N_FILTERS_SIZE + (
+            constants.FILTER_PARAMETERS_SIZE * total_n_filters)) *
+        constants.BYTE_TO_WORD_MULTIPLIER)
+    return total
+
+
+def sdram_size_in_bytes_for_routing_region(n_keys):
+    return ((constants.ROUTING_N_ROUTES_SIZE + (
+        constants.ROUTING_ENTRIES_PER_ROUTE * n_keys)) *
+            constants.BYTE_TO_WORD_MULTIPLIER)

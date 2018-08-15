@@ -1,11 +1,23 @@
 import math
+import numpy
 
+from collections import defaultdict
+
+from nengo_spinnaker_gfe.machine_vertices.interposer_machine_vertex import \
+    InterposerMachineVertex
+from nengo_spinnaker_gfe.nengo_exceptions import \
+    NotValidOutgoingPartitionIdentifier
+from nengo_spinnaker_gfe.nengo_filters.\
+    filter_and_routing_region_generator import \
+    FilterAndRoutingRegionGenerator
 from pacman.executor.injection_decorator import inject
+from pacman.model.graphs.common import Slice
+from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_utilities.overrides import overrides
 
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
     AbstractNengoApplicationVertex
-from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe import constants, helpful_functions
 
 
 class InterposerApplicationVertex(AbstractNengoApplicationVertex):
@@ -84,35 +96,36 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
         "_groups"
         ]
 
-    def __init__(self, size_in, label, rng, seed,
-                 max_cols=constants.MAX_COLUMNS,
-                 max_rows=constants.MAX_ROWS):
+    # Maximum number of columns and rows which may be
+    # handled by a single processing core. The defaults (128 and 64
+    # respectively) result in the overall connection matrix being
+    # decomposed such that (a) blocks are sufficiently small to be stored
+    # in DTCM, (b) network traffic is reduced.
+
+    # NB: max_rows and max_cols determined by experimentation by AM and
+    # some modelling by SBF.
+    # Create as many groups as necessary to keep the size in of any group
+    # less than max_cols.
+
+    MAX_COLUMNS_SUPPORTED = 128
+    MAX_ROWS_SUPPORTED = 64
+
+    SYSTEM_DATA_ITEMS = 4
+
+    def __init__(self, size_in, label, rng, seed):
         """Create a new parallel Filter.
         
         :param size_in:  Width of the filter (length of any incoming signals).
         :type size_in: int
-        :param max_cols: Maximum number of columns and rows which may be\ 
-        handled by a single processing core. The defaults (128 and 64 \
-        respectively) result in the overall connection matrix being \
-        decomposed such that (a) blocks are sufficiently small to be stored \
-        in DTCM, (b) network traffic is reduced.
-        :type max_cols: int
-        :param max_rows: see max_cols
-        :type max_rows: int
         :param rng: the random number generator for generating seeds
+        :param label: the human readable label
+        :type label: str
+        :param seed: random number generator seed
+        :type seed: int
         """
-
-        # NB: max_rows and max_cols determined by experimentation by AM and
-        # some modelling by SBF.
-        # Create as many groups as necessary to keep the size in of any group
-        # less than max_cols.
         AbstractNengoApplicationVertex.__init__(self, label=label, rng=rng,
                                                 seed=seed)
-
         self._size_in = size_in
-        n_groups = int(math.ceil(size_in // max_cols))
-        self._groups = tuple(FilterGroup(sl, max_rows) for sl in
-                            divide_slice(slice(0, size_in), n_groups))
 
     @property
     def size_in(self):
@@ -122,18 +135,15 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
     def groups(self):
         return self._groups
 
-    @inject({"output_signals": "OutputSignals",
-             "machine_time_step": "MachineTimeStep",
-             "filter_region": "Filterregion",
-             "filter_routing_region": "FilterRoutingRegion"})
+    @inject({
+        "machine_time_step": "MachineTimeStep",
+        "operator_graph": "NengoOperatorGraph"})
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices,
-               additional_arguments=[
-                   "output_signals", "machine_time_step", "filter_region",
-                   "filter_routing_region"])
+               additional_arguments=["machine_time_step",
+                                     "operator_graph"])
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner,
-            machine_graph, graph_mapper, output_signals,
-            machine_time_step, filter_region, filter_routing_region):
+            self, resource_tracker, nengo_partitioner, machine_graph,
+            graph_mapper, machine_time_step, operator_graph):
         """Partition the transform matrix into groups of rows and assign each
         group of rows to a core for computation.
     
@@ -141,45 +151,147 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
         larger than 17 cores) then partition the matrix such that any used
         chips are used in their entirety.
         """
-        if OutputPort.standard not in output_signals:
-            self.cores = list()
-        else:
-            # Get the output transform, keys and slices for this slice of the
-            # filter.
-            transform, keys, output_slices = \
-                get_transforms_and_keys(output_signals[OutputPort.standard],
-                                        self.column_slice)
 
-            size_out = transform.shape[0]
+        # verify that channel output port standard exists. If not no vertices
+        #  will be made
+        outgoing_partitions = operator_graph\
+            .get_outgoing_edge_partitions_starting_at_vertex(self)
+        output_standard_partitions = list()
+        for outgoing_partition in outgoing_partitions:
+            if (outgoing_partition.identifier.source_port ==
+                    constants.OUTPUT_PORT.STANDARD):
+                output_standard_partitions.append(outgoing_partition)
+            else:
+                raise NotValidOutgoingPartitionIdentifier(
+                    "The outgoing partitions are expected to be of type {}. "
+                    "The outgoing partition {} was not.".format(
+                        constants.OUTPUT_PORT.STANDARD, outgoing_partition))
 
-            # Build as many vertices as required to keep the number of rows
-            # handled by each core below max_rows.
-            n_cores = (
-                (size_out // self.max_rows) +
-                (1 if size_out % self.max_rows else 0)
-            )
+        # TODO IS THIS A VALID APPROACH!?
+        if len(output_standard_partitions) == 0:
+            return
+
+        # locate the incoming standard partitions
+        filter_keys = 0
+        filters = defaultdict(list)
+
+        for incoming_edge in operator_graph.get_edges_ending_at_vertex(self):
+            if incoming_edge.input_port == constants.INPUT_PORT.STANDARD:
+                FilterAndRoutingRegionGenerator.add_filters(
+                    filters, incoming_edge,
+                    operator_graph.get_outgoing_partition_for_edge(
+                        incoming_edge), minimise=True, width=self._size_in)
+            filter_keys += 1
+
+        # there are standard outgoings, so build machine verts
+        n_groups = int(math.ceil(self._size_in // self.MAX_COLUMNS_SUPPORTED))
+        filter_slices = nengo_partitioner.divide_slice(
+            Slice(0, self._size_in), n_groups)
+
+        for filter_slice in filter_slices:
+            self._generate_cluster(
+                filter_slice, filter_keys, filters, output_standard_partitions,
+                machine_graph, graph_mapper, resource_tracker,
+                machine_time_step, nengo_partitioner)
+
+    def _generate_cluster(
+            self, filter_slice, filter_keys, filters,
+            output_standard_partitions, machine_graph, graph_mapper,
+            resource_tracker, machine_time_step, nengo_partitioner):
+
+        # Get the output transform, keys and slices for this slice of the
+        # filter.
+        transform, n_keys, output_slices = self._get_transforms_and_keys(
+            output_standard_partitions, filter_slice)
+
+        size_out = transform.shape[0]
+
+        # Build as many vertices as required to keep the number of rows
+        # handled by each core below max_rows.
+        n_cores = math.ceil(size_out // self.MAX_ROWS_SUPPORTED)
+
+        for output_slice in nengo_partitioner.divide_slice(
+                Slice(0, size_out), n_cores):
 
             # Build the transform region for these cores
-            transform_region = regions.MatrixRegion(
-                np_to_fix(transform),
-                sliced_dimension=regions.MatrixPartitioning.rows
-            )
+            transform_data = \
+                helpful_functions.convert_transform_to_machine_vertex_level(
+                    transform, output_slice,
+                    constants.MATRIX_CONVERSION_PARTITIONING.ROWS)
 
-            # Build all the vertices
-            self.cores = [
-                FilterCore(self.column_slice, out_slice,
-                           transform_region, keys, output_slices,
-                           machine_timestep,
-                           filter_region, filter_routing_region) for
-                out_slice in divide_slice(slice(0, size_out), n_cores)
-            ]
+            # build machine vertex
+            resources = self._generate_resources(
+                transform_data, n_keys, filters)
+            machine_vertex = InterposerMachineVertex(
+                filter_slice, output_slice, transform_data, n_keys, filter_keys,
+                output_slices, machine_time_step, filters,
+                "interposer_with-slice{}:{}_for_interposer{}".format(
+                    filter_slice.lo_atom, filter_slice.hi_atom, self),
+                self.constraints, resources)
 
+            # update graph objects
+            machine_graph.add_vertex(machine_vertex)
+            graph_mapper.add_vertex_mapping(
+                machine_vertex=machine_vertex, application_vertex=self)
+            resource_tracker.allocate_resources(resources)
         return self.cores
 
+    def _generate_resources(self, transform_data, n_keys, filters):
+        sdram = (
+            (self.SYSTEM_DATA_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER) +
+            transform_data.nbytes + (constants.BYTES_PER_KEY * n_keys) +
+            helpful_functions.sdram_size_in_bytes_for_filter_region(filters) +
+            helpful_functions.sdram_size_in_bytes_for_routing_region(n_keys))
+        return ResourceContainer(sdram=SDRAMResource(sdram))
 
     def add_constraint(self, constraint):
-        pass
+        self._constraints.add(constraint)
 
     @property
     def constraints(self):
-        pass
+        return self._constraints
+
+    @staticmethod
+    def _get_transforms_and_keys(outgoing_partitions, columns):
+        """Get a combined transform matrix and a list of keys to use to \
+        transmit elements transformed with the matrix.  This method also \
+        returns a list of signal parameters, transmission parameters and the \
+        slice of the final transform matrix that they are associated with.
+        """
+        transforms = list()
+        n_keys = 0
+        slices = list()
+
+        start = end = 0
+        for outgoing_partition in outgoing_partitions:
+            # Extract the transform
+            transmission_parameter = \
+                outgoing_partition.identifier.transmission_parameter
+            transform = transmission_parameter.full_transform(
+                slice_in=False, slice_out=False)[:, columns]
+
+            if outgoing_partition.identifier.latching_required:
+                # If the signal is latching then we use the transform exactly
+                # as it is.
+                keep = numpy.array([True for _ in range(transform.shape[0])])
+            else:
+                # If the signal isn't latching then we remove rows which would
+                # result in zero packets.
+                keep = numpy.any(transform != 0.0, axis=1)
+
+            transforms.append(transform[keep])
+            end += transforms[-1].shape[0]
+
+            slices.append((transmission_parameter, set(range(start, end))))
+            start = end
+
+            for i, k in zip(range(transform.shape[0]), keep):
+                if k:
+                    n_keys += 1
+
+        # Combine all the transforms
+        if len(transforms) > 0:
+            transform = numpy.vstack(transforms)
+        else:
+            transform = numpy.array([[]])
+        return transform, n_keys, slices

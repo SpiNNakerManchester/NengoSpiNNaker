@@ -26,9 +26,11 @@ KEY_FIELDS = Enum(
     names=[('CLUSTER', 0)]
 )
 
-# the max atoms per core are based off matrix sizes. these were
-MAX_ROWS = 64
-MAX_COLUMNS = 128
+MATRIX_CONVERSION_PARTITIONING = Enum(
+    value="MATRIX_CONVERSION_PARTITIONING",
+    names=[('ROWS', 0),
+           ('COLUMNS', 1)])
+
 CONVERT_MILLISECONDS_TO_SECONDS = 1000
 
 # random magic nums from the top level
@@ -40,6 +42,14 @@ SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
 BYTE_TO_WORD_MULTIPLIER = 4
 WORD_TO_BIT_CONVERSION = 32
 BYTES_PER_KEY = 4
+
+# sizes of elements for filter dsg regions
+FILTER_PARAMETERS_SIZE = 4
+FILTER_N_FILTERS_SIZE = 1
+
+# sizes of elements for routing dsg regions
+ROUTING_N_ROUTES_SIZE = 1
+ROUTING_ENTRIES_PER_ROUTE = 4
 
 # flag constants used around the codebase
 DECODERS_FLAG = "decoders"

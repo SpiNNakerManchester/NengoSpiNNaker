@@ -30,8 +30,10 @@ class InterposerMachineVertex(
                ('INPUT_ROUTING', 3),
                ('TRANSFORM', 4)])
 
-    def __init__(self, size_in, max_cols, max_row, label, constraints,
-                 resources):
+    def __init__(
+            self, size_in, output_slice, transform_data, n_keys, filter_keys,
+            output_slices, machine_time_step, filters, label, constraints,
+            resources):
         MachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AcceptsMulticastSignals.__init__(self)

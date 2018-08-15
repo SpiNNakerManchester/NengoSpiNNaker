@@ -67,3 +67,7 @@ class NengoSDRAMSizeException(NengoException):
     """ raised when a constant SDRAM partition discovers its edges have 
     inconsistent size requests
     """
+
+
+class NotValidOutgoingPartitionIdentifier(NengoException):
+    """ raised when a outgoing partition source port was not expected"""
