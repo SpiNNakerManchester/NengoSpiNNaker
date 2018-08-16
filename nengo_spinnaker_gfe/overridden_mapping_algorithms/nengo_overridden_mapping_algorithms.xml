@@ -106,10 +106,15 @@
                 <param_name>pre_allocated_resources</param_name>
                 <param_type>MemoryPreAllocatedResources</param_type>
             </parameter>
+            <parameter>
+                <param_name>nengo_random_number_generator</param_name>
+                <param_type>NengoRandomNumberGenerator</param_type>
+            </parameter>
         </input_definitions>
         <required_inputs>
             <param_name>nengo_operator_graph</param_name>
             <param_name>machine</param_name>
+            <param_name>nengo_random_number_generator</param_name>
         </required_inputs>
         <optional_inputs>
             <token>GeneratedPreAllocatedResources</token>

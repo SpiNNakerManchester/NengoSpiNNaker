@@ -31,12 +31,13 @@ MATRIX_CONVERSION_PARTITIONING = Enum(
     names=[('ROWS', 0),
            ('COLUMNS', 1)])
 
+# math constants
 CONVERT_MILLISECONDS_TO_SECONDS = 1000
+SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
 
-# random magic nums from the top level
+# default timings
 DEFAULT_DT = 0.001
 DEFAULT_TIME_SCALE = 1.0
-SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
 
 # DSG memory calculation
 BYTE_TO_WORD_MULTIPLIER = 4
@@ -59,13 +60,12 @@ RECORD_SPIKES_FLAG = "spikes"
 RECORD_VOLTAGE_FLAG = "voltage"
 ENCODERS_FLAG = "encoders"
 SCALED_ENCODERS_FLAG = "scaled_encoders"
+
+# graph constants
 APP_GRAPH_NAME = "nengo_operator_graph"
 INTER_APP_GRAPH_NAME = "nengo_operator_graph_par_way_interposers"
 MACHINE_GRAPH_LABEL = "machine graph"
 
-# extra params that spinnaker supports (unknown why)
-FUNCTION_OF_TIME_PARAM_FLAG = "function_of_time"
-FUNCTION_OF_TIME_PERIOD_PARAM_FLAG = "function_of_time_period"
 
 # sdp ports used by c code, to track with fec sdp ports.
 SDP_PORTS = Enum(

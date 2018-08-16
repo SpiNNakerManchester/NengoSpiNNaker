@@ -502,12 +502,10 @@ class NengoApplicationGraphBuilder(object):
                     period = function_of_time_nodes_time_period[nengo_node]
                 else:
                     logger.warning(
-                        "The {} parameter has not been provided. Please "
-                        "provide it for the node {} with label {} within the "
-                        "extra_object_params parameter. Will use None "
-                        "instead".format(
-                            constants.FUNCTION_OF_TIME_PERIOD_PARAM_FLAG,
-                            nengo_node, nengo_node.label))
+                        "The function_of_time_period parameter has not been "
+                        "provided. Please provide it for the node {} with label"
+                        " {} within the extra_object_params parameter. Will "
+                        "use None instead".format(nengo_node, nengo_node.label))
                     period = None
             else:
                 period = (machine_time_step /
