@@ -140,9 +140,11 @@ class NengoUtiliseInterposers(object):
                 mean_fan_in = numpy.mean(numpy.sum(trans != 0.0, axis=0))
                 mean_fan_out = numpy.mean(numpy.sum(trans != 0.0, axis=1))
                 interposer_fan_in = numpy.ceil(
-                    float(trans.shape[1]) / float(constants.MAX_COLUMNS))
+                    float(trans.shape[1]) / float(
+                        InterposerApplicationVertex.MAX_COLUMNS_SUPPORTED))
                 interposer_fan_out = numpy.ceil(
-                    float(trans.shape[0]) / float(constants.MAX_ROWS))
+                    float(trans.shape[0]) / float(
+                        InterposerApplicationVertex.MAX_ROWS_SUPPORTED))
 
                 # If the interposer would improve connectivity then add it
                 #  to the list of potential interposers.
