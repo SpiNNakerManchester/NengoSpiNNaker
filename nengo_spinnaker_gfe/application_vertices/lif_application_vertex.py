@@ -641,32 +641,30 @@ class LIFApplicationVertex(
                        constants.BYTE_TO_WORD_MULTIPLIER)
 
         # matrix based regions
-        decoders_region = self._decoders[helpful_functions.expand_slice(
-            output_slice.as_slice,
-            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
-            self._decoders.ndim)].nbytes
+        decoders_region = \
+            helpful_functions.convert_matrix_to_machine_vertex_level(
+                self._decoders, output_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
-        learnt_decoders_region = self._learnt_decoders[
-            helpful_functions.expand_slice(
-                learnt_output_slice.as_slice,
-                constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
-                self._learnt_decoders.ndim)].nbytes
+        learnt_decoders_region = \
+            helpful_functions.convert_matrix_to_machine_vertex_level(
+                self._learnt_decoders, learnt_output_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
-        encoders_region = self._encoders_with_gain[
-            helpful_functions.expand_slice(
-                neuron_slice.as_slice,
-                constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
-                self._encoders_with_gain.ndim)].nbytes
+        encoders_region = \
+            helpful_functions.convert_matrix_to_machine_vertex_level(
+                self._encoders_with_gain, neuron_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
-        bias_region = self._bias[helpful_functions.expand_slice(
-            neuron_slice.as_slice,
-            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
-            self._bias.ndim)].nbytes
+        bias_region = \
+            helpful_functions.convert_matrix_to_machine_vertex_level(
+                self._bias, neuron_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
-        gain_region = self._gain[helpful_functions.expand_slice(
-            neuron_slice.as_slice,
-            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
-            self._gain.ndim)].nbytes
+        gain_region = \
+            helpful_functions.convert_matrix_to_machine_vertex_level(
+                self._gain, neuron_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
         # basic key regions
         key_region = constants.BYTES_PER_KEY * self._n_output_keys

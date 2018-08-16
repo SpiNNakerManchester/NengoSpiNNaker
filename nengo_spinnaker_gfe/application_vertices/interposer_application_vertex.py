@@ -213,7 +213,7 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
 
             # Build the transform region for these cores
             transform_data = \
-                helpful_functions.convert_transform_to_machine_vertex_level(
+                helpful_functions.convert_matrix_to_machine_vertex_level(
                     transform, output_slice,
                     constants.MATRIX_CONVERSION_PARTITIONING.ROWS)
 

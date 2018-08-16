@@ -26,16 +26,28 @@ def convert_numpy_array_to_s16_15(values):
     return numpy.array(clipped_values, copy=True, dtype=numpy.int32)
 
 
-def convert_transform_to_machine_vertex_level(
+def convert_matrix_to_machine_vertex_level(
         transform, matrix_slice, sliced_dimension):
-    fixed_point_transform = convert_numpy_array_to_s16_15(transform)
-    sliced_transform = fixed_point_transform[
-        expand_slice(
-            matrix_slice, sliced_dimension, fixed_point_transform.ndim)]
+    """
+    
+    :param transform: 
+    :param matrix_slice: 
+    :param sliced_dimension: 
+    :return: 
+    """
+    sliced_transform = transform[_expand_slice(
+        matrix_slice, sliced_dimension, transform.ndim)]
     return sliced_transform
 
 
-def expand_slice(matrix_slice, sliced_dimension, n_dim):
+def _expand_slice(matrix_slice, sliced_dimension, n_dim):
+    """
+    
+    :param matrix_slice: 
+    :param sliced_dimension: 
+    :param n_dim: 
+    :return: 
+    """
     if sliced_dimension is None:
         return slice(None)
 
@@ -46,6 +58,11 @@ def expand_slice(matrix_slice, sliced_dimension, n_dim):
 
 
 def sdram_size_in_bytes_for_filter_region(filters):
+    """
+    
+    :param filters: 
+    :return: 
+    """
     total = 0
     total_n_filters = 0
     for outgoing_partition in filters:
@@ -60,6 +77,11 @@ def sdram_size_in_bytes_for_filter_region(filters):
 
 
 def sdram_size_in_bytes_for_routing_region(n_keys):
+    """ calculates the sdram usage in bytes for a routing region
+    
+    :param n_keys: 
+    :return: 
+    """
     return ((constants.ROUTING_N_ROUTES_SIZE + (
         constants.ROUTING_ENTRIES_PER_ROUTE * n_keys)) *
             constants.BYTE_TO_WORD_MULTIPLIER)
