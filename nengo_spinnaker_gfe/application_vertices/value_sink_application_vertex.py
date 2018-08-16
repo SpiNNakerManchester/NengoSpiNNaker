@@ -1,5 +1,7 @@
 import math
 
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
+    NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
 from spinn_utilities.overrides import overrides
@@ -41,8 +43,8 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
             "using_auto_pause_and_resume", "receive_buffer_host",
             "receive_buffer_port"})
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper, minimum_buffer_sdram, maximum_sdram_for_buffering,
+            self, resource_tracker, machine_graph, graph_mapper,
+            minimum_buffer_sdram, maximum_sdram_for_buffering,
             using_auto_pause_and_resume, receive_buffer_host,
             receive_buffer_port):
         # Make sufficient vertices to ensure that each has a size_in of less
@@ -52,7 +54,7 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
         if n_vertices == 0:
             n_vertices = 1
 
-        for input_slice in nengo_partitioner.divide_slice(
+        for input_slice in NengoPartitioner.divide_slice(
                 Slice(0, self._size_in), n_vertices):
             machine_vertex = ValueSinkMachineVertex(
                 input_slice=input_slice,

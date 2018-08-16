@@ -1,7 +1,10 @@
-import math
-
 from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
+from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
+    TransmitsMulticastSignals
+from nengo_spinnaker_gfe.graph_components.\
+    connection_machine_outgoing_partition import \
+    ConnectionMachineOutgoingPartition
 from pacman.model.graphs.common import Slice
 from pacman.model.graphs.machine import MachineGraph, MachineEdge
 from pacman.utilities.utility_objs import ResourceTracker
@@ -10,11 +13,7 @@ from nengo_spinnaker_gfe.abstracts. \
     abstract_accepts_multicast_signals import AcceptsMulticastSignals
 from nengo_spinnaker_gfe.graph_components. \
     graph_mapper import GraphMapper
-from nengo_spinnaker_gfe.nengo_exceptions import \
-    NotAbleToBeConnectedToAsADestination, NotPartitionable
-
-from nengo_spinnaker_gfe.machine_vertices.interposer_machine_vertex import \
-    InterposerMachineVertex
+from nengo_spinnaker_gfe.nengo_exceptions import NotPartitionable
 from spinn_machine import Processor, SDRAM
 from spinn_utilities.progress_bar import ProgressBar
 
@@ -32,8 +31,9 @@ class NengoPartitioner(object):
     def __init__(self):
         self._resource_tracker = None
 
-    def __call__(self, nengo_operator_graph, machine,
-                 pre_allocated_resources=None):
+    def __call__(
+            self, nengo_operator_graph, machine, nengo_random_number_generator,
+            pre_allocated_resources=None):
         machine_graph = MachineGraph(label=constants.MACHINE_GRAPH_LABEL)
         graph_mapper = GraphMapper()
 
@@ -43,7 +43,7 @@ class NengoPartitioner(object):
         progress_bar = ProgressBar(
             total_number_of_things_to_do=(
                 len(nengo_operator_graph.vertices) +
-                len(nengo_operator_graph.edges)),
+                len(nengo_operator_graph.outgoing_edge_partitions)),
             string_describing_what_being_progressed="partitioning")
 
         # convert application vertices into machine vertices
@@ -52,22 +52,78 @@ class NengoPartitioner(object):
 
             # create the machine verts
             operator.create_machine_vertices(
-                self._resource_tracker, self, machine_graph, graph_mapper)
+                self._resource_tracker, machine_graph, graph_mapper)
 
         self._handle_edges(nengo_operator_graph, machine_graph, graph_mapper,
-                           progress_bar)
+                           progress_bar, nengo_random_number_generator)
 
-    def _handle_edges(self, operator_graph, machine_graph,
-                      graph_mapper, progress_bar):
-        for outgoing_edge_partition in operator_graph.outgoing_edge_partitions:
+    def _handle_edges(
+            self, operator_graph, machine_graph, graph_mapper, progress_bar,
+            nengo_random_number_generator):
+
+        for outgoing_edge_partition in progress_bar.over(
+                operator_graph.outgoing_edge_partitions, True):
             machine_vertices = graph_mapper.get_machine_vertices(
                 outgoing_edge_partition.pre_vertex)
+            transmission_parameter = \
+                outgoing_edge_partition.identifier.transmission_parameter
 
+            # locate valid sources for machine edges
+            valid_sources = list()
+            for machine_vertex in machine_vertices:
+                if isinstance(machine_vertex, TransmitsMulticastSignals):
+                    if machine_vertex.transmits_multicast_signals(
+                            transmission_parameter):
+                        valid_sources.append(machine_vertex)
+                else:
+                    raise NotPartitionable(
+                        "The vertex {} can not inform the partitioner if it"
+                        " transmits these signals".format(machine_vertex))
 
+            # locate valid destinations for machine edges, and build machine
+            # edges
+            for app_edge in outgoing_edge_partition.edges:
+                destination_app_vertex = app_edge.post_vertex
+                machine_vertices = graph_mapper.get_machine_vertices(
+                    destination_app_vertex)
+                for machine_vertex in machine_vertices:
 
+                    # if accepts this signal, make machine vertex
+                    if isinstance(machine_vertex, AcceptsMulticastSignals):
+                        if machine_vertex.accepts_multicast_signals(
+                                transmission_parameter):
+                            self._create_machine_edge(
+                                valid_sources, outgoing_edge_partition,
+                                machine_graph, graph_mapper, machine_vertex,
+                                app_edge, nengo_random_number_generator)
+                    else:
+                        raise NotPartitionable(
+                            "The vertex {} can not inform the partitioner if it"
+                            " accepts these signals".format(machine_vertex))
+
+    @staticmethod
+    def _create_machine_edge(
+            valid_sources, outgoing_edge_partition, machine_graph, graph_mapper,
+            sink, app_edge, nengo_random_number_generator):
+            for source in valid_sources:
+                machine_outgoing_edge_partition = \
+                    ConnectionMachineOutgoingPartition(
+                        identifier=outgoing_edge_partition.identifier,
+                        seed=None, pre_vertex=source,
+                        rng=nengo_random_number_generator)
+                machine_graph.add_outgoing_edge_partition(
+                    machine_outgoing_edge_partition)
+                edge = MachineEdge(
+                    source, sink, outgoing_edge_partition.identifier.weight)
+                machine_graph.add_edge(
+                    edge, outgoing_edge_partition.identifier)
+                graph_mapper.add_edge_mapping(
+                    machine_edge=edge, application_edge=app_edge)
+
+    @staticmethod
     def create_slices(
-            self, initial_slice, application_vertex,
-            max_resources_to_use_per_core, max_cores, max_cuts):
+            initial_slice, application_vertex, max_resources_to_use_per_core,
+            max_cores, max_cuts, resource_tracker):
         """
         
         :param initial_slice: 
@@ -75,16 +131,18 @@ class NengoPartitioner(object):
         :param max_resources_to_use_per_core: 
         :param max_cores: 
         :param max_cuts:
+        :param resource_tracker:
         :return: 
         """
 
-        return self.create_slices_for_multiple(
-                [initial_slice], application_vertex,
-                max_resources_to_use_per_core, max_cores, max_cuts)
+        return NengoPartitioner.create_slices_for_multiple(
+            [initial_slice], application_vertex, max_resources_to_use_per_core,
+            max_cores, max_cuts, resource_tracker)
 
+    @staticmethod
     def create_slices_for_multiple(
-            self, initial_slices, application_vertex,
-            max_resources_to_use_per_core, max_cores, user_max_cuts):
+            initial_slices, application_vertex, max_resources_to_use_per_core,
+            max_cores, user_max_cuts, resource_tracker):
         """
         
         :param initial_slices: 
@@ -92,6 +150,7 @@ class NengoPartitioner(object):
         :param max_resources_to_use_per_core: 
         :param max_cores: 
         :param user_max_cuts:
+        :param resource_tracker
         :return: dict of tuple to ResourceContainer
         """
 
@@ -117,9 +176,9 @@ class NengoPartitioner(object):
         slices = [initial_slices]
         resources_used = list()
 
-        while self._constraints_unsatisfied(
+        while NengoPartitioner._constraints_unsatisfied(
                 slices, application_vertex, max_resources_to_use_per_core,
-                max_cores, resources_used):
+                max_cores, resources_used, resource_tracker):
 
             # clear resources used, as splitting again
             resources_used = list()
@@ -158,7 +217,7 @@ class NengoPartitioner(object):
 
                 for neuron_slice in internal_slices:
                     new_slices.append(list())
-                    for new_neuron_slice in self.divide_slice(
+                    for new_neuron_slice in NengoPartitioner.divide_slice(
                             neuron_slice, n_cuts):
                         new_slices[-1].append(new_neuron_slice)
             slices = new_slices
@@ -198,9 +257,10 @@ class NengoPartitioner(object):
             yield Slice(pos, pos + chunk)
             pos += chunk
 
+    @staticmethod
     def _constraints_unsatisfied(
-            self, slices, application_vertex, max_resources_to_use_per_core,
-            n_cores, resources_used):
+            slices, application_vertex, max_resources_to_use_per_core, n_cores,
+            resources_used, resource_tracker):
 
         max_sdram_usage = (
             application_vertex.get_shared_resources_for_slices(
@@ -225,8 +285,8 @@ class NengoPartitioner(object):
         # if still valid, check that all sdram allocated including shared
         # will be acceptable
         if not failed:
-            max_available_resources = self._resource_tracker.\
-                get_maximum_resources_available()
+            max_available_resources = \
+                resource_tracker.get_maximum_resources_available()
             failed = max_sdram_usage > max_available_resources.sdram.get_value()
         return failed
 

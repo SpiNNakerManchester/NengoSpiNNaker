@@ -4,7 +4,8 @@ from six import add_metaclass
 from spinn_utilities.abstract_base import AbstractBase, abstractmethod
 from spinn_utilities.overrides import overrides
 
-from nengo_spinnaker_gfe.abstracts.abstract_nengo_object import AbstractNengoObject
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_object import \
+    AbstractNengoObject
 
 
 @add_metaclass(AbstractBase)
@@ -47,9 +48,10 @@ class AbstractNengoApplicationVertex(
 
     @abstractmethod
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper):
+            self, resource_tracker, machine_graph, graph_mapper):
         """
-        
-        :return: 
+        :param resource_tracker:
+        :param machine_graph:
+        :param graph_mapper:
+        :rtype: None
         """

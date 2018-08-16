@@ -4,6 +4,8 @@ import math
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe.machine_vertices.value_source_machine_vertex import \
     ValueSourceMachineVertex
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
+    NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
 from pacman.model.resources import SDRAMResource, ResourceContainer
@@ -86,13 +88,13 @@ class ValueSourceApplicationVertex(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments=["operator_graph", "n_machine_time_steps"])
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper, operator_graph, n_machine_time_steps):
+            self, resource_tracker, machine_graph, graph_mapper, operator_graph,
+            n_machine_time_steps):
         outgoing_partitions = \
             operator_graph.get_outgoing_edge_partitions_starting_at_vertex(self)
-        n_machine_verts = math.ceil(
-            len(outgoing_partitions) / self.MAX_CHANNELS_PER_MACHINE_VERTEX)
-        vertex_partition_slices = nengo_partitioner.divide_slice(
+        n_machine_verts = int(math.ceil(
+            len(outgoing_partitions) / self.MAX_CHANNELS_PER_MACHINE_VERTEX))
+        vertex_partition_slices = NengoPartitioner.divide_slice(
             Slice(0, len(outgoing_partitions)), n_machine_verts)
 
         for vertex_partition_slice in vertex_partition_slices:

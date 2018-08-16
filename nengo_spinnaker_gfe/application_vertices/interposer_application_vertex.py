@@ -10,6 +10,8 @@ from nengo_spinnaker_gfe.nengo_exceptions import \
 from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import \
     FilterAndRoutingRegionGenerator
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
+    NengoPartitioner
 from pacman.executor.injection_decorator import inject
 from pacman.model.graphs.common import Slice
 from spinn_utilities.overrides import overrides
@@ -139,8 +141,8 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
                additional_arguments=["machine_time_step",
                                      "operator_graph"])
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper, machine_time_step, operator_graph):
+            self, resource_tracker, machine_graph, graph_mapper,
+            machine_time_step, operator_graph):
         """Partition the transform matrix into groups of rows and assign each
         group of rows to a core for computation.
     
@@ -182,7 +184,7 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
 
         # there are standard outgoings, so build machine verts
         n_groups = int(math.ceil(self._size_in // self.MAX_COLUMNS_SUPPORTED))
-        filter_slices = nengo_partitioner.divide_slice(
+        filter_slices = NengoPartitioner.divide_slice(
             Slice(0, self._size_in), n_groups)
 
         for filter_slice in filter_slices:
@@ -205,10 +207,9 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
 
         # Build as many vertices as required to keep the number of rows
         # handled by each core below max_rows.
-        n_cores = math.ceil(size_out // self.MAX_ROWS_SUPPORTED)
-
-        for output_slice in nengo_partitioner.divide_slice(
-                Slice(0, size_out), n_cores):
+        for output_slice in NengoPartitioner.divide_slice(
+                initial_slice=Slice(0, size_out),
+                n_slices=int(math.ceil(size_out // self.MAX_ROWS_SUPPORTED))):
 
             # Build the transform region for these cores
             transform_data = \

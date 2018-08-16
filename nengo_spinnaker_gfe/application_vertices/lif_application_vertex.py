@@ -27,6 +27,8 @@ from nengo_spinnaker_gfe.machine_vertices.lif_machine_vertex import \
     LIFMachineVertex
 from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
+    NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
 from pacman.model.resources import CPUCyclesPerTickResource, DTCMResource, \
@@ -406,8 +408,8 @@ class LIFApplicationVertex(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments=["operator_graph", "machine_time_step"])
     def create_machine_vertices(
-            self, resource_tracker, nengo_partitioner, machine_graph,
-            graph_mapper, operator_graph, machine_time_step):
+            self, resource_tracker, machine_graph, graph_mapper,
+            operator_graph, machine_time_step):
 
         machine_vertices = list()
 
@@ -430,21 +432,20 @@ class LIFApplicationVertex(
             # partitioning. else assume one chip and partition accordingly.
             cluster_vertices = list()
             if self.ENSEMBLE_PARTITIONING_OVER_MULTIPLE_CHIPS:
-                slices = nengo_partitioner.create_slices(
+                slices = NengoPartitioner.create_slices(
                     Slice(0, self._n_neurons - 1), self,
                     self._max_resources_to_use_per_core, max_cores,
-                    self._n_neurons)
+                    self._n_neurons, resource_tracker)
                 for neuron_slice in slices:
                     self._n_neurons_in_current_cluster = (
                         neuron_slice.hi_atom - neuron_slice.lo_atom)
                     cluster_vertices = self._create_cluster_and_verts(
-                        neuron_slice, max_cores, nengo_partitioner)
+                        neuron_slice, max_cores, resource_tracker)
                     machine_vertices.extend(cluster_vertices)
             else:
                 self._n_neurons_in_current_cluster = self._n_neurons
                 cluster_vertices = self._create_cluster_and_verts(
-                    Slice(0, self._n_neurons - 1), max_cores,
-                    nengo_partitioner)
+                    Slice(0, self._n_neurons - 1), max_cores, resource_tracker)
                 machine_vertices.extend(cluster_vertices)
 
             # update the atom tracker
@@ -547,7 +548,7 @@ class LIFApplicationVertex(
             machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SEMAPHORE)
 
     def _create_cluster_and_verts(
-            self, neuron_slice, max_cores, nengo_partitioner):
+            self, neuron_slice, max_cores, resource_tracker):
 
         cluster_vertices = list()
 
@@ -559,9 +560,9 @@ class LIFApplicationVertex(
             Slice(0, len(self._learnt_encoder_filters))  # Learnt output
         ]
         # create core sized partitions
-        all_slices_and_resources = nengo_partitioner.create_slices_for_multiple(
+        all_slices_and_resources = NengoPartitioner.create_slices_for_multiple(
             sliced_objects, self, self._max_resources_to_use_per_core,
-            max_cores, max_cores)
+            max_cores, max_cores, resource_tracker)
 
         neuron_slices = list()
         for ((_, neuron_slice, _, _), used_resources) in \
@@ -641,26 +642,30 @@ class LIFApplicationVertex(
 
         # matrix based regions
         decoders_region = self._decoders[helpful_functions.expand_slice(
-            output_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
+            output_slice.as_slice,
+            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._decoders.ndim)].nbytes
 
         learnt_decoders_region = self._learnt_decoders[
             helpful_functions.expand_slice(
-                learnt_output_slice,
+                learnt_output_slice.as_slice,
                 constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
                 self._learnt_decoders.ndim)].nbytes
 
         encoders_region = self._encoders_with_gain[
             helpful_functions.expand_slice(
-                neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
+                neuron_slice.as_slice,
+                constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
                 self._encoders_with_gain.ndim)].nbytes
 
         bias_region = self._bias[helpful_functions.expand_slice(
-            neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
+            neuron_slice.as_slice,
+            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._bias.ndim)].nbytes
 
         gain_region = self._gain[helpful_functions.expand_slice(
-            neuron_slice, constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
+            neuron_slice.as_slice,
+            constants.MATRIX_CONVERSION_PARTITIONING.ROWS,
             self._gain.ndim)].nbytes
 
         # basic key regions
