@@ -80,14 +80,25 @@ class ValueSourceApplicationVertex(
     def recording_of(self):
         return self._recording_of
 
-    @inject_items({"operator_graph": "NengoOperatorGraph",
-                   "n_machine_time_steps": "TotalMachineTimeSteps"})
+    @inject_items({
+        "operator_graph": "NengoOperatorGraph",
+        "n_machine_time_steps": "TotalMachineTimeSteps",
+        "minimum_buffer_sdram": "MinBufferSize",
+        "maximum_sdram_for_buffering": "MaxSinkBuffingSize",
+        "using_auto_pause_and_resume": "UsingAutoPauseAndResume",
+        "receive_buffer_host": "ReceiveBufferHost",
+        "receive_buffer_port": "ReceiveBufferPort"})
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
-        additional_arguments=["operator_graph", "n_machine_time_steps"])
+        additional_arguments=[
+            "operator_graph", "n_machine_time_steps", "minimum_buffer_sdram",
+            "maximum_sdram_for_buffering", "using_auto_pause_and_resume",
+            "receive_buffer_host", "receive_buffer_port"])
     def create_machine_vertices(
             self, resource_tracker, machine_graph, graph_mapper, operator_graph,
-            n_machine_time_steps):
+            n_machine_time_steps, minimum_buffer_sdram,
+            maximum_sdram_for_buffering, using_auto_pause_and_resume,
+            receive_buffer_host):
         outgoing_partitions = \
             operator_graph.get_outgoing_edge_partitions_starting_at_vertex(self)
         n_machine_verts = int(math.ceil(
@@ -95,14 +106,13 @@ class ValueSourceApplicationVertex(
         vertex_partition_slices = NengoPartitioner.divide_slice(
             Slice(0, len(outgoing_partitions)), n_machine_verts)
 
-
-
         for vertex_partition_slice in vertex_partition_slices:
 
-
-
             machine_vertex = ValueSourceMachineVertex(
-                vertex_partition_slice, n_machine_time_steps)
+                vertex_partition_slice, n_machine_time_steps,
+                self._update_period, minimum_buffer_sdram,
+                maximum_sdram_for_buffering, using_auto_pause_and_resume,
+                receive_buffer_host)
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)

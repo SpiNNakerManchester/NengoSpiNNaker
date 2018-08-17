@@ -65,6 +65,12 @@ def compare_against_the_nengo_spinnaker_and_gfe_impls(
             connection_map, app_graph, nengo_operators, nengo_to_app_graph_map,
             nengo_spinnaker_network_builder)
 
+def compare_against_the_nengo_spinnaker_and_gfe_impls_machine_graphs(
+        nengo_app_operators, nengo_to_app_graph_map, connection_map,
+        machine_net_list, machine_graph, graph_mapper, app_graph,
+        nengo_spinnaker_network_builder):
+    pass
+
 
 def _compare_none_filters(nengo_version, gfe_version):
     return (nengo_version.width == gfe_version.width and
@@ -255,6 +261,7 @@ def _check_value_source_app_vertex(nengo_spinnaker_vertex, gfe_nengo_vertex):
                 gfe_nengo_vertex.nengo_output_function):
             output_function_valid = True
     return basic_values and output_function_valid
+
 
 def _check_vert(
         nengo_spinnaker_vertex, gfe_nengo_vertex,
@@ -455,10 +462,11 @@ def _test_graph_edges(
                     (signal_params, transmission_parameter)]
                 for (sink_object, input_port, reception_params) in \
                         nengo_data:
-                    nengo_mapped_objs[(channel_identifier,
-                          signal_params.weight,
-                          signal_params.latching,
-                          transmission_parameter)][
+                    nengo_mapped_objs[
+                        (channel_identifier,
+                         signal_params.weight,
+                         signal_params.latching,
+                         transmission_parameter)][
                         (sink_object, reception_params,
                          input_port)] = False
 

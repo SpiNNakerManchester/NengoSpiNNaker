@@ -91,6 +91,7 @@ def create_model():
             p_encoders = nengo.Probe(
                 conn_in.learning_rule, 'scaled_encoders',
                 label="p_encoders")
+
     return model, list(), dict()
 
 if __name__ == '__main__':

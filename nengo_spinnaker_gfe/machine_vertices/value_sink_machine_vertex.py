@@ -113,14 +113,21 @@ class ValueSinkMachineVertex(
         spec.write_value(self._input_slice.n_atoms)
         spec.write_array(self._input_slice.lo_atom)
 
-        # filters region
+        # add filer region
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
+        self._write_filter_region(spec)
 
-        # routing region
+        # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
+        self._write_routing_region(spec)
 
-        # end spec
         spec.end_specification()
+
+    def _write_filter_region(self, spec):
+        pass
+
+    def _write_routing_region(self, spec):
+        pass
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(

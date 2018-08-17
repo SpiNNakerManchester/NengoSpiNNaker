@@ -49,7 +49,7 @@ class SDPReceiverMachineVertex(
     BYTES_PER_FIELD = 4
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
-    # the next timerticks wort of changes. future could be modded to remove
+    # the next timer ticks worth of changes. future could be modded to remove
     # this limitation.
     MAX_N_KEYS_SUPPORTED = 64
     TRANSFORM_SLICE_OUT = False
