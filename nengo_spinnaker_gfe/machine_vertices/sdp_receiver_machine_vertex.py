@@ -3,7 +3,9 @@ from data_specification.enums import DataType
 from enum import Enum
 
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AcceptsMulticastSignals
+    AbstractAcceptsMulticastSignals
+from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
+    AbstractTransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource
@@ -26,7 +28,7 @@ from nengo_spinnaker_gfe.constraints.nengo_key_constraint import \
 
 class SDPReceiverMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractProvidesNKeysForPartition, AcceptsMulticastSignals,
+        AbstractProvidesNKeysForPartition, AbstractTransmitsMulticastSignals,
         AbstractProvidesOutgoingPartitionConstraints):
 
     __slots__ = [
@@ -56,6 +58,9 @@ class SDPReceiverMachineVertex(
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
+        AbstractTransmitsMulticastSignals.__init__(self)
+        AbstractProvidesOutgoingPartitionConstraints.__init__(self)
+        AbstractProvidesNKeysForPartition.__init__(self)
 
         # TODO WHY DO WE PARTITION OVER OUTGOING PARTITIONS!!!
         self._managing_outgoing_partition = outgoing_partition
@@ -113,8 +118,8 @@ class SDPReceiverMachineVertex(
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
 
-    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
-    def accepts_multicast_signals(self, transmission_params):
+    @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
+    def transmits_multicast_signals(self, transmission_params):
         return True
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
@@ -141,13 +146,13 @@ class SDPReceiverMachineVertex(
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(
-            self.DATA_REGIONS.SYSTEM.value(),
+            self.DATA_REGIONS.SYSTEM.value,
             constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
         spec.reserve_memory_region(
-            self.DATA_REGIONS.N_KEYS.value(),
+            self.DATA_REGIONS.N_KEYS.value,
             self.N_KEYS_REGION_SIZE, label="n_keys region")
         spec.reserve_memory_region(
-            self.DATA_REGIONS.KEYS.value(),
+            self.DATA_REGIONS.KEYS.value,
             self._calculate_sdram_for_keys(self.keys),
             label="keys region")
 

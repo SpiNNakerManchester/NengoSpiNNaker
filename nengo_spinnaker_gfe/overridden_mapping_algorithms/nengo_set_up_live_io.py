@@ -4,6 +4,8 @@ class NengoSetUpLiveIO(object):
 
     def __call__(self, machine_graph):
 
+
+
         class EthernetThread(threading.Thread):
             """Thread which handles transmitting and receiving IO values."""
 

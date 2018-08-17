@@ -4,7 +4,7 @@ from spinn_utilities.abstract_base import AbstractBase, abstractmethod
 
 
 @add_metaclass(AbstractBase)
-class TransmitsMulticastSignals(object):
+class AbstractTransmitsMulticastSignals(object):
     __slots__ = []
 
     def __init__(self):

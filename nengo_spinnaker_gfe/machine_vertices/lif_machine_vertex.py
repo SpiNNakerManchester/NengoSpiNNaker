@@ -1,5 +1,5 @@
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
-    TransmitsMulticastSignals
+    AbstractTransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
@@ -8,12 +8,12 @@ from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AcceptsMulticastSignals
+    AbstractAcceptsMulticastSignals
 
 
 class LIFMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AcceptsMulticastSignals, TransmitsMulticastSignals):
+        AbstractAcceptsMulticastSignals, AbstractTransmitsMulticastSignals):
 
     __slots__ = [
         "_resources",
@@ -25,11 +25,12 @@ class LIFMachineVertex(
     ]
 
     def __init__(self, vertex_index, neuron_slice, input_slice, output_slice,
-                learnt_slice, resources, n_profiler_samples):
-        MachineVertex.__init__(self)
+                learnt_slice, resources, n_profiler_samples, label):
+        MachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
-        AcceptsMulticastSignals.__init__(self)
+        AbstractAcceptsMulticastSignals.__init__(self)
+        AbstractTransmitsMulticastSignals.__init__(self)
         self._resources = resources
         self._neuron_slice = neuron_slice
         self._input_slice = input_slice
@@ -53,11 +54,11 @@ class LIFMachineVertex(
     def learnt_slice(self):
         return self._learnt_slice
 
-    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
         return True
 
-    @overrides(TransmitsMulticastSignals.transmits_multicast_signals)
+    @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
         return True
 

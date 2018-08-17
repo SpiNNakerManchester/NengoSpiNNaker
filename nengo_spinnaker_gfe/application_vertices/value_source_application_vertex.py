@@ -1,14 +1,12 @@
 import logging
 import math
 
-from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe.machine_vertices.value_source_machine_vertex import \
     ValueSourceMachineVertex
-from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
-    NengoPartitioner
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_partitioner import NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
-from pacman.model.resources import SDRAMResource, ResourceContainer
 from spinn_utilities.log import FormatAdapter
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe.abstracts. \
@@ -97,7 +95,12 @@ class ValueSourceApplicationVertex(
         vertex_partition_slices = NengoPartitioner.divide_slice(
             Slice(0, len(outgoing_partitions)), n_machine_verts)
 
+
+
         for vertex_partition_slice in vertex_partition_slices:
+
+
+
             machine_vertex = ValueSourceMachineVertex(
                 vertex_partition_slice, n_machine_time_steps)
             resource_tracker.allocate_resources(

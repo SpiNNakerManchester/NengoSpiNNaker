@@ -1,7 +1,7 @@
 from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
-    TransmitsMulticastSignals
+    AbstractTransmitsMulticastSignals
 from nengo_spinnaker_gfe.graph_components.\
     connection_machine_outgoing_partition import \
     ConnectionMachineOutgoingPartition
@@ -10,7 +10,7 @@ from pacman.model.graphs.machine import MachineGraph, MachineEdge
 from pacman.utilities.utility_objs import ResourceTracker
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe.abstracts. \
-    abstract_accepts_multicast_signals import AcceptsMulticastSignals
+    abstract_accepts_multicast_signals import AbstractAcceptsMulticastSignals
 from nengo_spinnaker_gfe.graph_components. \
     graph_mapper import GraphMapper
 from nengo_spinnaker_gfe.nengo_exceptions import NotPartitionable
@@ -57,6 +57,8 @@ class NengoPartitioner(object):
         self._handle_edges(nengo_operator_graph, machine_graph, graph_mapper,
                            progress_bar, nengo_random_number_generator)
 
+        return machine_graph, graph_mapper
+
     def _handle_edges(
             self, operator_graph, machine_graph, graph_mapper, progress_bar,
             nengo_random_number_generator):
@@ -71,7 +73,7 @@ class NengoPartitioner(object):
             # locate valid sources for machine edges
             valid_sources = list()
             for machine_vertex in machine_vertices:
-                if isinstance(machine_vertex, TransmitsMulticastSignals):
+                if isinstance(machine_vertex, AbstractTransmitsMulticastSignals):
                     if machine_vertex.transmits_multicast_signals(
                             transmission_parameter):
                         valid_sources.append(machine_vertex)
@@ -89,7 +91,7 @@ class NengoPartitioner(object):
                 for machine_vertex in machine_vertices:
 
                     # if accepts this signal, make machine vertex
-                    if isinstance(machine_vertex, AcceptsMulticastSignals):
+                    if isinstance(machine_vertex, AbstractAcceptsMulticastSignals):
                         if machine_vertex.accepts_multicast_signals(
                                 transmission_parameter):
                             self._create_machine_edge(
@@ -106,13 +108,17 @@ class NengoPartitioner(object):
             valid_sources, outgoing_edge_partition, machine_graph, graph_mapper,
             sink, app_edge, nengo_random_number_generator):
             for source in valid_sources:
-                machine_outgoing_edge_partition = \
-                    ConnectionMachineOutgoingPartition(
-                        identifier=outgoing_edge_partition.identifier,
-                        seed=None, pre_vertex=source,
-                        rng=nengo_random_number_generator)
-                machine_graph.add_outgoing_edge_partition(
-                    machine_outgoing_edge_partition)
+                machine_outgoing_edge_partition = machine_graph.\
+                    get_outgoing_edge_partition_starting_at_vertex(
+                        source, outgoing_edge_partition.identifier)
+                if machine_outgoing_edge_partition is None:
+                    machine_outgoing_edge_partition = \
+                        ConnectionMachineOutgoingPartition(
+                            identifier=outgoing_edge_partition.identifier,
+                            seed=None, pre_vertex=source,
+                            rng=nengo_random_number_generator)
+                    machine_graph.add_outgoing_edge_partition(
+                        machine_outgoing_edge_partition)
                 edge = MachineEdge(
                     source, sink, outgoing_edge_partition.identifier.weight)
                 machine_graph.add_edge(

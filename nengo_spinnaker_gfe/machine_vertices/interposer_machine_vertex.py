@@ -2,7 +2,7 @@ from enum import Enum
 
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
-    TransmitsMulticastSignals
+    AbstractTransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
@@ -12,12 +12,12 @@ from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AcceptsMulticastSignals
+    AbstractAcceptsMulticastSignals
 
 
 class InterposerMachineVertex(
         MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AcceptsMulticastSignals, TransmitsMulticastSignals):
+        AbstractAcceptsMulticastSignals, AbstractTransmitsMulticastSignals):
 
     __slots__ = [
         "_size_in",
@@ -27,7 +27,8 @@ class InterposerMachineVertex(
         "_filter_keys",
         "_output_slices",
         "_machine_time_step",
-        "_filters"
+        "_filters",
+        "_transmission_params"
     ]
 
     """Portion of the rows of the transform assigned to a parallel filter
@@ -49,7 +50,7 @@ class InterposerMachineVertex(
             output_slices, machine_time_step, filters, label, constraints):
         MachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
-        AcceptsMulticastSignals.__init__(self)
+        AbstractAcceptsMulticastSignals.__init__(self)
         self._size_in = size_in
         self._output_slice = output_slice
         self._transform_data = transform_data
@@ -58,6 +59,19 @@ class InterposerMachineVertex(
         self._output_slices = output_slices
         self._machine_time_step = machine_time_step
         self._filters = filters
+
+        # Store which signal parameter slices we contain
+        self._transmission_params = self._filter_transmission_params()
+
+    def _filter_transmission_params(self):
+        transmission_params = set()
+        out_set = set(range(self._output_slice.start, self._output_slice.stop))
+        for transmission_params, outs in self._output_slices:
+            # If there is an intersection between the outs and the set of outs
+            # we're responsible for then store transmission parameters.
+            if out_set & outs:
+                transmission_params.add(transmission_params)
+        return out_set
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(self, spec, placement,
@@ -68,7 +82,7 @@ class InterposerMachineVertex(
                                             time_scale_factor):
         pass
 
-    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
         return transmission_params.projects_to(self._column_slice)
 
@@ -96,10 +110,10 @@ class InterposerMachineVertex(
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
 
-    @overrides(AcceptsMulticastSignals.accepts_multicast_signals)
+    @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
-        return
+        return transmission_params.projects_to(self._size_in)
 
-    @overrides(TransmitsMulticastSignals.transmits_multicast_signals)
+    @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
-        return
+        return transmission_params in self._transmission_params

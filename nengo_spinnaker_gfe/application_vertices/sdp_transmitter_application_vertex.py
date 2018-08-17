@@ -1,6 +1,12 @@
 import threading
 
 import numpy
+from collections import defaultdict
+
+from nengo_spinnaker_gfe import constants, helpful_functions
+from nengo_spinnaker_gfe.nengo_filters.filter_and_routing_region_generator import \
+    FilterAndRoutingRegionGenerator
+from pacman.executor.injection_decorator import inject_items
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe. \
     abstracts.abstract_nengo_application_vertex import \
@@ -54,11 +60,37 @@ class SDPTransmitterApplicationVertex(
         with self._lock:
             self._output = new_output
 
+    @inject_items({"operator_graph": "NengoOperatorGraph"})
+    @overrides(
+        AbstractNengoApplicationVertex.create_machine_vertices,
+        additional_arguments=["operator_graph"])
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices)
     def create_machine_vertices(
-            self, resource_tracker, machine_graph, graph_mapper):
-        """Create vertices that will simulate the SDPTransmitter."""
-        machine_vertex = SDPTransmitterMachineVertex(self._size_in)
+            self, resource_tracker, machine_graph, graph_mapper,
+            operator_graph):
+        """ Create vertices that will simulate the SDPTransmitter.
+        
+        :param resource_tracker: 
+        :param machine_graph: 
+        :param graph_mapper: 
+        :return: 
+        """
+        incoming_standard_edges = \
+            helpful_functions.locate_all_incoming_edges_of_type(
+                operator_graph, self, constants.INPUT_PORT.STANDARD)
+
+        # generate filters and mc key count
+        inputs_n_keys = 0
+        input_filters = defaultdict(list)
+        for input_edge in incoming_standard_edges:
+            FilterAndRoutingRegionGenerator.add_filters(
+                input_filters, input_edge,
+                operator_graph.get_outgoing_partition_for_edge(input_edge),
+                minimise=True)
+            inputs_n_keys += 1
+
+        machine_vertex = SDPTransmitterMachineVertex(
+            self._size_in, input_filters, inputs_n_keys)
         resource_tracker.allocate_resources(machine_vertex.resources_required)
         machine_graph.add_vertex(machine_vertex)
         graph_mapper.add_vertex_mapping(

@@ -10,8 +10,8 @@ from nengo_spinnaker_gfe.nengo_exceptions import \
 from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import \
     FilterAndRoutingRegionGenerator
-from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
-    NengoPartitioner
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_partitioner import NengoPartitioner
 from pacman.executor.injection_decorator import inject
 from pacman.model.graphs.common import Slice
 from spinn_utilities.overrides import overrides
@@ -191,12 +191,12 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
             self._generate_cluster(
                 filter_slice, filter_keys, filters, output_standard_partitions,
                 machine_graph, graph_mapper, resource_tracker,
-                machine_time_step, nengo_partitioner)
+                machine_time_step)
 
     def _generate_cluster(
             self, filter_slice, filter_keys, filters,
             output_standard_partitions, machine_graph, graph_mapper,
-            resource_tracker, machine_time_step, nengo_partitioner):
+            resource_tracker, machine_time_step):
 
         # Get the output transform, keys and slices for this slice of the
         # filter.
