@@ -62,7 +62,7 @@ class ValueSinkMachineVertex(
     def __init__(
             self, input_slice, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
-            receive_buffer_port, input_filters, inputs_n_keys):
+            receive_buffer_port, input_filters, input_n_keys):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -75,7 +75,7 @@ class ValueSinkMachineVertex(
         self._receive_buffer_host = receive_buffer_host
         self._receive_buffer_port = receive_buffer_port
         self._input_filters = input_filters
-        self._input_n_keys = inputs_n_keys
+        self._input_n_keys = input_n_keys
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
