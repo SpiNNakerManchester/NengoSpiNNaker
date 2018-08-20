@@ -61,10 +61,8 @@ class SDPTransmitterApplicationVertex(
             self._output = new_output
 
     @inject_items({"operator_graph": "NengoOperatorGraph"})
-    @overrides(
-        AbstractNengoApplicationVertex.create_machine_vertices,
-        additional_arguments=["operator_graph"])
-    @overrides(AbstractNengoApplicationVertex.create_machine_vertices)
+    @overrides(AbstractNengoApplicationVertex.create_machine_vertices,
+               additional_arguments=["operator_graph"])
     def create_machine_vertices(
             self, resource_tracker, machine_graph, graph_mapper,
             operator_graph):
