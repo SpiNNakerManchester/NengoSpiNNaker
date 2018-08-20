@@ -136,15 +136,14 @@ class SDPReceiverMachineVertex(
             self.get_binary_file_name(), machine_time_step,
             time_scale_factor))
         spec.switch_write_focus(self.DATA_REGIONS.N_KEYS.value)
-        spec.write_value(len(self._n_keys), DataType.UINT32)
+        spec.write_value(self._n_keys, DataType.UINT32)
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
         self._write_keys_region(spec, routing_info)
         spec.end_specification()
 
     def _write_keys_region(self, spec, routing_info):
-        partition_routing_info = \
-            routing_info.get_routing_info_from_partition(
-                self._managing_outgoing_partition)
+        partition_routing_info = routing_info.get_routing_info_from_partition(
+            self._managing_outgoing_partition)
         for key in partition_routing_info.get_keys():
             spec.write_value(key)
 
@@ -157,7 +156,7 @@ class SDPReceiverMachineVertex(
             self.N_KEYS_REGION_SIZE, label="n_keys region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEYS.value,
-            self._calculate_sdram_for_keys(self.keys),
+            self._calculate_sdram_for_keys(self._n_keys),
             label="keys region")
 
     def send_output_to_spinnaker(self, value, placement, transceiver):

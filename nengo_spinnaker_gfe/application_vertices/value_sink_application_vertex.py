@@ -3,8 +3,8 @@ import math
 from collections import defaultdict
 
 from nengo_spinnaker_gfe import helpful_functions, constants
-from nengo_spinnaker_gfe.nengo_filters.filter_and_routing_region_generator import \
-    FilterAndRoutingRegionGenerator
+from nengo_spinnaker_gfe.nengo_filters.\
+    filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
 from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
     nengo_partitioner import NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
@@ -41,18 +41,22 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
         "using_auto_pause_and_resume": "UsingAutoPauseAndResume",
         "receive_buffer_host": "ReceiveBufferHost",
         "receive_buffer_port": "ReceiveBufferPort",
-        "operator_graph": "NengoOperatorGraph"})
+        "operator_graph": "NengoOperatorGraph",
+        "time_between_requests": "TimeBetweenRequests",
+        "buffer_size_before_receive": "BufferSizeBeforeReceive"})
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
         additional_arguments={
             "minimum_buffer_sdram", "maximum_sdram_for_buffering",
             "using_auto_pause_and_resume", "receive_buffer_host",
-            "receive_buffer_port", "operator_graph"})
+            "receive_buffer_port", "operator_graph", "time_between_requests",
+            "buffer_size_before_receive"})
     def create_machine_vertices(
             self, resource_tracker, machine_graph, graph_mapper,
             minimum_buffer_sdram, maximum_sdram_for_buffering,
             using_auto_pause_and_resume, receive_buffer_host,
-            receive_buffer_port, operator_graph):
+            receive_buffer_port, operator_graph, time_between_requests,
+            buffer_size_before_receive):
         # Make sufficient vertices to ensure that each has a size_in of less
         # than max_width.
 
@@ -83,7 +87,9 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
                 using_auto_pause_and_resume=using_auto_pause_and_resume,
                 receive_buffer_host=receive_buffer_host,
                 receive_buffer_port=receive_buffer_port,
-                input_filters=input_filters, input_n_keys=inputs_n_keys)
+                input_filters=input_filters, input_n_keys=inputs_n_keys,
+                time_between_requests=time_between_requests,
+                buffer_size_before_receive=buffer_size_before_receive)
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)

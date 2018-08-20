@@ -43,7 +43,11 @@ class ValueSinkMachineVertex(
         #
         "_input_filters",
         #
-        "_input_n_keys"
+        "_input_n_keys",
+        #
+        "_time_between_requests",
+        #
+        "_buffer_size_before_receive"
 
     ]
 
@@ -62,7 +66,8 @@ class ValueSinkMachineVertex(
     def __init__(
             self, input_slice, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
-            receive_buffer_port, input_filters, input_n_keys):
+            receive_buffer_port, input_filters, input_n_keys,
+            time_between_requests, buffer_size_before_receive):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -76,6 +81,8 @@ class ValueSinkMachineVertex(
         self._receive_buffer_port = receive_buffer_port
         self._input_filters = input_filters
         self._input_n_keys = input_n_keys
+        self._time_between_requests = time_between_requests
+        self._buffer_size_before_receive = buffer_size_before_receive
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -100,13 +107,12 @@ class ValueSinkMachineVertex(
 
         # fill in recording region
         spec.switch_write_focus(self.DATA_REGIONS.RECORDING.value)
-        ip_tags = iptags.get_ip_tags_for_vertex(self)
         recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
             self._get_buffered_sdram(self._input_slice, n_machine_time_steps),
-            self._maximum_sdram_for_buffering)
+            [self._maximum_sdram_for_buffering])
         spec.write_array(recording_utilities.get_recording_header_array(
             recorded_region_sizes, self._time_between_requests,
-            self._buffer_size_before_receive, ip_tags))
+            self._buffer_size_before_receive, iptags))
 
         # data on slice, aka, input slice size and start point
         spec.switch_write_focus(self.DATA_REGIONS.SLICE_DATA.value)
@@ -118,7 +124,7 @@ class ValueSinkMachineVertex(
         self._write_filter_region(spec)
 
         # add routing region
-        spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
+        spec.switch_write_focus(self.DATA_REGIONS.FILTER_ROUTING.value)
         self._write_routing_region(spec)
 
         spec.end_specification()
@@ -182,8 +188,8 @@ class ValueSinkMachineVertex(
         return container
 
     def _get_buffered_sdram(self, input_slice, n_machine_time_steps):
-        return (self.SDRAM_RECORDING_SDRAM_PER_ATOM * input_slice.n_atoms *
-                n_machine_time_steps)
+        return [(self.SDRAM_RECORDING_SDRAM_PER_ATOM * input_slice.n_atoms *
+                n_machine_time_steps)]
 
     @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
     def get_minimum_buffer_sdram_usage(self):

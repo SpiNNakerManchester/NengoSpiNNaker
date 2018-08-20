@@ -243,7 +243,11 @@ class NengoSimulator(SpiNNaker):
             maximum_sdram_for_sink_vertex_buffing=self._config.getint(
                 "Buffers", "sink_vertex_max_sdram_for_buffing"),
             using_auto_pause_and_resume=self._config.getboolean(
-                "Buffers", "use_auto_pause_and_resume"))
+                "Buffers", "use_auto_pause_and_resume"),
+            time_between_requests=self._config.getint(
+                "Buffers", "time_between_requests"),
+            buffer_size_before_receive=self._config.getint(
+                "Buffers", "buffer_size_before_receive"))
 
         # update spinnaker with app graph
         self._original_machine_graph = machine_graph
