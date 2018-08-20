@@ -13,10 +13,10 @@ from spinn_front_end_common.abstract_models import \
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.simulation import simulation_utilities
-from spinn_front_end_common.utilities import constants
+from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
-from nengo_spinnaker_gfe import constants as nengo_constants
+from nengo_spinnaker_gfe import constants as nengo_constants, constants
 from nengo_spinnaker_gfe import helpful_functions
 from spinnman.messages.sdp import SDPMessage, SDPHeader
 
@@ -43,7 +43,7 @@ class SDPReceiverMachineVertex(
         names=[('SYSTEM', 0),
                ('N_KEYS', 1),
                ('KEYS', 2)])
-    N_KEYS_REGION_SIZE = 4
+    N_KEYS_REGION_ITEMS = 2
     BYTES_PER_FIELD = 4
     USE_REVERSE_IPTAGS = False
 
@@ -103,8 +103,9 @@ class SDPReceiverMachineVertex(
             reverse_ip_tags = None
         return ResourceContainer(
             sdram=SDRAMResource(
-                constants.SYSTEM_BYTES_REQUIREMENT +
-                SDPReceiverMachineVertex.N_KEYS_REGION_SIZE +
+                fec_constants.SYSTEM_BYTES_REQUIREMENT +
+                (SDPReceiverMachineVertex.N_KEYS_REGION_ITEMS *
+                 constants.BYTE_TO_WORD_MULTIPLIER) +
                 SDPReceiverMachineVertex._calculate_sdram_for_keys(keys)),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0),
@@ -144,16 +145,22 @@ class SDPReceiverMachineVertex(
     def _write_keys_region(self, spec, routing_info):
         partition_routing_info = routing_info.get_routing_info_from_partition(
             self._managing_outgoing_partition)
-        for key in partition_routing_info.get_keys():
-            spec.write_value(key)
+        if partition_routing_info is None:
+            spec.write_value(1)
+            spec.write_value(0)
+        else:
+            spec.write_value(0)
+            for key in partition_routing_info.get_keys():
+                spec.write_value(key)
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(
             self.DATA_REGIONS.SYSTEM.value,
-            constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
+            fec_constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.N_KEYS.value,
-            self.N_KEYS_REGION_SIZE, label="n_keys region")
+            (self.N_KEYS_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER),
+            label="n_keys region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEYS.value,
             self._calculate_sdram_for_keys(self._n_keys),

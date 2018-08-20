@@ -203,6 +203,8 @@ class NengoSimulator(SpiNNaker):
         # extract data
         self._extract_data()
 
+
+
     def _generate_machine_graph(self, steps):
         """ generate the machine graph in context of pre allocated system 
         resoruces
