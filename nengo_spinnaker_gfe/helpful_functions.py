@@ -17,7 +17,11 @@ def get_seed(nengo_object):
 
 
 def convert_numpy_array_to_s16_15(values):
-    """Convert the given NumPy array of values into fixed point format."""
+    """Convert the given NumPy array of values into fixed point format.
+    
+    :param values: the values to convert
+    :return: s1615 array
+    """
     # Scale and cast to appropriate int types
     scaled_values = values * DataType.S1615.scale
 
@@ -29,6 +33,15 @@ def convert_numpy_array_to_s16_15(values):
     # being zeroed on some indeterminate selection of OSes,
     # architectures, Python and Numpy versions"
     return numpy.array(clipped_values, copy=True, dtype=numpy.int32)
+
+
+def convert_s16_15_to_numpy_array(values):
+    """Convert the given fixed point array of values into a numpy array format.
+    
+    :param values: the values to convert
+    :return: a numpy array
+    """
+    return values / DataType.S1615.scale
 
 
 def convert_matrix_to_machine_vertex_level(

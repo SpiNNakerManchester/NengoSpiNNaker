@@ -137,7 +137,7 @@ class ValueSinkMachineVertex(
             self.DATA_REGIONS.SLICE_DATA.value,
             self.SLICE_DATA_SDRAM_REQUIREMENT, label="filter region")
         spec.reserve_memory_region(
-            self.DATA_REGIONS.ROUTING.value,
+            self.DATA_REGIONS.FILTER_ROUTING.value,
             helpful_functions.sdram_size_in_bytes_for_routing_region(
                 self._input_n_keys), label="routing region")
         spec.reserve_memory_region(

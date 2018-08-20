@@ -60,17 +60,21 @@ class SDPTransmitterApplicationVertex(
         with self._lock:
             self._output = new_output
 
-    @inject_items({"operator_graph": "NengoOperatorGraph"})
+    @inject_items({
+        "operator_graph": "NengoOperatorGraph",
+        "ip_address": "IPAddress"})
     @overrides(AbstractNengoApplicationVertex.create_machine_vertices,
-               additional_arguments=["operator_graph"])
+               additional_arguments=["operator_graph", "ip_address"])
     def create_machine_vertices(
             self, resource_tracker, machine_graph, graph_mapper,
-            operator_graph):
+            operator_graph, ip_address):
         """ Create vertices that will simulate the SDPTransmitter.
         
         :param resource_tracker: 
         :param machine_graph: 
         :param graph_mapper: 
+        :param operator_graph:
+        :param ip_address:
         :return: 
         """
         incoming_standard_edges = \
@@ -88,7 +92,7 @@ class SDPTransmitterApplicationVertex(
             inputs_n_keys += 1
 
         machine_vertex = SDPTransmitterMachineVertex(
-            self._size_in, input_filters, inputs_n_keys)
+            self._size_in, input_filters, inputs_n_keys, ip_address)
         resource_tracker.allocate_resources(machine_vertex.resources_required)
         machine_graph.add_vertex(machine_vertex)
         graph_mapper.add_vertex_mapping(

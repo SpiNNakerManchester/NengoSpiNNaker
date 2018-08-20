@@ -20,15 +20,15 @@ class NengoInputNode(nengo.Node, NengoLiveInputInterface):
     def output(self, t):
         """ enforced by the nengo_spinnaker_gfe duck typing
 
-        :param t: 
+        :param t: pointless parameter
         :return: 
         """
-        self._spinnaker_vertex.output(t)
+        return self._spinnaker_vertex.output
 
     @overrides(nengo.Node.__getstate__)
     def __getstate__(self):
-        pass
+        raise NotImplementedError("Nengo objects do not support pickling")
 
     @overrides(nengo.Node.__setstate__)
     def __setstate__(self, state):
-        pass
+        raise NotImplementedError("Nengo objects do not support pickling")

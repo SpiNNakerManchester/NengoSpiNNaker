@@ -2,13 +2,11 @@ import numpy
 from data_specification.enums import DataType
 from enum import Enum
 
-from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AbstractAcceptsMulticastSignals
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
-    DTCMResource, CPUCyclesPerTickResource
+    DTCMResource, CPUCyclesPerTickResource, ReverseIPtagResource
 from spinn_front_end_common.abstract_models import \
     AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition, \
     AbstractProvidesOutgoingPartitionConstraints
@@ -47,6 +45,7 @@ class SDPReceiverMachineVertex(
                ('KEYS', 2)])
     N_KEYS_REGION_SIZE = 4
     BYTES_PER_FIELD = 4
+    USE_REVERSE_IPTAGS = False
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
     # the next timer ticks worth of changes. future could be modded to remove
@@ -98,13 +97,18 @@ class SDPReceiverMachineVertex(
 
     @staticmethod
     def get_static_resources(keys):
+        if SDPReceiverMachineVertex.USE_REVERSE_IPTAGS:
+            reverse_ip_tags = [ReverseIPtagResource()]
+        else:
+            reverse_ip_tags = None
         return ResourceContainer(
             sdram=SDRAMResource(
                 constants.SYSTEM_BYTES_REQUIREMENT +
                 SDPReceiverMachineVertex.N_KEYS_REGION_SIZE +
                 SDPReceiverMachineVertex._calculate_sdram_for_keys(keys)),
             dtcm=DTCMResource(0),
-            cpu_cycles=CPUCyclesPerTickResource(0))
+            cpu_cycles=CPUCyclesPerTickResource(0),
+            reverse_iptags=reverse_ip_tags)
 
     @staticmethod
     def _calculate_sdram_for_keys(keys):

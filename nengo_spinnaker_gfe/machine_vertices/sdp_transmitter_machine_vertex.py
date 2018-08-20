@@ -1,10 +1,13 @@
+import threading
+import numpy
 from enum import Enum
 
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
 from pacman.model.graphs.machine import MachineVertex
-from pacman.model.resources import ResourceContainer, SDRAMResource
+from pacman.model.resources import ResourceContainer, SDRAMResource, \
+    IPtagResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
@@ -24,7 +27,15 @@ class SDPTransmitterMachineVertex(
         #
         "_input_filters",
         #
-        "_input_n_keys"
+        "_input_n_keys",
+        #
+        "_hostname",
+        #
+        "_port",
+        #
+        "_output_lock",
+        #
+        "_output"
     ]
 
     DATA_REGIONS = Enum(
@@ -36,8 +47,9 @@ class SDPTransmitterMachineVertex(
 
     TRANSMITTER_REGION_ELEMENTS = 2
     TRANSMISSION_DELAY = 1
+    IPTAG_TRAFFIC_IDENTIFIER = "SDP_RECEIVER_FEED"
 
-    def __init__(self, size_in, input_filters, inputs_n_keys):
+    def __init__(self, size_in, input_filters, inputs_n_keys, hostname):
         MachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -45,6 +57,9 @@ class SDPTransmitterMachineVertex(
         self._size_in = size_in
         self._input_filters = input_filters
         self._input_n_keys = inputs_n_keys
+        self._hostname = hostname
+        self._output_lock = threading.Lock()
+        self._output = numpy.zeros(self._size_in)
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
@@ -58,15 +73,17 @@ class SDPTransmitterMachineVertex(
     @overrides(MachineVertex.resources_required)
     def resources_required(self):
         return self.get_static_resources(
-            self._input_filters, self._input_n_keys)
+            self._input_filters, self._input_n_keys,
+            self._hostname)
 
     @staticmethod
-    def get_static_resources(input_filters, n_routing_keys):
+    def get_static_resources(input_filters, n_routing_keys, hostname):
         """ generates resource calculation so that it can eb called from 
         outside and not instantiated
         
         :param input_filters: the input filters going into this vertex
         :param n_routing_keys: the n keys from the input filters
+        :param hostname: The hostname of the host machine we're running on
         :return: A resource container containing the resources used by this 
         vertex for those inputs. 
         """
@@ -77,7 +94,11 @@ class SDPTransmitterMachineVertex(
                     input_filters) +
                 helpful_functions.sdram_size_in_bytes_for_routing_region(
                     n_routing_keys) +
-                SDPTransmitterMachineVertex._transmitter_region()))
+                SDPTransmitterMachineVertex._transmitter_region()),
+            iptags=[IPtagResource(
+                ip_address=hostname, port=None, strip_sdp=False,
+                tag=None, traffic_identifier=(
+                    SDPTransmitterMachineVertex.IPTAG_TRAFFIC_IDENTIFIER))])
 
     @staticmethod
     def _transmitter_region():
@@ -147,3 +168,14 @@ class SDPTransmitterMachineVertex(
         spec.reserve_memory_region(
             self.DATA_REGIONS.TRANSMITTER.value,
             self._transmitter_region(), label="transmitter region")
+
+    @property
+    def output(self):
+        with self._output_lock:
+            # return a copy of the array
+            return self._output[:]
+
+    @output.setter
+    def output(self, new_value):
+        with self._output_lock:
+            self._output = new_value
