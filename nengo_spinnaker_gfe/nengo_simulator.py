@@ -3,6 +3,8 @@ import os
 
 import numpy
 from nengo.cache import NoDecoderCache
+from nengo_spinnaker_gfe.application_vertices.\
+    value_sink_application_vertex import ValueSinkApplicationVertex
 from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
     NengoMachineGraphGenerator
 
@@ -42,8 +44,11 @@ class NengoSimulator(SpiNNaker):
     """
 
     __slots__ = [
-
-        "_nengo_operator_graph"
+        "_nengo_operator_graph",
+        "_nengo_object_to_data_map",
+        "_profiled_nengo_object_to_data_map",
+        "_nengo_to_app_graph_map",
+        "_nengo_app_machine_graph_mapper"
     ]
 
     CONFIG_FILE_NAME = "nengo_spinnaker.cfg"
@@ -84,6 +89,11 @@ class NengoSimulator(SpiNNaker):
         values
         :rtype None
         """
+        self._nengo_object_to_data_map = dict()
+        self._profiled_nengo_object_to_data_map = dict()
+        self._nengo_to_app_graph_map = None
+        self._nengo_app_machine_graph_mapper = None
+
         executable_finder = ExecutableFinder()
         executable_finder.add_path(os.path.dirname(binaries.__file__))
 
@@ -151,7 +161,7 @@ class NengoSimulator(SpiNNaker):
         nengo_app_graph_generator = NengoApplicationGraphGenerator()
 
         (self._nengo_operator_graph, host_network,
-         nengo_to_app_graph_map, random_number_generator) = \
+         self._nengo_to_app_graph_map, random_number_generator) = \
             nengo_app_graph_generator(
             self._extra_inputs["NengoModel"], self.machine_time_step,
             self._extra_inputs["NengoRandomNumberGeneratorSeed"],
@@ -168,7 +178,7 @@ class NengoSimulator(SpiNNaker):
         # add the extra outputs as new inputs
         self.update_extra_inputs(
             {"NengoHostGraph": host_network,
-             "NengoGraphToAppGraphMap": nengo_to_app_graph_map,
+             "NengoGraphToAppGraphMap": self._nengo_to_app_graph_map,
              "NengoRandomNumberGenerator": random_number_generator})
 
     def __enter__(self):
@@ -203,7 +213,25 @@ class NengoSimulator(SpiNNaker):
         # extract data
         self._extract_data()
 
+    @property
+    def data(self):
+        return self._nengo_object_to_data_map
 
+    def _extract_data(self):
+        for application_vertex in self._nengo_operator_graph.vertices:
+            if isinstance(application_vertex, ValueSinkApplicationVertex):
+                app_data = numpy.zeros(
+                    (self.get_generated_output("RunTime"),
+                     application_vertex.size_in), dtype=numpy.float)
+                nengo_object = self._nengo_to_app_graph_map[application_vertex]
+                self._nengo_object_to_data_map[nengo_object] = app_data
+                machine_vertices = self._nengo_app_machine_graph_mapper.\
+                    get_machine_vertices(application_vertex)
+
+                for machine_vertex in machine_vertices:
+                    app_data[:, machine_vertex.input_slice] = \
+                        machine_vertex.get_data(self.get_generated_output(
+                            "RunTime"))
 
     def _generate_machine_graph(self, steps):
         """ generate the machine graph in context of pre allocated system 
@@ -221,38 +249,37 @@ class NengoSimulator(SpiNNaker):
             self._get_system_functionality_algorithms_and_inputs()
 
         machine_graph_generator = NengoMachineGraphGenerator()
-        machine_graph, nengo_graph_mapper = machine_graph_generator(
-            system_pre_allocated_resources_inputs=system_pre_alloc_res_inputs,
-            max_machine_outputs=self._max_machine_outputs,
-            max_machine_available=self._max_machine_available,
-            steps=steps,
-            partitioning_algorithm=self.config.get_str(
-                "Mapping", "application_to_machine_graph_algorithms"),
-            system_pre_alloc_res_algorithms=system_pre_alloc_res_algorithms,
-            print_timings=self._print_timings,
-            do_timings=self._do_timings,
-            nengo_operator_graph=self._nengo_operator_graph,
-            xml_paths=self._xml_paths,
-            machine_time_step=self._machine_time_step,
-            pacman_executor_provenance_path=(
-                self._pacman_executor_provenance_path),
-            receive_buffer_port=helpful_functions.read_config_int(
-                self._config, "Buffers", "receive_buffer_port"),
-            receive_buffer_host=self._config.get(
-                "Buffers", "receive_buffer_host"),
-            minimum_buffer_sdram=self._config.getint(
-                "Buffers", "minimum_buffer_sdram"),
-            maximum_sdram_for_sink_vertex_buffing=self._config.getint(
-                "Buffers", "sink_vertex_max_sdram_for_buffing"),
-            using_auto_pause_and_resume=self._config.getboolean(
-                "Buffers", "use_auto_pause_and_resume"),
-            time_between_requests=self._config.getint(
-                "Buffers", "time_between_requests"),
-            buffer_size_before_receive=self._config.getint(
-                "Buffers", "buffer_size_before_receive"))
-
-        # update spinnaker with app graph
-        self._original_machine_graph = machine_graph
+        self._original_machine_graph, self._nengo_app_machine_graph_mapper = \
+            machine_graph_generator(
+                system_pre_allocated_resources_inputs=(
+                    system_pre_alloc_res_inputs),
+                max_machine_outputs=self._max_machine_outputs,
+                max_machine_available=self._max_machine_available,
+                steps=steps,
+                partitioning_algorithm=self.config.get_str(
+                    "Mapping", "application_to_machine_graph_algorithms"),
+                system_pre_alloc_res_algorithms=system_pre_alloc_res_algorithms,
+                print_timings=self._print_timings,
+                do_timings=self._do_timings,
+                nengo_operator_graph=self._nengo_operator_graph,
+                xml_paths=self._xml_paths,
+                machine_time_step=self._machine_time_step,
+                pacman_executor_provenance_path=(
+                    self._pacman_executor_provenance_path),
+                receive_buffer_port=helpful_functions.read_config_int(
+                    self._config, "Buffers", "receive_buffer_port"),
+                receive_buffer_host=self._config.get(
+                    "Buffers", "receive_buffer_host"),
+                minimum_buffer_sdram=self._config.getint(
+                    "Buffers", "minimum_buffer_sdram"),
+                maximum_sdram_for_sink_vertex_buffing=self._config.getint(
+                    "Buffers", "sink_vertex_max_sdram_for_buffing"),
+                using_auto_pause_and_resume=self._config.getboolean(
+                    "Buffers", "use_auto_pause_and_resume"),
+                time_between_requests=self._config.getint(
+                    "Buffers", "time_between_requests"),
+                buffer_size_before_receive=self._config.getint(
+                    "Buffers", "buffer_size_before_receive"))
 
     def close(self, turn_off_machine=None, clear_routing_tables=None,
               clear_tags=None):
