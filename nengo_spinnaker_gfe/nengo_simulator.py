@@ -179,7 +179,8 @@ class NengoSimulator(SpiNNaker):
         self.update_extra_inputs(
             {"NengoHostGraph": host_network,
              "NengoGraphToAppGraphMap": self._nengo_to_app_graph_map,
-             "NengoRandomNumberGenerator": random_number_generator})
+             "NengoRandomNumberGenerator": random_number_generator,
+             "NengoOperatorGraph": self._nengo_operator_graph})
 
     def __enter__(self):
         """Enter a context which will close the simulator when exited."""
@@ -280,6 +281,8 @@ class NengoSimulator(SpiNNaker):
                     "Buffers", "time_between_requests"),
                 buffer_size_before_receive=self._config.getint(
                     "Buffers", "buffer_size_before_receive"))
+        self.update_extra_mapping_inputs(
+            {"NengoGraphMapper": self._nengo_app_machine_graph_mapper})
 
     def close(self, turn_off_machine=None, clear_routing_tables=None,
               clear_tags=None):

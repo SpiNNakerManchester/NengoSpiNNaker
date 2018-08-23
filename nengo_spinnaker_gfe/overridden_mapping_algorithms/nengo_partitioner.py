@@ -2,6 +2,8 @@ from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
+from nengo_spinnaker_gfe.graph_components.connection_machine_edge import \
+    ConnectionMachineEdge
 from nengo_spinnaker_gfe.graph_components.\
     connection_machine_outgoing_partition import \
     ConnectionMachineOutgoingPartition
@@ -73,7 +75,8 @@ class NengoPartitioner(object):
             # locate valid sources for machine edges
             valid_sources = list()
             for machine_vertex in machine_vertices:
-                if isinstance(machine_vertex, AbstractTransmitsMulticastSignals):
+                if isinstance(
+                        machine_vertex, AbstractTransmitsMulticastSignals):
                     if machine_vertex.transmits_multicast_signals(
                             transmission_parameter):
                         valid_sources.append(machine_vertex)
@@ -91,7 +94,8 @@ class NengoPartitioner(object):
                 for machine_vertex in machine_vertices:
 
                     # if accepts this signal, make machine vertex
-                    if isinstance(machine_vertex, AbstractAcceptsMulticastSignals):
+                    if isinstance(
+                            machine_vertex, AbstractAcceptsMulticastSignals):
                         if machine_vertex.accepts_multicast_signals(
                                 transmission_parameter):
                             self._create_machine_edge(
@@ -119,8 +123,11 @@ class NengoPartitioner(object):
                             rng=nengo_random_number_generator)
                     machine_graph.add_outgoing_edge_partition(
                         machine_outgoing_edge_partition)
-                edge = MachineEdge(
-                    source, sink, outgoing_edge_partition.identifier.weight)
+                edge = ConnectionMachineEdge(
+                    pre_vertex=source, post_vertex=sink,
+                    traffic_weight=outgoing_edge_partition.identifier.weight,
+                    reception_parameters=app_edge.reception_parameters,
+                    input_port=app_edge.input_port)
                 machine_graph.add_edge(
                     edge, outgoing_edge_partition.identifier)
                 graph_mapper.add_edge_mapping(

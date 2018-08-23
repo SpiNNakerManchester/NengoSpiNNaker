@@ -1,20 +1,25 @@
 from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.abstracts.\
+    abstract_traffic_type_secure_outgoing_partition import \
+    AbstractTrafficTypeSecureOutgoingPartition
 from nengo_spinnaker_gfe.graph_components.sdram_machine_edge import\
     SDRAMMachineEdge
-from pacman.model.graphs.impl import OutgoingEdgePartition
+from pacman.model.graphs.common import EdgeTrafficType
 import math
 
 
-class SegmentedSpikesSDRAMMachinePartition(OutgoingEdgePartition):
+class SegmentedSpikesSDRAMMachinePartition(
+        AbstractTrafficTypeSecureOutgoingPartition):
 
     __slots__ = [
-        "_sdram_base_address"
+        "_sdram_base_address",
+        "_pre_vertex"
     ]
 
     def __init__(self, identifier, pre_vertex, label):
-        OutgoingEdgePartition.__init__(
+        AbstractTrafficTypeSecureOutgoingPartition.__init__(
             self,  identifier=identifier, allowed_edge_types=SDRAMMachineEdge,
-            label=label)
+            label=label, traffic_type=EdgeTrafficType.SDRAM)
         self._sdram_base_address = None
         self._pre_vertex = pre_vertex
 

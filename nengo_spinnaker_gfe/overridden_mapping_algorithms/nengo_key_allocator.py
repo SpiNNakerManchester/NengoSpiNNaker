@@ -1,7 +1,418 @@
+from collections import defaultdict, deque
+
+from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.utility_objects.rigs_bitfield import BitField
+from pacman.model.graphs.common import EdgeTrafficType
 from pacman.model.routing_info import RoutingInfo
+
+from six import iteritems, iterkeys
+
+from spinn_machine import Router
 
 
 class NengoKeyAllocator(object):
 
-    def __call__(self, machine_graph):
-        return RoutingInfo()
+    USER_FIELD = "user"
+    ROUTING_TAG = "routing"
+    FILTER_ROUTING_TAG = "filter_routing"
+    CONNECTION_ID_FIELD = "connection_id"
+    CLUSTER_FIELD = "cluster"
+    INDEX_FIELD = "index"
+    NENGO_USER_FIELD_ID = 0
+
+    def __call__(
+            self, machine_graph, nengo_operator_graph, graph_mapper,
+            routing_by_partition, placements, machine):
+
+        bit_field, nengo_bit_field = self._set_up_bit_fields()
+
+        # Assign cluster IDs based on the placement and the routing
+        vertex_cluster_id = self._assign_cluster_ids(
+            nengo_operator_graph, graph_mapper, placements, machine_graph,
+            machine, routing_by_partition)
+
+        outgoing_partition_key_spaces = self._allocate_signal_keyspaces(
+            machine_graph, routing_by_partition, placements, nengo_bit_field,
+            machine, vertex_cluster_id)
+
+        # Fix all keyspaces
+        bit_field.assign_fields()
+
+        # construct the routing info object
+        routing_info = self._construct_routing_info(
+            machine_graph, outgoing_partition_key_spaces)
+
+        return routing_info
+
+    def _construct_routing_info(
+            self, machine_graph, outgoing_partition_key_spaces):
+        for outgoing_partition in machine_graph.outgoing_edge_partitions:
+
+
+    def _assign_cluster_ids(
+            self, nengo_operator_graph, graph_mapper, placements,
+            machine_graph, machine, routing_tables):
+        """Assign identifiers to the clusters of vertices owned by each 
+        operator to the extent that multicast nets belonging to the same signal 
+        which originate at multiple chips can be differentiated if required.
+
+        An operator may be partitioned into a number of vertices which are 
+        placed onto the cores of two SpiNNaker chips.  The vertices on these 
+        chips form two clusters; packets from these clusters need to be 
+        differentiated in order to be routed correctly.  For example:
+
+            +--------+                      +--------+
+            |        | ------- (a) ------>  |        |
+            |   (A)  |                      |   (B)  |
+            |        | <------ (b) -------  |        |
+            +--------+                      +--------+
+
+        Packets traversing `(a)` need to be differentiated from packets
+        traversing `(b)`.  This can be done by including an additional field 
+        in the packet keys which indicates from which chip the packet was 
+        sent - in this case a single bit will suffice with packets from `(A)` 
+        using a key with the bit not set and packets from `(B)` setting the bit.
+
+        This method will assign an ID to each cluster of vertices (e.g., `(A)` 
+        and `(B)`) by storing the index in the `cluster` attribute of each 
+        vertex. Later this ID can be used in the keyspace of all nets 
+        originating from the cluster.
+        
+        :param nengo_operator_graph: the machine graph
+        :param placements: placements
+        """
+        # Build a dictionary mapping each operator to the signals and routes for
+        # which it is the source.
+
+        # Assign identifiers to each of the clusters of vertices contained
+        # within each operator.
+
+        vertex_cluster_id = dict()
+
+        for operator in nengo_operator_graph.vertices:
+            chip_placements = set()
+            cluster_partitions = list()
+            for machine_vertex in graph_mapper.get_machine_vertices(operator):
+                placement = placements.get_placement_of_vertex(machine_vertex)
+                chip_placements.add((placement.x, placement.y))
+                cluster_partitions.extend(
+                    machine_graph.
+                    get_outgoing_edge_partitions_starting_at_vertex(
+                        machine_vertex))
+
+            n_chips = len(chip_placements)
+            n_outgoing_partitions = len(cluster_partitions)
+            if (n_outgoing_partitions == 0) or (n_chips == 1):
+
+                # If the operator has no outgoing signals, or only one cluster,
+                # then assign the same identifier to all of the vertices.
+                for machine_vertex in graph_mapper.get_machine_vertices(
+                        operator):
+                    vertex_cluster_id[machine_vertex] = 0
+            else:
+                # Otherwise try to allocate as few cluster IDs as are required
+                # to differentiate between multicast nets which take
+                # different routes at the same router.
+                #
+                # Build a graph identifying which clusters may or may not share
+                # identifiers.
+
+                graph = self._build_cluster_graph(
+                    machine_graph.
+                    get_outgoing_edge_partitions_starting_at_vertex(operator),
+                    placements, machine, routing_tables)
+
+                # Colour this graph to assign identifiers to the clusters
+                cluster_ids = self._colour_graph(graph)
+
+                # Assign these colours to the vertices.
+                for machine_vertex in graph_mapper.get_machine_vertices(
+                        operator):
+                    placement = placements.get_placement_of_vertex(
+                        machine_vertex)
+                    vertex_cluster_id[machine_vertex] = cluster_ids[placement]
+
+        self._verify_all_cluster_ids_consistent(
+            vertex_cluster_id, placements, nengo_operator_graph, graph_mapper)
+        return vertex_cluster_id
+
+    @staticmethod
+    def _verify_all_cluster_ids_consistent(
+            vertex_cluster_id, placements, nengo_operator_graph, graph_mapper):
+        for application_vertex in nengo_operator_graph.vertices:
+            chip_cluster_id = dict()
+            for machine_vertex in graph_mapper.get_machine_vertices(
+                    application_vertex):
+                placement = placements.get_placement_of_vertex(machine_vertex)
+                cluster_id = vertex_cluster_id[machine_vertex]
+                if (placement.x, placement.y) not in chip_cluster_id:
+                    chip_cluster_id[(placement.x, placement.y)] = cluster_id
+                elif chip_cluster_id[(placement.x, placement.y)] != cluster_id:
+                    raise Exception("odd")
+
+    def _build_cluster_graph(
+            self, outgoing_partitions, placements, machine, routing_tables):
+        """Build a graph the nodes of which represent the chips on which the
+        vertices representing a single operator have been placed and the edges 
+        of which represent constraints upon which of these chips may share 
+        routing identifiers for the purposes of this set of vertices.
+
+        :param outgoing_partitions : list of outgoing partitions 
+        :param placements:
+        :param machine:
+        :param routing_tables:
+
+        Returns
+        -------
+        {(x, y): {(x, y), ...}, ...}
+            An adjacency list representation of the graph described above.
+        """
+
+        # Adjacency list represent of the graph
+        cluster_graph = defaultdict(set)
+
+        for outgoing_partition in outgoing_partitions:
+            # Build up a dictionary which maps each chip to a mapping of the
+            # routes from this chip to the source cluster of the multicast
+            # nets which take these routes. This will allow us to determine
+            # which clusters need to be uniquely identified.
+            chips_routes_clusters = defaultdict(lambda: defaultdict(set))
+
+            source_placement = placements.get_placement_of_vertex(
+                outgoing_partition.pre_vertex)
+
+            for edge in outgoing_partition.edges:
+                dest_placement = placements.get_placement_of_vertex(
+                    edge.post_vertex)
+                path = self._recursive_trace_to_destination(
+                    source_placement.x, source_placement.y, outgoing_partition,
+                    dest_placement.x, dest_placement.y, machine, routing_tables)
+
+                # Ensure every cluster is in the graph
+                source_chip = machine.get_chip_at(
+                    source_placement.x, source_placement.y)
+                for (chip, entry) in path:
+                    route = (
+                        Router.convert_routing_table_entry_to_spinnaker_route(
+                            entry))
+                    # Add this cluster to the set of clusters whose net takes
+                    # this route at this point.
+                    chips_routes_clusters[chip][route].add(source_chip)
+
+                    # Add constraints to the cluster graph dependent on which
+                    # multicast nets take different routes at this point.
+                    routes_from_chip = chips_routes_clusters[chip]
+                    for other_route, clusters in iteritems(routes_from_chip):
+                        # We care about different routes
+                        if other_route != route:
+                            for cluster in clusters:
+                                # This cluster cannot share an identifier with
+                                # any of the clusters whose nets take a
+                                # different route at this point.
+                                cluster_graph[source_chip].add(cluster)
+                                cluster_graph[cluster].add(source_chip)
+        return cluster_graph
+
+    def _allocate_signal_keyspaces(
+            self, machine_graph, routing_by_partition, placements,
+            nengo_bit_field, machine, vertex_cluster_id):
+
+        outgoing_partition_to_key_space = dict()
+        partition_ids = self._assign_mn_net_ids(
+            machine_graph, routing_by_partition, placements, machine)
+        for outgoing_partition, connection_id in iteritems(partition_ids):
+            partition_key_space = nengo_bit_field(connection_id=connection_id)
+
+            max_width = 0
+            for edge in outgoing_partition.edges:
+                max_width = max(max_width, edge.reception_parameters.width)
+                if ((max_width != 0) and (
+                        max_width != edge.reception_parameters.width)):
+                    raise Exception("I have no idea what keyspace size is for "
+                                    "differing reception param widths.")
+
+            # Expand the key space to fit the required indices
+            partition_key_space = partition_key_space(index=max_width - 1)
+
+            # update cluster id
+            partition_key_space = partition_key_space(
+                cluster=vertex_cluster_id[outgoing_partition.pre_vertex])
+
+            # add to tracker
+            outgoing_partition_to_key_space[outgoing_partition] = (
+                partition_key_space)
+        return outgoing_partition_to_key_space
+
+    def _assign_mn_net_ids(
+            self, machine_graph, routing_by_partition, placements, machine):
+        return self._colour_graph(
+            self._build_nm_net_graph(
+                machine_graph, routing_by_partition, placements, machine))
+
+    @staticmethod
+    def _colour_graph(net_graph):
+        """Assign colours to each node in a graph such that connected nodes 
+            do not share a colour.
+
+            Parameters
+            ----------
+            :param net_graph : {node: {node, ...}, ...}
+                An adjacency list representation of a graph where the presence 
+                of an edge indicates that two nodes may not share a colour.
+
+            Returns
+            -------
+            {node: int}
+                Mapping from each node to an identifier (colour).
+            
+        """
+        # This follows a heuristic of first assigning a colour to the node
+        # with the highest degree and then progressing through other nodes in a
+        # breadth-first search.
+        colours = deque()  # List of sets which contain vertices
+        unvisited = set(iterkeys(net_graph))  # Nodes which haven't been visited
+
+        # While there are still unvisited nodes -- note that this may be
+        # true more than once if there are disconnected cliques in the graph,
+        #  e.g.:
+        #
+        #           (c)  (d)
+        #            |   /
+        #            |  /            (f) --- (g)
+        #            | /               \     /
+        #   (a) --- (b)                 \   /
+        #             \                  (h)
+        #              \
+        #               \          (i)
+        #               (e)
+        #
+        # Where a valid colouring would be:
+        #   0: (b), (f), (i)
+        #   1: (a), (c), (d), (e), (g)
+        #   2: (h)
+        #
+        # Nodes might be visited in the order [(b) is always first]:
+        #   (b), (a), (c), (d), (e) - new clique - (f), (g), (h) - again - (i)
+        while unvisited:
+            queue = deque()  # Queue of nodes to visit
+
+            # Add the node with the greatest degree to the queue
+            queue.append(max(unvisited, key=lambda vx: len(net_graph[vx])))
+
+            # Perform a breadth-first search of the tree and colour nodes as we
+            # touch them.
+            while queue:
+                node = queue.popleft()  # Get the next node to process
+
+                if node in unvisited:
+                    # If the node is unvisited then mark it as visited
+                    unvisited.remove(node)
+
+                    # Colour the node, using the first legal colour or by
+                    # creating a new colour for the node.
+                    for group in colours:
+                        if net_graph[node].isdisjoint(group):
+                            group.add(node)
+                            break
+                    else:
+                        # Cannot colour this node with any of the existing
+                        # colours, so create a new colour.
+                        colours.append({node})
+
+                    # Add unvisited connected nodes to the queue
+                    for vx in net_graph[node]:
+                        queue.append(vx)
+
+        # Reverse the data format to result in {node: colour, ...}, for
+        # each group of equivalently coloured nodes mark the colour on the node.
+        colouring = dict()
+        for i, group in enumerate(colours):
+            for vx in group:
+                colouring[vx] = i
+        return colouring
+
+    def _build_nm_net_graph(
+            self, machine_graph, routing_by_partition, placements, machine):
+        net_graph = defaultdict(set)
+        chip_route_nets = defaultdict(lambda: defaultdict(deque))
+        for out_going_partition in machine_graph.outgoing_edge_partitions:
+            if out_going_partition.traffic_type == EdgeTrafficType.MULTICAST:
+                source_placement = placements.get_placement_of_vertex(
+                    out_going_partition.pre_vertex)
+                for edge in out_going_partition.edges:
+                    self._process_edge(
+                        placements, source_placement, net_graph, edge,
+                        chip_route_nets, machine, routing_by_partition,
+                        out_going_partition)
+        return net_graph
+
+    def _process_edge(
+            self, placements, source_placement, net_graph, edge,
+            chip_route_nets, machine, routing_by_partition,
+            out_going_partition):
+        dest_placement = placements.get_placement_of_vertex(
+            edge.post_vertex)
+        traversal = self._recursive_trace_to_destination(
+            source_placement.x, source_placement.y,
+            out_going_partition, dest_placement.x, dest_placement.y,
+            machine, routing_by_partition)
+        for (chip, entry) in traversal:
+            route = Router.convert_routing_table_entry_to_spinnaker_route(
+                entry)
+            chip_route_nets[chip][route].append(out_going_partition)
+
+            # Add constraints to the net graph dependent on which nets take
+            # different routes at this point.
+            routes_in_chip = chip_route_nets[chip]
+            for other_route, other_partitions in iteritems(routes_in_chip):
+                if other_route != route:
+                    for other_partition in other_partitions:
+                        # This partition cannot share an identifier with any of
+                        # the other partitions who take a different route at
+                        # this point.
+                        if other_partition != out_going_partition:
+                            net_graph[out_going_partition].add(other_partition)
+                            net_graph[other_partition].add(out_going_partition)
+
+    def _set_up_bit_fields(self):
+        bit_field = BitField(length=constants.KEY_BIT_SIZE)
+        bit_field.add_field(
+            self.USER_FIELD, tags=[self.ROUTING_TAG, self.FILTER_ROUTING_TAG])
+        nengo_bit_field = bit_field(user=self.NENGO_USER_FIELD_ID)
+        nengo_bit_field.add_field(
+            self.CONNECTION_ID_FIELD,
+            tags=[self.ROUTING_TAG, self.FILTER_ROUTING_TAG])
+        nengo_bit_field.add_field(self.CLUSTER_FIELD, tags=[self.ROUTING_TAG])
+        nengo_bit_field.add_field(self.INDEX_FIELD, start_at=0)
+
+        return bit_field, nengo_bit_field
+
+    # locates the next dest position to check
+    def _recursive_trace_to_destination(
+            self, chip_x, chip_y, outgoing_partition,
+            dest_chip_x, dest_chip_y, machine, routing_tables):
+        """ Recursively search though routing tables till no more entries are\
+            registered with this key
+        """
+
+        chip = machine.get_chip_at(chip_x, chip_y)
+        chips_traversed = list()
+
+        # If reached destination, return the core
+        if chip_x == dest_chip_x and chip_y == dest_chip_y:
+            entry = routing_tables.get_entry_on_coords_for_edge(
+                outgoing_partition, chip_x, chip_y)
+            chips_traversed.append([chip, entry])
+            return chips_traversed
+
+        # If the current chip is real, find the link to the destination
+        entry = routing_tables.get_entry_on_coords_for_edge(
+            outgoing_partition, chip_x, chip_y)
+        if entry is not None:
+            chips_traversed.append([chip, entry])
+            for link_id in entry.link_ids:
+                link = chip.router.get_link(link_id)
+                chips_traversed.extend(self._recursive_trace_to_destination(
+                    link.destination_x, link.destination_y, outgoing_partition,
+                    dest_chip_x, dest_chip_y, machine, routing_tables))
+        return chips_traversed

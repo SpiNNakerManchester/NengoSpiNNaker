@@ -22,6 +22,7 @@ class ReceptionParameters(object):
     def __repr__(self):
         return "{}:{}:{}".format(self._parameter_filter, self._width,
                                  self._learning_rule)
+
     def __str__(self):
         return self.__repr__()
 

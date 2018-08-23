@@ -1,5 +1,9 @@
 import logging
 
+from nengo_spinnaker_gfe.abstracts.\
+    abstract_traffic_type_secure_outgoing_partition import \
+    AbstractTrafficTypeSecureOutgoingPartition
+from pacman.model.graphs.common import EdgeTrafficType
 from pacman.model.graphs.impl import OutgoingEdgePartition
 from pacman.model.graphs.machine import MachineEdge
 from spinn_utilities.log import FormatAdapter
@@ -11,7 +15,7 @@ logger = FormatAdapter(logging.getLogger(__name__))
 
 
 class ConnectionMachineOutgoingPartition(
-        OutgoingEdgePartition,  AbstractNengoObject):
+        AbstractTrafficTypeSecureOutgoingPartition,  AbstractNengoObject):
 
     __slots__ = [
         '_outgoing_edges_destinations',
@@ -30,14 +34,15 @@ class ConnectionMachineOutgoingPartition(
         "identifier={}, edges={}, constraints={}, label={}, seed={})"
 
     def __init__(self, rng, identifier, pre_vertex, seed):
-        OutgoingEdgePartition.__init__(
-            self, identifier=identifier,
-            allowed_edge_types=MachineEdge)
+        AbstractTrafficTypeSecureOutgoingPartition.__init__(
+            self, identifier=identifier, label="connection_machine_partition",
+            allowed_edge_types=MachineEdge,
+            traffic_type=EdgeTrafficType.MULTICAST)
         AbstractNengoObject.__init__(self, rng=rng, seed=seed)
         self._outgoing_edges_destinations = list()
         self._pre_vertex = pre_vertex
 
-    @overrides(OutgoingEdgePartition.add_edge)
+    @overrides(AbstractTrafficTypeSecureOutgoingPartition.add_edge)
     def add_edge(self, edge):
         super(ConnectionMachineOutgoingPartition, self).add_edge(edge)
         self._outgoing_edges_destinations.append(edge.post_vertex)

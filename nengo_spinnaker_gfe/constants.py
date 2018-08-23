@@ -31,6 +31,9 @@ MATRIX_CONVERSION_PARTITIONING = Enum(
     names=[('ROWS', 0),
            ('COLUMNS', 1)])
 
+# key field size in bits
+KEY_BIT_SIZE = 32
+
 # math constants
 CONVERT_MILLISECONDS_TO_SECONDS = 1000
 SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6

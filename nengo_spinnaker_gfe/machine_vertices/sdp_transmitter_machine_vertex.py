@@ -48,6 +48,7 @@ class SDPTransmitterMachineVertex(
     TRANSMITTER_REGION_ELEMENTS = 2
     TRANSMISSION_DELAY = 1
     IPTAG_TRAFFIC_IDENTIFIER = "SDP_RECEIVER_FEED"
+    USE_IPTAG = False
 
     def __init__(self, size_in, input_filters, inputs_n_keys, hostname):
         MachineVertex.__init__(self)
@@ -87,6 +88,14 @@ class SDPTransmitterMachineVertex(
         :return: A resource container containing the resources used by this 
         vertex for those inputs. 
         """
+        iptags = list()
+        if SDPTransmitterMachineVertex.USE_IPTAG:
+            iptags.append(
+                IPtagResource(
+                    ip_address=hostname, port=None, strip_sdp=False,
+                    tag=None, traffic_identifier=(
+                        SDPTransmitterMachineVertex.IPTAG_TRAFFIC_IDENTIFIER)))
+
         return ResourceContainer(
             sdram=SDRAMResource(
                 fec_constants.SYSTEM_BYTES_REQUIREMENT +
@@ -95,10 +104,7 @@ class SDPTransmitterMachineVertex(
                 helpful_functions.sdram_size_in_bytes_for_routing_region(
                     n_routing_keys) +
                 SDPTransmitterMachineVertex._transmitter_region()),
-            iptags=[IPtagResource(
-                ip_address=hostname, port=None, strip_sdp=False,
-                tag=None, traffic_identifier=(
-                    SDPTransmitterMachineVertex.IPTAG_TRAFFIC_IDENTIFIER))])
+            iptags=iptags)
 
     @staticmethod
     def _transmitter_region():

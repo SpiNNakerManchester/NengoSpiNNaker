@@ -125,7 +125,9 @@ class SDPReceiverMachineVertex(
 
     @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
-        return True
+        return (
+            transmission_params ==
+            self._managing_outgoing_partition.identifier.transmission_parameter)
 
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
