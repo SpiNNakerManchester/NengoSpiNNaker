@@ -5,7 +5,8 @@ from enum import Enum
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
-from pacman.model.graphs.machine import MachineVertex
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     IPtagResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
@@ -18,8 +19,8 @@ from spinn_utilities.overrides import overrides
 
 
 class SDPTransmitterMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractAcceptsMulticastSignals):
+        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals):
 
     __slots__ = [
         #
@@ -51,7 +52,7 @@ class SDPTransmitterMachineVertex(
     USE_IPTAG = False
 
     def __init__(self, size_in, input_filters, inputs_n_keys, hostname):
-        MachineVertex.__init__(self)
+        NengoMachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
@@ -71,7 +72,7 @@ class SDPTransmitterMachineVertex(
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @overrides(MachineVertex.resources_required)
+    @overrides(NengoMachineVertex.resources_required)
     def resources_required(self):
         return self.get_static_resources(
             self._input_filters, self._input_n_keys,

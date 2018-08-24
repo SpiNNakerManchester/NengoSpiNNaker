@@ -1,6 +1,7 @@
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
-from pacman.model.graphs.machine import MachineVertex
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
@@ -12,8 +13,9 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 
 
 class LIFMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractAcceptsMulticastSignals, AbstractTransmitsMulticastSignals):
+        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
+        AbstractTransmitsMulticastSignals):
 
     __slots__ = [
         "_resources",
@@ -26,7 +28,7 @@ class LIFMachineVertex(
 
     def __init__(self, vertex_index, neuron_slice, input_slice, output_slice,
                 learnt_slice, resources, n_profiler_samples, label):
-        MachineVertex.__init__(self, label=label)
+        NengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
@@ -73,7 +75,7 @@ class LIFMachineVertex(
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @overrides(MachineVertex.resources_required)
+    @overrides(NengoMachineVertex.resources_required)
     def resources_required(self):
         return self._resources
 

@@ -42,6 +42,10 @@ class ConnectionMachineOutgoingPartition(
         self._outgoing_edges_destinations = list()
         self._pre_vertex = pre_vertex
 
+    @property
+    def pre_vertex(self):
+        return self._pre_vertex
+
     @overrides(AbstractTrafficTypeSecureOutgoingPartition.add_edge)
     def add_edge(self, edge):
         super(ConnectionMachineOutgoingPartition, self).add_edge(edge)

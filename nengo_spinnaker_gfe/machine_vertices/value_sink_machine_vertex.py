@@ -1,8 +1,9 @@
 from enum import Enum
 
 from nengo_spinnaker_gfe import helpful_functions
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from pacman.executor.injection_decorator import inject_items
-from pacman.model.graphs.machine import MachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     CPUCyclesPerTickResource, DTCMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
@@ -24,8 +25,9 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 
 
 class ValueSinkMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractAcceptsMulticastSignals, AbstractReceiveBuffersToHost):
+        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
+        AbstractReceiveBuffersToHost):
 
     __slots__ = [
         #
@@ -68,7 +70,7 @@ class ValueSinkMachineVertex(
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
             receive_buffer_port, input_filters, input_n_keys,
             time_between_requests, buffer_size_before_receive):
-        MachineVertex.__init__(self)
+        NengoMachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
@@ -162,7 +164,7 @@ class ValueSinkMachineVertex(
     @property
     @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
     @overrides(
-        MachineVertex.resources_required,
+        NengoMachineVertex.resources_required,
         additional_arguments=["n_machine_time_steps"])
     def resources_required(self, n_machine_time_steps):
         container = ResourceContainer(

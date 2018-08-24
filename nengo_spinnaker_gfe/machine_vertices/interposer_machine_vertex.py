@@ -3,7 +3,8 @@ from enum import Enum
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
-from pacman.model.graphs.machine import MachineVertex
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
@@ -16,8 +17,9 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
 
 
 class InterposerMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractAcceptsMulticastSignals, AbstractTransmitsMulticastSignals):
+        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
+        AbstractTransmitsMulticastSignals):
 
     __slots__ = [
         "_size_in",
@@ -48,9 +50,12 @@ class InterposerMachineVertex(
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
             output_slices, machine_time_step, filters, label, constraints):
-        MachineVertex.__init__(self, label=label, constraints=constraints)
+        NengoMachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
+        MachineDataSpecableVertex.__init__(self)
+        AbstractTransmitsMulticastSignals.__init__(self)
+
         self._size_in = size_in
         self._output_slice = output_slice
         self._transform_data = transform_data
@@ -91,7 +96,7 @@ class InterposerMachineVertex(
         return "interposer.aplx"  # this was filter in mundy code
 
     @property
-    @overrides(MachineVertex.resources_required)
+    @overrides(NengoMachineVertex.resources_required)
     def resources_required(self):
         return self.generate_static_resources(
             self._transform_data, self._n_keys, self._filters)

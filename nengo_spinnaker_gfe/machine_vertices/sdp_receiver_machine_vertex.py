@@ -4,30 +4,27 @@ from enum import Enum
 
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
-from pacman.model.graphs.machine import MachineVertex
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource, ReverseIPtagResource
 from spinn_front_end_common.abstract_models import \
-    AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition, \
-    AbstractProvidesOutgoingPartitionConstraints
+    AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
-from nengo_spinnaker_gfe import constants as nengo_constants, constants
+from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe import helpful_functions
 from spinnman.messages.sdp import SDPMessage, SDPHeader
 
-from nengo_spinnaker_gfe.constraints.nengo_key_constraint import \
-    NengoKeyConstraint
-
 
 class SDPReceiverMachineVertex(
-        MachineVertex, MachineDataSpecableVertex, AbstractHasAssociatedBinary,
-        AbstractProvidesNKeysForPartition, AbstractTransmitsMulticastSignals,
-        AbstractProvidesOutgoingPartitionConstraints):
+        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition,
+        AbstractTransmitsMulticastSignals):
 
     __slots__ = [
         # keys to transmit with i think
@@ -54,11 +51,10 @@ class SDPReceiverMachineVertex(
     TRANSFORM_SLICE_OUT = False
 
     def __init__(self, outgoing_partition):
-        MachineVertex.__init__(self)
+        NengoMachineVertex.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
-        AbstractProvidesOutgoingPartitionConstraints.__init__(self)
         AbstractProvidesNKeysForPartition.__init__(self)
 
         # TODO WHY DO WE PARTITION OVER OUTGOING PARTITIONS!!!
@@ -83,15 +79,8 @@ class SDPReceiverMachineVertex(
         else:
             return self._n_keys
 
-    @overrides(
-        AbstractProvidesOutgoingPartitionConstraints.
-        get_outgoing_partition_constraints)
-    def get_outgoing_partition_constraints(self, partition):
-        if partition.identifier == self._managing_outgoing_partition.identifier:
-            return [NengoKeyConstraint(nengo_constants.KEY_FIELDS.CLUSTER)]
-
     @property
-    @overrides(MachineVertex.resources_required)
+    @overrides(NengoMachineVertex.resources_required)
     def resources_required(self):
         return self.get_static_resources(self._n_keys)
 

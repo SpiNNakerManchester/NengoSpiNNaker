@@ -1,30 +1,27 @@
 from collections import defaultdict, deque
 
 from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.constraints.nengo_key_constraints import \
+    NengoKeyConstraints
+from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
+    NengoMachineVertex
 from nengo_spinnaker_gfe.utility_objects.rigs_bitfield import BitField
 from pacman.model.graphs.common import EdgeTrafficType
 from pacman.model.routing_info import RoutingInfo
 
 from six import iteritems, iterkeys
 
+from pacman.utilities import utility_calls
 from spinn_machine import Router
 
 
 class NengoKeyAllocator(object):
 
-    USER_FIELD = "user"
-    ROUTING_TAG = "routing"
-    FILTER_ROUTING_TAG = "filter_routing"
-    CONNECTION_ID_FIELD = "connection_id"
-    CLUSTER_FIELD = "cluster"
-    INDEX_FIELD = "index"
-    NENGO_USER_FIELD_ID = 0
-
     def __call__(
             self, machine_graph, nengo_operator_graph, graph_mapper,
             routing_by_partition, placements, machine):
 
-        bit_field, nengo_bit_field = self._set_up_bit_fields()
+        bit_field = BitField(length=constants.KEY_BIT_SIZE)
 
         # Assign cluster IDs based on the placement and the routing
         vertex_cluster_id = self._assign_cluster_ids(
@@ -32,7 +29,7 @@ class NengoKeyAllocator(object):
             machine, routing_by_partition)
 
         outgoing_partition_key_spaces = self._allocate_signal_keyspaces(
-            machine_graph, routing_by_partition, placements, nengo_bit_field,
+            machine_graph, routing_by_partition, placements, bit_field,
             machine, vertex_cluster_id)
 
         # Fix all keyspaces
@@ -47,7 +44,7 @@ class NengoKeyAllocator(object):
     def _construct_routing_info(
             self, machine_graph, outgoing_partition_key_spaces):
         for outgoing_partition in machine_graph.outgoing_edge_partitions:
-
+            pass
 
     def _assign_cluster_ids(
             self, nengo_operator_graph, graph_mapper, placements,
@@ -215,33 +212,80 @@ class NengoKeyAllocator(object):
 
     def _allocate_signal_keyspaces(
             self, machine_graph, routing_by_partition, placements,
-            nengo_bit_field, machine, vertex_cluster_id):
+            bit_field, machine, vertex_cluster_id):
 
         outgoing_partition_to_key_space = dict()
+        created_fields = dict()
         partition_ids = self._assign_mn_net_ids(
             machine_graph, routing_by_partition, placements, machine)
         for outgoing_partition, connection_id in iteritems(partition_ids):
-            partition_key_space = nengo_bit_field(connection_id=connection_id)
 
             max_width = 0
             for edge in outgoing_partition.edges:
                 max_width = max(max_width, edge.reception_parameters.width)
                 if ((max_width != 0) and (
-                        max_width != edge.reception_parameters.width)):
+                            max_width != edge.reception_parameters.width)):
                     raise Exception("I have no idea what keyspace size is for "
                                     "differing reception param widths.")
 
-            # Expand the key space to fit the required indices
-            partition_key_space = partition_key_space(index=max_width - 1)
+            key_constraints = self._get_key_constraints(outgoing_partition)
+            if (key_constraints.get_value_for_field(constants.USER_FIELD_ID)
+                    == constants.USER_FIELDS.NENGO.value):
 
-            # update cluster id
-            partition_key_space = partition_key_space(
-                cluster=vertex_cluster_id[outgoing_partition.pre_vertex])
+                key_constraints.set_value_for_field(
+                    constants.CONNECTION_FIELD_ID, connection_id)
+                # Expand the key space to fit the required indices
+                key_constraints.set_value_for_field(
+                    constants.INDEX_FIELD_ID, max_width - 1)
+                # update cluster id
+                key_constraints.set_value_for_field(
+                    constants.CLUSTER_FIELD_ID,
+                    vertex_cluster_id[outgoing_partition.pre_vertex])
+
+                partition_key_space = self._create_partition_key_space(
+                    key_constraints, bit_field, created_fields)
+            else:
+                partition_key_space = self._create_partition_key_space(
+                    key_constraints, bit_field, created_fields)
 
             # add to tracker
             outgoing_partition_to_key_space[outgoing_partition] = (
                 partition_key_space)
         return outgoing_partition_to_key_space
+
+    @staticmethod
+    def _create_partition_key_space(key_constraints, bit_field, created_fields):
+        new_bit_field = bit_field
+        # build the fields as needed
+        for key_constraint in key_constraints.constraints:
+            if key_constraint.field_id not in created_fields.keys():
+                new_bit_field.add_field(
+                    identifier=key_constraint.field_id,
+                    length=key_constraint.length,
+                    tags=key_constraint.tags, start_at=key_constraint.start_at)
+                created_fields[key_constraint.field_id] = dict()
+
+        for key_constraint in key_constraints.constraints:
+            if key_constraint.field_value in created_fields[
+                    key_constraint.field_id]:
+                new_bit_field = created_fields[key_constraint.field_id][
+                    key_constraint.field_value]
+            else:
+                field = {key_constraint.field_id: key_constraint.field_value}
+                new_bit_field = new_bit_field(**field)
+                created_fields[key_constraint.field_id][
+                    key_constraint.field_value] = new_bit_field
+        return new_bit_field
+
+    @staticmethod
+    def _get_key_constraints(outgoing_partition):
+        if isinstance(outgoing_partition.pre_vertex, NengoMachineVertex):
+            outgoing_partition_constraints = \
+                outgoing_partition.pre_vertex.\
+                get_outgoing_partition_constraints(outgoing_partition)
+            return utility_calls.locate_constraints_of_type(
+                constraints=outgoing_partition_constraints,
+                constraint_type=NengoKeyConstraints)[0]
 
     def _assign_mn_net_ids(
             self, machine_graph, routing_by_partition, placements, machine):
@@ -373,19 +417,6 @@ class NengoKeyAllocator(object):
                         if other_partition != out_going_partition:
                             net_graph[out_going_partition].add(other_partition)
                             net_graph[other_partition].add(out_going_partition)
-
-    def _set_up_bit_fields(self):
-        bit_field = BitField(length=constants.KEY_BIT_SIZE)
-        bit_field.add_field(
-            self.USER_FIELD, tags=[self.ROUTING_TAG, self.FILTER_ROUTING_TAG])
-        nengo_bit_field = bit_field(user=self.NENGO_USER_FIELD_ID)
-        nengo_bit_field.add_field(
-            self.CONNECTION_ID_FIELD,
-            tags=[self.ROUTING_TAG, self.FILTER_ROUTING_TAG])
-        nengo_bit_field.add_field(self.CLUSTER_FIELD, tags=[self.ROUTING_TAG])
-        nengo_bit_field.add_field(self.INDEX_FIELD, start_at=0)
-
-        return bit_field, nengo_bit_field
 
     # locates the next dest position to check
     def _recursive_trace_to_destination(

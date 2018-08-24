@@ -31,6 +31,22 @@ MATRIX_CONVERSION_PARTITIONING = Enum(
     names=[('ROWS', 0),
            ('COLUMNS', 1)])
 
+USER_FIELDS = Enum(
+    value="KEY_SPACE_USER_FIELD",
+    names=[("NENGO", 0),
+           ("NOT_NENGO", 1)])
+
+# key allocation fields
+USER_FIELD_ID = "user"
+CONNECTION_FIELD_ID = "connection_id"
+CLUSTER_FIELD_ID = "cluster"
+INDEX_FIELD_ID = "index"
+INDEX_FIELD_START_POINT = 0
+
+# key allocation tags
+ROUTING_TAG = "routing"
+FILTER_ROUTING_TAG = "filter_routing"
+
 # key field size in bits
 KEY_BIT_SIZE = 32
 

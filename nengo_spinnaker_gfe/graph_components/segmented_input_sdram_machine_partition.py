@@ -29,6 +29,10 @@ class SegmentedInputSDRAMMachinePartition(
         return total
 
     @property
+    def pre_vertex(self):
+        return self._pre_vertex
+
+    @property
     def sdram_base_address(self):
         return self._sdram_base_address
 

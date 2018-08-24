@@ -21,6 +21,10 @@ class ConstantSDRAMMachinePartition(AbstractTrafficTypeSecureOutgoingPartition):
         self._sdram_base_address = None
         self._pre_vertex = pre_vertex
 
+    @property
+    def pre_vertex(self):
+        return self._pre_vertex
+
     def total_sdram_requirements(self):
         expected_size = self.edges[0].sdram_size
         for edge in self.edges:
