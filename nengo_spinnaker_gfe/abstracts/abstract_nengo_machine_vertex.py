@@ -6,9 +6,12 @@ from nengo_spinnaker_gfe.constraints.nengo_key_constraints import \
 from pacman.model.graphs.machine import MachineVertex
 from spinn_front_end_common.abstract_models import \
     AbstractProvidesOutgoingPartitionConstraints
+from six import add_metaclass
+from spinn_utilities.abstract_base import AbstractBase
 
 
-class NengoMachineVertex(
+@add_metaclass(AbstractBase)
+class AbstractNengoMachineVertex(
         MachineVertex, AbstractProvidesOutgoingPartitionConstraints):
 
     def __init__(self, label=None, constraints=None):

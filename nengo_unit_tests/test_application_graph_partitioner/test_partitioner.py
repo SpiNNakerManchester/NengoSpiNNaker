@@ -1,30 +1,28 @@
 import unittest
 
-from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
-    nengo_application_graph_builder import NengoApplicationGraphBuilder
-from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner \
-    import NengoPartitioner
-from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
-    nengo_utilise_interposers import NengoUtiliseInterposers
+import nengo_spinnaker
 from examples.basic import create_model as basic_create_model
 from examples.learn_associates import create_model as la_create_model
 from examples.learn_comm_channel import create_model as lcc_create_model
+from examples.lines import \
+    create_model as lines_create_model
 from examples.net import create_model as net_create_model
 from examples.spa import create_model as spa_create_model
 from examples.spaun_model import create_model as spaun_create_model
 from examples.test_nodes_sliced import create_model as \
     value_source_test_create_model
 from examples.two_d import create_model as two_d_create_model
-from nengo_unit_tests.test_app_graph_utilities import \
-    compare_against_the_nengo_spinnaker_and_gfe_impls
-
-import nengo_spinnaker
+from nengo.cache import NoDecoderCache
 from nengo_spinnaker.builder import Model
 from nengo_spinnaker.node_io import Ethernet
-
-from examples.lines import \
-    create_model as lines_create_model
-from nengo.cache import NoDecoderCache
+from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_utilise_interposers import \
+    NengoUtiliseInterposers
+from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
+    nengo_application_graph_builder import NengoApplicationGraphBuilder
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner \
+    import NengoPartitioner
+from nengo_unit_tests.test_app_graph_utilities import \
+    compare_against_the_nengo_spinnaker_and_gfe_impls
 
 
 class TestAppGraphPartitioner(unittest.TestCase):

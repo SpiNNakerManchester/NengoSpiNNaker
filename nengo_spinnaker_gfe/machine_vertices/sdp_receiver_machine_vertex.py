@@ -1,11 +1,13 @@
 import numpy
-from data_specification.enums import DataType
 from enum import Enum
 
+from data_specification.enums import DataType
+from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe import helpful_functions
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource, ReverseIPtagResource
 from spinn_front_end_common.abstract_models import \
@@ -16,13 +18,11 @@ from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
-from nengo_spinnaker_gfe import constants
-from nengo_spinnaker_gfe import helpful_functions
 from spinnman.messages.sdp import SDPMessage, SDPHeader
 
 
 class SDPReceiverMachineVertex(
-        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition,
         AbstractTransmitsMulticastSignals):
 
@@ -50,8 +50,8 @@ class SDPReceiverMachineVertex(
     MAX_N_KEYS_SUPPORTED = 64
     TRANSFORM_SLICE_OUT = False
 
-    def __init__(self, outgoing_partition):
-        NengoMachineVertex.__init__(self)
+    def __init__(self, outgoing_partition, label):
+        AbstractNengoMachineVertex.__init__(self, label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
@@ -80,7 +80,7 @@ class SDPReceiverMachineVertex(
             return self._n_keys
 
     @property
-    @overrides(NengoMachineVertex.resources_required)
+    @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
         return self.get_static_resources(self._n_keys)
 

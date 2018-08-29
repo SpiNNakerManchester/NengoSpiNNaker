@@ -1,16 +1,17 @@
 from collections import defaultdict, deque
 
-from nengo_spinnaker_gfe import constants
-from nengo_spinnaker_gfe.constraints.nengo_key_constraints import \
-    NengoKeyConstraints
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
-from nengo_spinnaker_gfe.utility_objects.rigs_bitfield import BitField
-from pacman.model.graphs.common import EdgeTrafficType
-from pacman.model.routing_info import RoutingInfo
-
 from six import iteritems, iterkeys
 
+from nengo_spinnaker_gfe import constants
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
+from nengo_spinnaker_gfe.constraints.nengo_key_constraints import \
+    NengoKeyConstraints
+from nengo_spinnaker_gfe.overridden_pacman_objects.nengo_base_key_and_mask import \
+    NengoBaseKeysAndMasks
+from nengo_spinnaker_gfe.utility_objects.rigs_bitfield import BitField
+from pacman.model.graphs.common import EdgeTrafficType
+from pacman.model.routing_info import RoutingInfo, PartitionRoutingInfo
 from pacman.utilities import utility_calls
 from spinn_machine import Router
 
@@ -41,10 +42,17 @@ class NengoKeyAllocator(object):
 
         return routing_info
 
-    def _construct_routing_info(
-            self, machine_graph, outgoing_partition_key_spaces):
+    @staticmethod
+    def _construct_routing_info(machine_graph, outgoing_partition_key_spaces):
+        routing_infos = RoutingInfo()
         for outgoing_partition in machine_graph.outgoing_edge_partitions:
-            pass
+            if outgoing_partition.traffic_type == EdgeTrafficType.MULTICAST:
+                ks = outgoing_partition_key_spaces[outgoing_partition]
+                keys_and_masks = list([NengoBaseKeysAndMasks(
+                    outgoing_partition_key_spaces[outgoing_partition])])
+                routing_infos.add_partition_info(
+                    PartitionRoutingInfo(keys_and_masks, outgoing_partition))
+        return routing_infos
 
     def _assign_cluster_ids(
             self, nengo_operator_graph, graph_mapper, placements,
@@ -92,10 +100,12 @@ class NengoKeyAllocator(object):
             for machine_vertex in graph_mapper.get_machine_vertices(operator):
                 placement = placements.get_placement_of_vertex(machine_vertex)
                 chip_placements.add((placement.x, placement.y))
-                cluster_partitions.extend(
-                    machine_graph.
+                for outgoing_partition in machine_graph.\
                     get_outgoing_edge_partitions_starting_at_vertex(
-                        machine_vertex))
+                        machine_vertex):
+                    if (outgoing_partition.traffic_type ==
+                            EdgeTrafficType.MULTICAST):
+                        cluster_partitions.append(outgoing_partition)
 
             n_chips = len(chip_placements)
             n_outgoing_partitions = len(cluster_partitions)
@@ -115,9 +125,7 @@ class NengoKeyAllocator(object):
                 # identifiers.
 
                 graph = self._build_cluster_graph(
-                    machine_graph.
-                    get_outgoing_edge_partitions_starting_at_vertex(operator),
-                    placements, machine, routing_tables)
+                    cluster_partitions, placements, machine, routing_tables)
 
                 # Colour this graph to assign identifiers to the clusters
                 cluster_ids = self._colour_graph(graph)
@@ -216,6 +224,7 @@ class NengoKeyAllocator(object):
 
         outgoing_partition_to_key_space = dict()
         created_fields = dict()
+        created_field_names = list()
         partition_ids = self._assign_mn_net_ids(
             machine_graph, routing_by_partition, placements, machine)
         for outgoing_partition, connection_id in iteritems(partition_ids):
@@ -243,10 +252,12 @@ class NengoKeyAllocator(object):
                     vertex_cluster_id[outgoing_partition.pre_vertex])
 
                 partition_key_space = self._create_partition_key_space(
-                    key_constraints, bit_field, created_fields)
+                    key_constraints, bit_field, created_fields,
+                    created_field_names)
             else:
                 partition_key_space = self._create_partition_key_space(
-                    key_constraints, bit_field, created_fields)
+                    key_constraints, bit_field, created_fields,
+                    created_field_names)
 
             # add to tracker
             outgoing_partition_to_key_space[outgoing_partition] = (
@@ -254,32 +265,39 @@ class NengoKeyAllocator(object):
         return outgoing_partition_to_key_space
 
     @staticmethod
-    def _create_partition_key_space(key_constraints, bit_field, created_fields):
+    def _create_partition_key_space(
+            key_constraints, bit_field, created_fields, created_field_names):
         new_bit_field = bit_field
         # build the fields as needed
+
+        field_level = list()
         for key_constraint in key_constraints.constraints:
-            if key_constraint.field_id not in created_fields.keys():
+            if key_constraint.field_id not in created_field_names:
                 new_bit_field.add_field(
                     identifier=key_constraint.field_id,
                     length=key_constraint.length,
                     tags=key_constraint.tags, start_at=key_constraint.start_at)
-                created_fields[key_constraint.field_id] = dict()
+                field_level.append(
+                    (key_constraint.field_id, key_constraint.field_value))
+                created_field_names.append(key_constraint.field_id)
 
+        field_level = list()
         for key_constraint in key_constraints.constraints:
-            if key_constraint.field_value in created_fields[
-                    key_constraint.field_id]:
-                new_bit_field = created_fields[key_constraint.field_id][
-                    key_constraint.field_value]
+            field_level.append(
+                (key_constraint.field_id, key_constraint.field_value))
+            if frozenset(field_level) in created_fields:
+                new_bit_field = created_fields[frozenset(field_level)]
+                print "poo"
             else:
                 field = {key_constraint.field_id: key_constraint.field_value}
                 new_bit_field = new_bit_field(**field)
-                created_fields[key_constraint.field_id][
-                    key_constraint.field_value] = new_bit_field
+                created_fields[frozenset(field_level)] = new_bit_field
+                print "boo"
         return new_bit_field
 
     @staticmethod
     def _get_key_constraints(outgoing_partition):
-        if isinstance(outgoing_partition.pre_vertex, NengoMachineVertex):
+        if isinstance(outgoing_partition.pre_vertex, AbstractNengoMachineVertex):
             outgoing_partition_constraints = \
                 outgoing_partition.pre_vertex.\
                 get_outgoing_partition_constraints(outgoing_partition)

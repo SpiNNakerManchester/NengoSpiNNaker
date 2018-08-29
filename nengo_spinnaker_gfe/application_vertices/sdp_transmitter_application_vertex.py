@@ -92,7 +92,8 @@ class SDPTransmitterApplicationVertex(
             inputs_n_keys += 1
 
         machine_vertex = SDPTransmitterMachineVertex(
-            self._size_in, input_filters, inputs_n_keys, ip_address)
+            self._size_in, input_filters, inputs_n_keys, ip_address,
+            self._label)
         resource_tracker.allocate_resources(machine_vertex.resources_required)
         machine_graph.add_vertex(machine_vertex)
         graph_mapper.add_vertex_mapping(

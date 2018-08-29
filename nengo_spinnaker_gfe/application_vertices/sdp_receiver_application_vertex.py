@@ -71,7 +71,8 @@ class SDPReceiverApplicationVertex(
                     constants.OUTPUT_PORT.STANDARD:
 
                 # Create a vertex for this connection
-                machine_vertex = SDPReceiverMachineVertex(outgoing_partition)
+                machine_vertex = SDPReceiverMachineVertex(
+                    outgoing_partition, label=self._label)
                 machine_graph.add_vertex(machine_vertex)
                 graph_mapper.add_vertex_mapping(
                     machine_vertex=machine_vertex, application_vertex=self)

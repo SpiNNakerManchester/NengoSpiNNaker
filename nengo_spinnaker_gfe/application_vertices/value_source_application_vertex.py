@@ -98,7 +98,7 @@ class ValueSourceApplicationVertex(
             self, resource_tracker, machine_graph, graph_mapper, operator_graph,
             n_machine_time_steps, minimum_buffer_sdram,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
-            receive_buffer_host):
+            receive_buffer_host, receive_buffer_port):
         outgoing_partitions = \
             operator_graph.get_outgoing_edge_partitions_starting_at_vertex(self)
         n_machine_verts = int(math.ceil(
@@ -111,8 +111,9 @@ class ValueSourceApplicationVertex(
             machine_vertex = ValueSourceMachineVertex(
                 vertex_partition_slice, n_machine_time_steps,
                 self._update_period, minimum_buffer_sdram,
-                maximum_sdram_for_buffering, using_auto_pause_and_resume,
-                receive_buffer_host)
+                receive_buffer_host, maximum_sdram_for_buffering,
+                using_auto_pause_and_resume, receive_buffer_port,
+                label="{} for {}".format(vertex_partition_slice, self._label))
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)

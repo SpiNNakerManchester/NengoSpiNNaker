@@ -1,13 +1,20 @@
 import unittest
+
+import nengo_spinnaker
+from nengo.cache import NoDecoderCache
+from nengo_spinnaker.builder import Model
+from nengo_spinnaker.node_io import Ethernet
+from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_utilise_interposers import \
+    NengoUtiliseInterposers
 from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
     nengo_application_graph_builder import NengoApplicationGraphBuilder
-from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
-    nengo_utilise_interposers import NengoUtiliseInterposers
 from nengo_unit_tests.examples.basic import create_model as basic_create_model
 from nengo_unit_tests.examples.learn_associates import create_model as \
     la_create_model
 from nengo_unit_tests.examples.learn_comm_channel import create_model as \
     lcc_create_model
+from nengo_unit_tests.examples.lines import \
+    create_model as lines_create_model
 from nengo_unit_tests.examples.net import create_model as net_create_model
 from nengo_unit_tests.examples.spa import create_model as spa_create_model
 from nengo_unit_tests.examples.spaun_model import create_model as \
@@ -17,15 +24,6 @@ from nengo_unit_tests.examples.test_nodes_sliced import create_model as \
 from nengo_unit_tests.examples.two_d import create_model as two_d_create_model
 from nengo_unit_tests.test_app_graph_utilities \
     import compare_against_the_nengo_spinnaker_and_gfe_impls
-
-import nengo_spinnaker
-from nengo_spinnaker.builder import Model
-from nengo_spinnaker.node_io import Ethernet
-
-
-from nengo_unit_tests.examples.lines import \
-    create_model as lines_create_model
-from nengo.cache import NoDecoderCache
 
 
 class TestAppGraphAndInterposerBuilder(unittest.TestCase):

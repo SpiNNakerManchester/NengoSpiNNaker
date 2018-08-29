@@ -89,7 +89,8 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
                 receive_buffer_port=receive_buffer_port,
                 input_filters=input_filters, input_n_keys=inputs_n_keys,
                 time_between_requests=time_between_requests,
-                buffer_size_before_receive=buffer_size_before_receive)
+                buffer_size_before_receive=buffer_size_before_receive,
+                label="{} for {}".format(input_slice, self._label))
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)

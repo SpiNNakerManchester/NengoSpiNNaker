@@ -3,25 +3,23 @@ from enum import Enum
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource
-
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.buffer_management import \
     recording_utilities
 from spinn_front_end_common.interface.simulation import simulation_utilities
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_front_end_common.utilities import constants as fec_constants
-
+from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
 
 class ValueSourceMachineVertex(
-        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals):
 
     __slots__ = [
@@ -56,8 +54,8 @@ class ValueSourceMachineVertex(
             self, outgoing_partition_slice, n_machine_time_steps,
             update_period, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
-            receive_buffer_port):
-        NengoMachineVertex.__init__(self)
+            receive_buffer_port, label):
+        AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         self._outgoing_partition_slice = outgoing_partition_slice
@@ -143,7 +141,7 @@ class ValueSourceMachineVertex(
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @overrides(NengoMachineVertex.resources_required)
+    @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
         return self.generate_static_resources(
             self._outgoing_partition_slice, self._n_machine_time_steps)

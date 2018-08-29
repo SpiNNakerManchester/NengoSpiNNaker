@@ -1,10 +1,12 @@
 from enum import Enum
 
 from nengo_spinnaker_gfe import constants, helpful_functions
+from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
+    AbstractAcceptsMulticastSignals
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
@@ -12,12 +14,9 @@ from spinn_front_end_common.abstract_models.impl import \
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
-from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AbstractAcceptsMulticastSignals
-
 
 class InterposerMachineVertex(
-        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
         AbstractTransmitsMulticastSignals):
 
@@ -50,7 +49,7 @@ class InterposerMachineVertex(
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
             output_slices, machine_time_step, filters, label, constraints):
-        NengoMachineVertex.__init__(self, label=label, constraints=constraints)
+        AbstractNengoMachineVertex.__init__(self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
         MachineDataSpecableVertex.__init__(self)
@@ -96,7 +95,7 @@ class InterposerMachineVertex(
         return "interposer.aplx"  # this was filter in mundy code
 
     @property
-    @overrides(NengoMachineVertex.resources_required)
+    @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
         return self.generate_static_resources(
             self._transform_data, self._n_keys, self._filters)

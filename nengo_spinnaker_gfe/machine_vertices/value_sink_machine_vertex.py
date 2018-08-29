@@ -1,8 +1,10 @@
 from enum import Enum
 
 from nengo_spinnaker_gfe import helpful_functions
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
+from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
+    AbstractAcceptsMulticastSignals
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     CPUCyclesPerTickResource, DTCMResource
@@ -20,12 +22,9 @@ from spinn_front_end_common.utilities import helpful_functions as \
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
-from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
-    AbstractAcceptsMulticastSignals
-
 
 class ValueSinkMachineVertex(
-        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
         AbstractReceiveBuffersToHost):
 
@@ -69,8 +68,9 @@ class ValueSinkMachineVertex(
             self, input_slice, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
             receive_buffer_port, input_filters, input_n_keys,
-            time_between_requests, buffer_size_before_receive):
-        NengoMachineVertex.__init__(self)
+            time_between_requests, buffer_size_before_receive,
+            label):
+        AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
@@ -164,7 +164,7 @@ class ValueSinkMachineVertex(
     @property
     @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
     @overrides(
-        NengoMachineVertex.resources_required,
+        AbstractNengoMachineVertex.resources_required,
         additional_arguments=["n_machine_time_steps"])
     def resources_required(self, n_machine_time_steps):
         container = ResourceContainer(

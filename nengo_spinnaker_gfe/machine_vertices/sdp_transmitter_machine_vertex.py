@@ -1,25 +1,26 @@
 import threading
+
 import numpy
 from enum import Enum
 
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
-from nengo_spinnaker_gfe.graph_components.nengo_machine_vertex import \
-    NengoMachineVertex
+from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
+    AbstractNengoMachineVertex
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     IPtagResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.simulation import simulation_utilities
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_front_end_common.utilities import constants as fec_constants
+from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
 
 
 class SDPTransmitterMachineVertex(
-        NengoMachineVertex, MachineDataSpecableVertex,
+        AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals):
 
     __slots__ = [
@@ -51,8 +52,8 @@ class SDPTransmitterMachineVertex(
     IPTAG_TRAFFIC_IDENTIFIER = "SDP_RECEIVER_FEED"
     USE_IPTAG = False
 
-    def __init__(self, size_in, input_filters, inputs_n_keys, hostname):
-        NengoMachineVertex.__init__(self)
+    def __init__(self, size_in, input_filters, inputs_n_keys, hostname, label):
+        AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
@@ -72,7 +73,7 @@ class SDPTransmitterMachineVertex(
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @overrides(NengoMachineVertex.resources_required)
+    @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
         return self.get_static_resources(
             self._input_filters, self._input_n_keys,
