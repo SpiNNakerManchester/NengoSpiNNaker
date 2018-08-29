@@ -2,6 +2,33 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="https://github.com/SpiNNakerManchester/PACMAN
             https://raw.githubusercontent.com/SpiNNakerManchester/PACMAN/master/pacman/operations/algorithms_metadata_schema.xsd">
+    <algorithm name="NengoRoutingTableGenerator">
+        <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_routing_table_generator</python_module>
+        <python_class>NengoRoutingTableGenerator</python_class>
+        <input_definitions>
+            <parameter>
+                <param_name>routing_infos</param_name>
+                <param_type>MemoryRoutingInfos</param_type>
+            </parameter>
+            <parameter>
+                <param_name>routing_table_by_partitions</param_name>
+                <param_type>MemoryRoutingTableByPartition</param_type>
+            </parameter>
+            <parameter>
+                <param_name>machine</param_name>
+                <param_type>MemoryExtendedMachine</param_type>
+            </parameter>
+        </input_definitions>
+        <required_inputs>
+            <param_name>routing_infos</param_name>
+            <param_name>routing_table_by_partitions</param_name>
+            <param_name>machine</param_name>
+        </required_inputs>
+        <outputs>
+            <param_type>MemoryRoutingTables</param_type>
+        </outputs>
+    </algorithm>
+
     <algorithm name="NengoSDRAMOutgoingPartitionAllocator">
         <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_sdram_outgoing_partition_allocator</python_module>
         <python_class>NengoSDRAMOutgoingPartitionAllocator</python_class>

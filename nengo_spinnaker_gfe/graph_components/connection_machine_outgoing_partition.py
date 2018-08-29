@@ -31,7 +31,8 @@ class ConnectionMachineOutgoingPartition(
 
     _REPR_TEMPLATE = \
         "ConnectionOutgoingPartition(\n" \
-        "identifier={}, edges={}, constraints={}, label={}, seed={})"
+        "pre_vertex={}, identifier={}, edges={}, constraints={}, label={}, " \
+        "seed={})"
 
     def __init__(self, rng, identifier, pre_vertex, seed):
         AbstractTrafficTypeSecureOutgoingPartition.__init__(
@@ -69,7 +70,8 @@ class ConnectionMachineOutgoingPartition(
                 edges += str(edge) + ","
 
         return self._REPR_TEMPLATE.format(
-            self._identifier, edges, self.constraints, self.label, self._seed)
+            self._pre_vertex, self._identifier, edges, self.constraints,
+            self.label, self._seed)
 
     def __str__(self):
         return self.__repr__()

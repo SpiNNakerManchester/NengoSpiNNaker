@@ -85,4 +85,4 @@ class SDPReceiverApplicationVertex(
                 raise Exception(
                     "The SDP receiver does not know what to do with output"
                     " port {}".format(
-                        outgoing_partition.identifier.source_port))
+                        outgoing_partition.identifier.source_port.value))
