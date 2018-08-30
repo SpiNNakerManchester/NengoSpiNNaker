@@ -57,5 +57,4 @@ class NengoMachineGraphGenerator(object):
         executor.execute_mapping()
 
         # update spinnaker with app graph
-        return (executor.get_item("MemoryMachineGraph"),
-                executor.get_item("NengoGraphMapper"))
+        return executor.get_items()

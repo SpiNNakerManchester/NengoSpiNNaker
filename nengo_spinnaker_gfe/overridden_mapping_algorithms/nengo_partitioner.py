@@ -59,7 +59,7 @@ class NengoPartitioner(object):
         self._handle_edges(nengo_operator_graph, machine_graph, graph_mapper,
                            progress_bar, nengo_random_number_generator)
 
-        return machine_graph, graph_mapper
+        return machine_graph, graph_mapper, self._resource_tracker.chips_used
 
     def _handle_edges(
             self, operator_graph, machine_graph, graph_mapper, progress_bar,

@@ -124,13 +124,16 @@ class ValueSourceMachineVertex(
 
         # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.KEY_REGION.value)
-        self._write_key_region(spec, routing_info)
+        self._write_key_region(spec, routing_info, machine_graph)
 
         spec.end_specification()
 
-    def _write_key_region(self, spec, routing_info):
-
-        raise Exception("NOT IMPLED YET")
+    def _write_key_region(self, spec, routing_info, machine_graph):
+        for outgoing_partition in (
+                machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
+                    self)):
+            spec.write_value(
+                routing_info.get_first_key_from_partition(outgoing_partition))
 
     def _reverse_memory_regions(self, spec, output_data, machine_graph):
         input_n_keys = len(

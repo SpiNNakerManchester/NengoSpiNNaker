@@ -1,12 +1,17 @@
 import logging
 import os
+import time
 
 import numpy
 from nengo.cache import NoDecoderCache
 from nengo_spinnaker_gfe.application_vertices.\
     value_sink_application_vertex import ValueSinkApplicationVertex
+from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_host_graph_update_builder import \
+    NengoHostGraphUpdateBuilder
 from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
     NengoMachineGraphGenerator
+from spinn_front_end_common.interface.interface_functions import \
+    NotificationProtocol
 
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.utilities.utility_objs import ExecutableFinder
@@ -53,6 +58,7 @@ class NengoSimulator(SpiNNaker):
 
     CONFIG_FILE_NAME = "nengo_spinnaker.cfg"
     NENGO_ALGORITHM_XML_FILE_NAME = "nengo_overridden_mapping_algorithms.xml"
+    NENGO_PARTITIONER_ALGORITHM = "NengoPartitioner"
 
     def __init__(
             self, network, dt=constants.DEFAULT_DT,
@@ -208,7 +214,6 @@ class NengoSimulator(SpiNNaker):
         """Simulate for the given number of steps."""
 
         self._generate_machine_graph(steps)
-
         SpiNNaker.run(self, steps)
 
         # extract data
@@ -250,40 +255,43 @@ class NengoSimulator(SpiNNaker):
             self._get_system_functionality_algorithms_and_inputs()
 
         machine_graph_generator = NengoMachineGraphGenerator()
-        self._original_machine_graph, self._nengo_app_machine_graph_mapper = \
-            machine_graph_generator(
-                system_pre_allocated_resources_inputs=(
-                    system_pre_alloc_res_inputs),
-                max_machine_outputs=self._max_machine_outputs,
-                max_machine_available=self._max_machine_available,
-                steps=steps,
-                partitioning_algorithm=self.config.get_str(
-                    "Mapping", "application_to_machine_graph_algorithms"),
-                system_pre_alloc_res_algorithms=system_pre_alloc_res_algorithms,
-                print_timings=self._print_timings,
-                do_timings=self._do_timings,
-                nengo_operator_graph=self._nengo_operator_graph,
-                xml_paths=self._xml_paths,
-                machine_time_step=self._machine_time_step,
-                pacman_executor_provenance_path=(
-                    self._pacman_executor_provenance_path),
-                receive_buffer_port=helpful_functions.read_config_int(
-                    self._config, "Buffers", "receive_buffer_port"),
-                receive_buffer_host=self._config.get(
-                    "Buffers", "receive_buffer_host"),
-                minimum_buffer_sdram=self._config.getint(
-                    "Buffers", "minimum_buffer_sdram"),
-                maximum_sdram_for_sink_vertex_buffing=self._config.getint(
-                    "Buffers", "sink_vertex_max_sdram_for_buffing"),
-                using_auto_pause_and_resume=self._config.getboolean(
-                    "Buffers", "use_auto_pause_and_resume"),
-                time_between_requests=self._config.getint(
-                    "Buffers", "time_between_requests"),
-                buffer_size_before_receive=self._config.getint(
-                    "Buffers", "buffer_size_before_receive"),
-                first_machine_time_step=self._current_run_timesteps,
-                machine_time_step_in_seconds=(
-                    self._extra_inputs["MachineTimeStepInSeconds"]))
+        executor_items = machine_graph_generator(
+            system_pre_allocated_resources_inputs=(
+                system_pre_alloc_res_inputs),
+            max_machine_outputs=self._max_machine_outputs,
+            max_machine_available=self._max_machine_available,
+            steps=steps,
+            partitioning_algorithm=self.NENGO_PARTITIONER_ALGORITHM,
+            system_pre_alloc_res_algorithms=system_pre_alloc_res_algorithms,
+            print_timings=self._print_timings,
+            do_timings=self._do_timings,
+            nengo_operator_graph=self._nengo_operator_graph,
+            xml_paths=self._xml_paths,
+            machine_time_step=self._machine_time_step,
+            pacman_executor_provenance_path=(
+                self._pacman_executor_provenance_path),
+            receive_buffer_port=helpful_functions.read_config_int(
+                self._config, "Buffers", "receive_buffer_port"),
+            receive_buffer_host=self._config.get(
+                "Buffers", "receive_buffer_host"),
+            minimum_buffer_sdram=self._config.getint(
+                "Buffers", "minimum_buffer_sdram"),
+            maximum_sdram_for_sink_vertex_buffing=self._config.getint(
+                "Buffers", "sink_vertex_max_sdram_for_buffing"),
+            using_auto_pause_and_resume=self._config.getboolean(
+                "Buffers", "use_auto_pause_and_resume"),
+            time_between_requests=self._config.getint(
+                "Buffers", "time_between_requests"),
+            buffer_size_before_receive=self._config.getint(
+                "Buffers", "buffer_size_before_receive"),
+            first_machine_time_step=self._current_run_timesteps,
+            machine_time_step_in_seconds=(
+                self._extra_inputs["MachineTimeStepInSeconds"]))
+
+        self._original_machine_graph = executor_items.get("MemoryMachineGraph")
+        self._nengo_app_machine_graph_mapper = \
+            executor_items.get("NengoGraphMapper")
+        self._max_machine_outputs = executor_items
         self.update_extra_mapping_inputs(
             {"NengoGraphMapper": self._nengo_app_machine_graph_mapper})
 

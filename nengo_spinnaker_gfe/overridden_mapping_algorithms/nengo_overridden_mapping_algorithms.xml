@@ -150,6 +150,7 @@
         <outputs>
             <param_type>MemoryMachineGraph</param_type>
             <param_type>NengoGraphMapper</param_type>
+            <param_type>NChipsRequired</param_type>
         </outputs>
     </algorithm>
     <algorithm name="NengoSetUpLiveIO">
