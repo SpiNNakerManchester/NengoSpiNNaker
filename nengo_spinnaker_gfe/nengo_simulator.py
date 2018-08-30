@@ -280,7 +280,10 @@ class NengoSimulator(SpiNNaker):
                 time_between_requests=self._config.getint(
                     "Buffers", "time_between_requests"),
                 buffer_size_before_receive=self._config.getint(
-                    "Buffers", "buffer_size_before_receive"))
+                    "Buffers", "buffer_size_before_receive"),
+                first_machine_time_step=self._current_run_timesteps,
+                machine_time_step_in_seconds=(
+                    self._extra_inputs["MachineTimeStepInSeconds"]))
         self.update_extra_mapping_inputs(
             {"NengoGraphMapper": self._nengo_app_machine_graph_mapper})
 

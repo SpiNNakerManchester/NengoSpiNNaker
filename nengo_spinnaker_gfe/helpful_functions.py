@@ -45,17 +45,17 @@ def convert_s16_15_to_numpy_array(values):
 
 
 def convert_matrix_to_machine_vertex_level(
-        transform, matrix_slice, sliced_dimension):
+        matrix, matrix_slice, sliced_dimension):
     """ converts a matrix from a application vertex, inside the matrix for the
     machine vertex
     
-    :param transform: the matrix to convert 
+    :param matrix: the matrix to convert 
     :param matrix_slice: the machine vertex slice
     :param sliced_dimension:  the sliced dimension (rows / columns)
     :return: the sliced matrix
     """
-    sliced_transform = transform[_expand_slice(
-        matrix_slice, sliced_dimension, transform.ndim)]
+    sliced_transform = matrix[_expand_slice(
+        matrix_slice, sliced_dimension, matrix.ndim)]
     return sliced_transform
 
 

@@ -14,7 +14,8 @@ class NengoMachineGraphGenerator(object):
             machine_time_step, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_sink_vertex_buffing, using_auto_pause_and_resume,
             receive_buffer_port, time_between_requests,
-            buffer_size_before_receive):
+            buffer_size_before_receive, first_machine_time_step,
+            machine_time_step_in_seconds):
 
         inputs = dict()
         algorithms = list()
@@ -35,6 +36,8 @@ class NengoMachineGraphGenerator(object):
         inputs["ReceiveBufferPort"] = receive_buffer_port
         inputs["TimeBetweenRequests"] = time_between_requests
         inputs["BufferSizeBeforeReceive"] = buffer_size_before_receive
+        inputs["FirstMachineTimeStep"] = first_machine_time_step
+        inputs["MachineTimeStepInSeconds"] = machine_time_step_in_seconds
 
         # update algorithms with system pre allocated algor's
         algorithms.extend(system_pre_alloc_res_algorithms)
