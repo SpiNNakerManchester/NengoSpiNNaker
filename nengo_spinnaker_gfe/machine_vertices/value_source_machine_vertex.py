@@ -59,6 +59,7 @@ class ValueSourceMachineVertex(
 
     UPDATE_PERIOD_ITEMS = 1
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
+    N_RECORDING_REGIONS = 1
 
     def __init__(
             self, outgoing_partition_slice, n_machine_time_steps,
@@ -92,7 +93,7 @@ class ValueSourceMachineVertex(
             n_machine_time_steps, current_time_step):
 
         # reserve data regions
-        self._reverse_memory_regions(spec, self._output_data)
+        self._reverse_memory_regions(spec, self._output_data, machine_graph)
 
         # add system region
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
@@ -101,14 +102,16 @@ class ValueSourceMachineVertex(
             time_scale_factor))
 
         # add recording region
-        spec.switch_write_focus(self.DATA_REGIONS.RECORDING.value)
-        ip_tags = iptags.get_ip_tags_for_vertex(self)
-        recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
-            self._get_buffered_sdram(n_machine_time_steps),
-            self._maximum_sdram_for_buffering)
-        spec.write_array(recording_utilities.get_recording_header_array(
-            recorded_region_sizes, self._time_between_requests,
-            self._buffer_size_before_receive, ip_tags))
+        if self._is_recording_output:
+            spec.switch_write_focus(self.DATA_REGIONS.RECORDING.value)
+            ip_tags = iptags.get_ip_tags_for_vertex(self)
+            recorded_region_sizes = \
+                recording_utilities.get_recorded_region_sizes(
+                    self._get_buffered_sdram(n_machine_time_steps),
+                    self._maximum_sdram_for_buffering)
+            spec.write_array(recording_utilities.get_recording_header_array(
+                recorded_region_sizes, self._time_between_requests,
+                self._buffer_size_before_receive, ip_tags))
 
         # add update period region
         spec.switch_write_focus(self.DATA_REGIONS.UPDATE_PERIOD.value)
@@ -116,18 +119,23 @@ class ValueSourceMachineVertex(
 
         # add filer region
         spec.switch_write_focus(self.DATA_REGIONS.OUTPUT_REGION.value)
-        spec.write_array(self._output_data, DataType.S1615)
+        spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
+            self._output_data))
 
         # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.KEY_REGION.value)
-        self._write_key_region(spec)
+        self._write_key_region(spec, routing_info)
 
         spec.end_specification()
 
-    def _write_key_region(self, spec):
+    def _write_key_region(self, spec, routing_info):
+
         raise Exception("NOT IMPLED YET")
 
-    def _reverse_memory_regions(self, spec, output_data):
+    def _reverse_memory_regions(self, spec, output_data, machine_graph):
+        input_n_keys = len(
+            machine_graph.get_outgoing_edge_partitions_starting_at_vertex(self))
+
         spec.reserve_memory_region(
             self.DATA_REGIONS.SYSTEM.value,
             fec_constants.SYSTEM_BYTES_REQUIREMENT,
@@ -135,15 +143,15 @@ class ValueSourceMachineVertex(
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEY_REGION.value,
             helpful_functions.sdram_size_in_bytes_for_routing_region(
-                self._input_n_keys), label="routing region")
+                input_n_keys), label="routing region")
         spec.reserve_memory_region(
-            self.DATA_REGIONS.OUTPUT_REGION.value,
-            helpful_functions.sdram_size_in_bytes_for_filter_region(
-                output_data.nbytes), label="filter region")
-        spec.reserve_memory_region(
-            region=self.DATA_REGIONS.RECORDING.value,
-            size=recording_utilities.get_recording_header_size(
-                self.N_RECORDING_REGIONS), label="recording")
+            self.DATA_REGIONS.OUTPUT_REGION.value, output_data.nbytes,
+            label="filter region")
+        if self._is_recording_output:
+            spec.reserve_memory_region(
+                region=self.DATA_REGIONS.RECORDING.value,
+                size=recording_utilities.get_recording_header_size(
+                    self.N_RECORDING_REGIONS), label="recording")
         spec.reserve_memory_region(
             region=self.DATA_REGIONS.UPDATE_PERIOD.value,
             size=self._sdram_size_in_bytes_for_update_period_region(),

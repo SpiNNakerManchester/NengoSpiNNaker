@@ -23,7 +23,7 @@ def convert_numpy_array_to_s16_15(values):
     :return: s1615 array
     """
     # Scale and cast to appropriate int types
-    scaled_values = values * DataType.S1615.scale
+    scaled_values = values * float(DataType.S1615.scale)
 
     # Saturate the values
     clipped_values = numpy.clip(scaled_values, DataType.S1615.min,
