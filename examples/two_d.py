@@ -3,14 +3,14 @@ import nengo
 
 import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
 import nengo_spinnaker as mundy_nengo
-USE_GFE = True
+USE_GFE = False
 
 def create_model():
 
     model = nengo.Network()
     with model:
-        stimulus = nengo.Node(lambda t: (np.sin(t), np.cos(t)))
-        ens = nengo.Ensemble(n_neurons=1000, dimensions=2)
+        stimulus = nengo.Node(lambda t: (np.sin(t), np.cos(t)), label="stim")
+        ens = nengo.Ensemble(n_neurons=1000, dimensions=2, label="ens")
         nengo.Connection(stimulus, ens)
     return model, list(), dict()
 
