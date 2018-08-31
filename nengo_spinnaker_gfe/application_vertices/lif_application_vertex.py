@@ -717,7 +717,7 @@ class LIFApplicationVertex(
             learnt_encoder_routing_region + recording_region_size)
 
         if len(slices) == 1:
-            return SDRAMResource(total / n_cores)
+            return SDRAMResource(int(math.ceil(total / n_cores)))
         else:
             return SDRAMResource(total)
 
