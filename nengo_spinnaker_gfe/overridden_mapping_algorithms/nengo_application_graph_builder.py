@@ -207,7 +207,8 @@ class NengoApplicationGraphBuilder(object):
                 nengo_operator_graph, nengo_to_app_graph_map, machine_time_step,
                 host_network, nengo_nodes_as_function_of_time, decoder_cache,
                 nengo_random_number_generator_seed,
-                function_of_time_nodes_time_period, progress_bar)
+                function_of_time_nodes_time_period, progress_bar,
+                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
 
         # convert from ensembles to neuron model operators
         for nengo_ensemble in progress_bar.over(nengo_network.ensembles, False):
