@@ -117,14 +117,15 @@ class ValueSourceMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.UPDATE_PERIOD.value)
         spec.write_value(self._update_period is not None)
 
-        # add filer region
+        # add output region
         spec.switch_write_focus(self.DATA_REGIONS.OUTPUT_REGION.value)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
             self._output_data))
 
         # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.KEY_REGION.value)
-        self._write_key_region(spec, routing_info, machine_graph)
+        helpful_functions.write_routing_region(
+            spec, routing_info, machine_graph, self)
 
         spec.end_specification()
 
@@ -146,15 +147,17 @@ class ValueSourceMachineVertex(
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEY_REGION.value,
             helpful_functions.sdram_size_in_bytes_for_routing_region(
-                input_n_keys), label="routing region")
+                input_n_keys),
+            label="routing region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.OUTPUT_REGION.value, output_data.nbytes,
-            label="filter region")
+            label="output region")
         if self._is_recording_output:
             spec.reserve_memory_region(
                 region=self.DATA_REGIONS.RECORDING.value,
                 size=recording_utilities.get_recording_header_size(
-                    self.N_RECORDING_REGIONS), label="recording")
+                    self.N_RECORDING_REGIONS),
+                label="recording")
         spec.reserve_memory_region(
             region=self.DATA_REGIONS.UPDATE_PERIOD.value,
             size=self._sdram_size_in_bytes_for_update_period_region(),

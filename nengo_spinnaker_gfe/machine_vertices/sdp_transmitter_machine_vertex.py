@@ -8,6 +8,7 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
+from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     IPtagResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
@@ -122,10 +123,13 @@ class SDPTransmitterMachineVertex(
     def accepts_multicast_signals(self, transmission_params):
         return True
 
-    @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
+    @inject_items({"machine_time_step_in_seconds": "MachineTimeStepInSeconds"})
+    @overrides(MachineDataSpecableVertex.generate_machine_data_specification,
+               additional_arguments=["machine_time_step_in_seconds"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
-            reverse_iptags, machine_time_step, time_scale_factor):
+            reverse_iptags, machine_time_step, time_scale_factor,
+            machine_time_step_in_seconds):
         self._reserve_memory_regions(spec)
 
         # create system region
@@ -136,23 +140,20 @@ class SDPTransmitterMachineVertex(
 
         # fill in filter region
         spec.switch_write_focus(self.DATA_REGIONS.FILTER.value)
-        self._write_filter_region(spec)
+        helpful_functions.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._input_filters)
 
         # fill in routing region
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
-        self._write_routing_region(spec)
+        helpful_functions.write_routing_region(
+            spec, routing_info, machine_graph, self)
 
         # fill in transmitter region
         spec.switch_write_focus(self.DATA_REGIONS.TRANSMITTER.value)
         spec.write_value(self._size_in)
         spec.write_value(self.TRANSMISSION_DELAY)
         spec.end_specification()
-
-    def _write_filter_region(self, spec):
-        pass
-
-    def _write_routing_region(self, spec):
-        pass
 
     def _reserve_memory_regions(self, spec):
         """ reserve the memory region sizes

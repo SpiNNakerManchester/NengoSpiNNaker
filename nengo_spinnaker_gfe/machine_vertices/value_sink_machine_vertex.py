@@ -90,13 +90,16 @@ class ValueSinkMachineVertex(
     def accepts_multicast_signals(self, transmission_params):
         return transmission_params.projects_to(self._input_slice.as_slice)
 
-    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @inject_items(
+        {"n_machine_time_steps": "TotalMachineTimeSteps",
+         "machine_time_step_in_seconds": "MachineTimeStepInSeconds"})
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification,
-               additional_arguments=["n_machine_time_steps"])
+               additional_arguments=[
+                   "n_machine_time_steps", "machine_time_step_in_seconds"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
-            n_machine_time_steps):
+            n_machine_time_steps, machine_time_step_in_seconds):
 
         # reserve the memory region blocks
         self._reserve_memory_regions(spec)
@@ -123,19 +126,16 @@ class ValueSinkMachineVertex(
 
         # add filer region
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
-        self._write_filter_region(spec)
+        helpful_functions.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._input_filters)
 
         # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.FILTER_ROUTING.value)
-        self._write_routing_region(spec)
+        helpful_functions.write_routing_region(
+            spec, routing_info, machine_graph, self)
 
         spec.end_specification()
-
-    def _write_filter_region(self, spec):
-        pass
-
-    def _write_routing_region(self, spec):
-        pass
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(
@@ -143,7 +143,7 @@ class ValueSinkMachineVertex(
             constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.SLICE_DATA.value,
-            self.SLICE_DATA_SDRAM_REQUIREMENT, label="filter region")
+            self.SLICE_DATA_SDRAM_REQUIREMENT, label="slice region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.FILTER_ROUTING.value,
             helpful_functions.sdram_size_in_bytes_for_routing_region(
