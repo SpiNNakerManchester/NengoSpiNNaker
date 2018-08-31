@@ -1,12 +1,11 @@
 import numpy
+
+from nengo_spinnaker_gfe.nengo_filters.basic_filter_impl import BasicFilterImpl
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe import helpful_functions
 
-from nengo_spinnaker_gfe.abstracts.abstract_filter import \
-    AbstractFilter
 
-
-class LowPassFilter(AbstractFilter):
+class LowPassFilter(BasicFilterImpl):
 
     __slots__ = [
         #
@@ -18,34 +17,36 @@ class LowPassFilter(AbstractFilter):
     SECOND_CO_EFFICIENT = 1.0
 
     def __init__(self, width, latching, time_constant):
-        AbstractFilter.__init__(self, width, latching)
+        BasicFilterImpl.__init__(self, width, latching)
         self._time_constant = time_constant
 
     @property
     def time_constant(self):
         return self._time_constant
 
-    @overrides(AbstractFilter.__eq__)
+    @overrides(BasicFilterImpl.__eq__)
     def __eq__(self, other):
         return (isinstance(other, LowPassFilter) and
                 self._width == other.width and
                 self._latching == other.latching and
                 self._time_constant == other.time_constant)
 
-    @overrides(AbstractFilter.size_words)
+    @overrides(BasicFilterImpl.size_words)
     def size_words(self):
-        return self.SIZE_OF_WORDS
+        return BasicFilterImpl.size_words(self) + self.SIZE_OF_WORDS
 
     @staticmethod
-    @overrides(AbstractFilter.build_filter)
+    @overrides(BasicFilterImpl.build_filter)
     def build_filter(requires_latching, reception_params, width=None):
         if width is None:
             width = reception_params.width
         return LowPassFilter(
             width, requires_latching, reception_params.parameter_filter.tau)
 
-    @overrides(AbstractFilter.pack_into)
-    def pack_into(self, spec, dt):
+    @overrides(BasicFilterImpl.write_spec)
+    def write_spec(self, spec, dt, width):
+
+        BasicFilterImpl.write_basic_spec(self, spec, width)
 
         """Pack the struct describing the filter into the buffer."""
         # Compute the coefficients

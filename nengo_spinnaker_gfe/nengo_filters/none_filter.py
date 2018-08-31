@@ -20,8 +20,8 @@ class NoneFilter(AbstractFilter):
     def size_words(self):
         return 0
 
-    @overrides(AbstractFilter.pack_into)
-    def pack_into(self, spec, dt):
+    @overrides(AbstractFilter.write_spec)
+    def write_spec(self, spec, dt, width):
         pass
 
     @staticmethod

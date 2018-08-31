@@ -64,8 +64,8 @@ WORD_TO_BIT_CONVERSION = 32
 BYTES_PER_KEY = 4
 
 # sizes of elements for filter dsg regions
-FILTER_PARAMETERS_SIZE = 4
-FILTER_N_FILTERS_SIZE = 1
+N_FILTER_TYPES = 3
+N_FILTER_COUNT_SIZE = 1
 
 # sizes of elements for routing dsg regions
 ROUTING_N_ROUTES_SIZE = 1

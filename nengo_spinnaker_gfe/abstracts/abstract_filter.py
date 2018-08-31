@@ -40,7 +40,7 @@ class AbstractFilter(object):
         """
 
     @abstractmethod
-    def pack_into(self, spec, dt):
+    def write_spec(self, spec, dt, width):
         """ pack the data into the dsg file        
         :param spec: 
         :param dt: 

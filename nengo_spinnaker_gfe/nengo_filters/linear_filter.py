@@ -1,13 +1,11 @@
 import numpy
 from nengo.utils.filter_design import cont2discrete
+from nengo_spinnaker_gfe.nengo_filters.basic_filter_impl import BasicFilterImpl
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe import helpful_functions
 
-from nengo_spinnaker_gfe.abstracts.abstract_filter import \
-    AbstractFilter
 
-
-class LinearFilter(AbstractFilter):
+class LinearFilter(BasicFilterImpl):
     __slots__ = [
         #
         '_num',
@@ -18,7 +16,7 @@ class LinearFilter(AbstractFilter):
     ]
 
     def __init__(self, width, latching, num, den):
-        AbstractFilter.__init__(self, width, latching)
+        BasicFilterImpl.__init__(self, width, latching)
         self._num = numpy.array(num)
         self._den = numpy.array(den)
         self._order = len(den) - 1
@@ -35,7 +33,7 @@ class LinearFilter(AbstractFilter):
     def order(self):
         return self._order
 
-    @overrides(AbstractFilter.__eq__)
+    @overrides(BasicFilterImpl.__eq__)
     def __eq__(self, other):
         return (isinstance(other, LinearFilter) and
                 self._width == other.width and
@@ -43,12 +41,12 @@ class LinearFilter(AbstractFilter):
                 self._num == other.num and self._den == other.den and
                 self._order == other.order)
 
-    @overrides(AbstractFilter.size_words)
+    @overrides(BasicFilterImpl.size_words)
     def size_words(self):
-        return 1 + self._order * 2
+        return BasicFilterImpl.size_words(self) + 1 + self._order * 2
 
     @staticmethod
-    @overrides(AbstractFilter.build_filter)
+    @overrides(BasicFilterImpl.build_filter)
     def build_filter(requires_latching, reception_params, width=None):
         if width is None:
             width = reception_params.width
@@ -56,8 +54,10 @@ class LinearFilter(AbstractFilter):
             width, requires_latching, reception_params.filter.num,
             reception_params.filter.den)
 
-    @overrides(AbstractFilter.pack_into)
-    def pack_into(self, spec, dt):
+    @overrides(BasicFilterImpl.write_spec)
+    def write_spec(self, spec, dt, width):
+        BasicFilterImpl.write_basic_spec(self, spec, width)
+
         """Pack the struct describing the filter into the buffer."""
         # Compute the filter coefficients
         b, a, _ = cont2discrete((self.num, self.den), dt)
