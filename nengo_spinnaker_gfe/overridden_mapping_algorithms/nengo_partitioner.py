@@ -8,7 +8,7 @@ from nengo_spinnaker_gfe.graph_components.\
     connection_machine_outgoing_partition import \
     ConnectionMachineOutgoingPartition
 from pacman.model.graphs.common import Slice
-from pacman.model.graphs.machine import MachineGraph, MachineEdge
+from pacman.model.graphs.machine import MachineGraph
 from pacman.utilities.utility_objs import ResourceTracker
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe.abstracts. \
@@ -18,6 +18,7 @@ from nengo_spinnaker_gfe.graph_components. \
 from nengo_spinnaker_gfe.nengo_exceptions import NotPartitionable
 from spinn_machine import Processor, SDRAM
 from spinn_utilities.progress_bar import ProgressBar
+import math
 
 
 class NengoPartitioner(object):
@@ -179,14 +180,15 @@ class NengoPartitioner(object):
 
         # max atoms = max cuts, as 1 atom per core is the worse you can do
         max_cuts = 0
-        for neuron_slice in initial_slices:
+        for old_slice in initial_slices:
             if user_max_cuts is None:
                 max_cuts = max(
-                    max_cuts, neuron_slice.hi_atom - neuron_slice.lo_atom)
+                    max_cuts, old_slice.hi_atom - old_slice.lo_atom)
             else:
                 max_cuts = user_max_cuts
 
-        slices = [initial_slices]
+        slices = list()
+        slices.append(initial_slices)
         resources_used = list()
 
         while NengoPartitioner._constraints_unsatisfied(
@@ -206,12 +208,16 @@ class NengoPartitioner(object):
 
                     n_cuts = max(
                         n_cuts,
-                        used_resources.dtcm.get_value() /
-                        Processor.DTCM_AVAILABLE,
-                        used_resources.cpu_cycles.get_value() /
-                        Processor.CLOCK_SPEED,
-                        used_resources.sdram.get_value() /
-                        SDRAM.DEFAULT_SDRAM_BYTES)
+                        int(math.ceil(
+                            float(used_resources.dtcm.get_value()) /
+                            max_resources_to_use_per_core.dtcm.get_value())),
+                        int(math.ceil(
+                            float(used_resources.cpu_cycles.get_value()) /
+                            max_resources_to_use_per_core.cpu_cycles.
+                            get_value())),
+                        int(math.ceil(
+                            float(used_resources.sdram.get_value()) /
+                            max_resources_to_use_per_core.sdram.get_value())))
             else:
                 # Otherwise just increment the number of cuts rather than
                 # honing in on the expensive elements.
@@ -226,13 +232,13 @@ class NengoPartitioner(object):
 
             # Partition
             new_slices = list()
-            for internal_slices in slices:
-
-                for neuron_slice in internal_slices:
-                    new_slices.append(list())
-                    for new_neuron_slice in NengoPartitioner.divide_slice(
-                            neuron_slice, n_cuts):
-                        new_slices[-1].append(new_neuron_slice)
+            for _ in range(n_cuts):
+                new_slices.append(list())
+            for old_slice in internal_slices:
+                for index, new_neuron_slice in enumerate(
+                        NengoPartitioner.divide_slice(
+                        old_slice, n_cuts)):
+                    new_slices[index].append(new_neuron_slice)
             slices = new_slices
 
         # map sets of slices to resources used. this allows us to not need to

@@ -41,6 +41,7 @@ class NengoMachineGraphGenerator(object):
 
         # update algorithms with system pre allocated algor's
         algorithms.extend(system_pre_alloc_res_algorithms)
+
         algorithms.append(partitioning_algorithm)
 
         outputs = ["MemoryMachineGraph", "NengoGraphMapper"]
