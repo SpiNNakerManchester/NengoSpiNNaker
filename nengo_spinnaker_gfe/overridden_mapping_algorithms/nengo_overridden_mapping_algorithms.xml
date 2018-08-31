@@ -28,7 +28,30 @@
             <param_type>MemoryRoutingTables</param_type>
         </outputs>
     </algorithm>
-
+    <algorithm name="NengoVirtualMallocBasedChipIDAllocator">
+        <python_module>pacman.operations.chip_id_allocator_algorithms.malloc_based_chip_id_allocator</python_module>
+        <python_class>MallocBasedChipIdAllocator</python_class>
+        <input_definitions>
+            <parameter>
+                <param_name>machine</param_name>
+                <param_type>MemoryVirtualMachine</param_type>
+            </parameter>
+            <parameter>
+                <param_name>graph</param_name>
+                <param_type>MemoryApplicationGraph</param_type>
+                <param_type>MemoryMachineGraph</param_type>
+            </parameter>
+        </input_definitions>
+        <required_inputs>
+            <param_name>machine</param_name>
+        </required_inputs>
+        <optional_inputs>
+            <param_name>graph</param_name>
+        </optional_inputs>
+        <outputs>
+            <param_type>MemoryExtendedVirtualMachine</param_type>
+        </outputs>
+    </algorithm>
     <algorithm name="NengoSDRAMOutgoingPartitionAllocator">
         <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_sdram_outgoing_partition_allocator</python_module>
         <python_class>NengoSDRAMOutgoingPartitionAllocator</python_class>
