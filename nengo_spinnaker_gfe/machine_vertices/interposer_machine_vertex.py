@@ -84,7 +84,10 @@ class InterposerMachineVertex(
                                             reverse_iptags,
                                             machine_time_step,
                                             time_scale_factor):
-        pass
+        self._reserve_memory_regions(spec)
+
+    def _reserve_memory_regions(self, spec):
+        spec.reserve_memory_region()
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
