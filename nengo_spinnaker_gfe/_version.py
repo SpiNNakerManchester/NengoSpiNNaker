@@ -1,0 +1,5 @@
+__version__ = "1.0.1"
+__version_month__ = "January"
+__version_year__ = "2019"
+__version_day__ = "1"
+__version_name__ = "SleeperService"
