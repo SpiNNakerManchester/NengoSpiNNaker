@@ -305,3 +305,15 @@ class NengoSimulator(SpiNNaker):
                 self=self, turn_off_machine=turn_off_machine,
                 clear_tags=clear_tags,
                 clear_routing_tables=clear_routing_tables)
+
+    def generate_bibtex_for_nengo_sim(self, doi_title, zenodo_access_token):
+        """ helper method for building bibtex from citation.cff's
+
+        :param doi_title: the title of the doi
+        :param zenodo_access_token: the access token for zenodo
+        :rtype: None
+        """
+        import nengo_spinnaker_gfe
+        SpiNNaker.generate_bibtex(
+            self, top_module=nengo_spinnaker_gfe, doi_title=doi_title,
+            zenodo_access_token=zenodo_access_token)
