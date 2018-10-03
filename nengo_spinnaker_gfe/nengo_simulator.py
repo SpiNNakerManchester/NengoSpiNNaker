@@ -3,8 +3,6 @@ import os
 import time
 
 import numpy
-
-import nengo_spinnaker_gfe
 from nengo.cache import NoDecoderCache
 from nengo_spinnaker_gfe.application_vertices.\
     value_sink_application_vertex import ValueSinkApplicationVertex
@@ -129,8 +127,7 @@ class NengoSimulator(SpiNNaker):
                 os.path.join(os.path.dirname(__file__),
                              self.CONFIG_FILE_NAME))],
             machine_time_step=machine_time_step,
-            extra_xml_paths=xml_paths,
-            top_level_module=nengo_spinnaker_gfe)
+            extra_xml_paths=xml_paths)
 
         # basic mapping extras
         extra_mapping_algorithms = [
