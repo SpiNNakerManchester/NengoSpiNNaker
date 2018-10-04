@@ -5,6 +5,7 @@ from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
+from nengo_spinnaker_gfe.nengo_filters import filter_region_writer
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     CPUCyclesPerTickResource, DTCMResource
@@ -126,7 +127,7 @@ class ValueSinkMachineVertex(
 
         # add filer region
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
-        helpful_functions.write_filter_region(
+        filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
 
