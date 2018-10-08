@@ -122,8 +122,8 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
         :param seed: random number generator seed
         :type seed: int
         """
-        AbstractNengoApplicationVertex.__init__(self, label=label, rng=rng,
-                                                seed=seed)
+        AbstractNengoApplicationVertex.__init__(
+            self, label=label, rng=rng, seed=seed)
         self._size_in = size_in
 
     @property
