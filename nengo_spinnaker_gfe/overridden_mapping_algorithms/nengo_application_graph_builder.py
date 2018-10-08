@@ -744,7 +744,7 @@ class NengoApplicationGraphBuilder(object):
         # TODO that one
         try:
             targets = nengo_connection_builder.get_targets(
-                model, nengo_connection, eval_points)
+                nengo_connection, eval_points)
         except:  # yuck
             # nengo <= 2.3.0
             targets = nengo_connection_builder.get_targets(

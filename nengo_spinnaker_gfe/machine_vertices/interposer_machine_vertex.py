@@ -49,7 +49,8 @@ class InterposerMachineVertex(
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
             output_slices, machine_time_step, filters, label, constraints):
-        AbstractNengoMachineVertex.__init__(self, label=label, constraints=constraints)
+        AbstractNengoMachineVertex.__init__(
+            self, label=label, constraints=constraints)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
         MachineDataSpecableVertex.__init__(self)
@@ -84,7 +85,7 @@ class InterposerMachineVertex(
                                             reverse_iptags,
                                             machine_time_step,
                                             time_scale_factor):
-        pass
+        raise Exception()
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):

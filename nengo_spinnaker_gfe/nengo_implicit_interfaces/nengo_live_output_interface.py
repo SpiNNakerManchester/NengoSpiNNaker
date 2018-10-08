@@ -1,6 +1,7 @@
 
 
 class NengoLiveOutputInterface(object):
+
     def __init__(self):
         pass
 
@@ -11,3 +12,5 @@ class NengoLiveOutputInterface(object):
         :param x:
         :return: 
         """
+        pass
+

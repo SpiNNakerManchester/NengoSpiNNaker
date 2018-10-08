@@ -287,12 +287,10 @@ class NengoKeyAllocator(object):
                 (key_constraint.field_id, key_constraint.field_value))
             if frozenset(field_level) in created_fields:
                 new_bit_field = created_fields[frozenset(field_level)]
-                print "poo"
             else:
                 field = {key_constraint.field_id: key_constraint.field_value}
                 new_bit_field = new_bit_field(**field)
                 created_fields[frozenset(field_level)] = new_bit_field
-                print "boo"
         return new_bit_field
 
     @staticmethod
