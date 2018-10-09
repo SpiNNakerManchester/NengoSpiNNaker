@@ -1,7 +1,5 @@
 from enum import Enum
-import numpy
-
-from data_specification.enums import DataType
+import random
 
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
@@ -28,8 +26,6 @@ class ValueSourceMachineVertex(
 
     __slots__ = [
         #
-        "_n_machine_time_steps",
-        #
         "_outgoing_partition_slice",
         #
         "_minimum_buffer_sdram",
@@ -52,27 +48,27 @@ class ValueSourceMachineVertex(
     DATA_REGIONS = Enum(
         value="DATA_REGIONS",
         names=[('SYSTEM', 0),
-               ('UPDATE_PERIOD', 1),
-               ('OUTPUT_REGION', 2),
-               ('KEY_REGION', 3),
+               ('OUTPUT_REGION', 1),
+               ('KEY_REGION', 2),
+               ('NEURON_REGION', 3),
                ('RECORDING', 4)])
 
-    UPDATE_PERIOD_ITEMS = 1
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
     N_RECORDING_REGIONS = 1
+    NEURON_REGION_ITEMS = 4
 
     def __init__(
-            self, outgoing_partition_slice, n_machine_time_steps,
+            self, outgoing_partition_slice,
             update_period, minimum_buffer_sdram, receive_buffer_host,
             maximum_sdram_for_buffering, using_auto_pause_and_resume,
             receive_buffer_port, is_recording_output,
             this_cores_matrix, label):
+
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
         self._outgoing_partition_slice = outgoing_partition_slice
-        self._n_machine_time_steps = n_machine_time_steps
         self._minimum_buffer_sdram = minimum_buffer_sdram
         self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
         self._using_auto_pause_and_resume = using_auto_pause_and_resume
@@ -83,14 +79,16 @@ class ValueSourceMachineVertex(
         self._output_data = this_cores_matrix
 
     @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps",
-                   "current_time_step": "FirstMachineTimeStep"})
+                   "current_time_step": "FirstMachineTimeStep",
+                   "graph_mapper": "NengoGraphMapper"})
     @overrides(
         MachineDataSpecableVertex.generate_machine_data_specification,
-        additional_arguments=["n_machine_time_steps", "current_time_step"])
+        additional_arguments=[
+            "n_machine_time_steps", "current_time_step", "graph_mapper"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
-            n_machine_time_steps, current_time_step):
+            n_machine_time_steps, current_time_step, graph_mapper):
 
         # reserve data regions
         self._reverse_memory_regions(spec, self._output_data, machine_graph)
@@ -113,10 +111,6 @@ class ValueSourceMachineVertex(
                 recorded_region_sizes, self._time_between_requests,
                 self._buffer_size_before_receive, ip_tags))
 
-        # add update period region
-        spec.switch_write_focus(self.DATA_REGIONS.UPDATE_PERIOD.value)
-        spec.write_value(self._update_period is not None)
-
         # add output region
         spec.switch_write_focus(self.DATA_REGIONS.OUTPUT_REGION.value)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
@@ -127,6 +121,30 @@ class ValueSourceMachineVertex(
         helpful_functions.write_routing_region(
             spec, routing_info, machine_graph, self)
 
+        # add params region
+        spec.switch_write_focus(self.DATA_REGIONS.PARAMS_REGION.value)
+        spec.write_value(self._update_period is not None)
+        spec.write_value(self._outgoing_partition_slice.n_atoms)
+
+        # Write the random back off value
+        app_vertex = graph_mapper.get_application_vertex(self)
+        spec.write_value(random.randint(0, min(
+            app_vertex.n_value_source_machine_vertices,
+            constants.MICROSECONDS_PER_SECOND // machine_time_step)))
+
+        # write time between spikes
+        spikes_per_time_step = (
+            self._outgoing_partition_slice.n_atoms / (
+                constants.MICROSECONDS_PER_SECOND // machine_time_step))
+        # avoid a possible division by zero / small number (which may
+        # result in a value that doesn't fit in a uint32) by only
+        # setting time_between_spikes if spikes_per_timestep is > 1
+        time_between_spikes = 0.0
+        if spikes_per_time_step > 1:
+            time_between_spikes = (
+                (machine_time_step * time_scale_factor) /
+                (spikes_per_time_step * 2.0))
+        spec.write_value(data=int(time_between_spikes))
         spec.end_specification()
 
     def _write_key_region(self, spec, routing_info, machine_graph):
@@ -159,19 +177,22 @@ class ValueSourceMachineVertex(
                     self.N_RECORDING_REGIONS),
                 label="recording")
         spec.reserve_memory_region(
-            region=self.DATA_REGIONS.UPDATE_PERIOD.value,
-            size=self._sdram_size_in_bytes_for_update_period_region(),
-            label="update period")
+            region=self.DATA_REGIONS.NEURON_REGION.value,
+            size=self.NEURON_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER,
+            label="n neurons")
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
         return ExecutableType.USES_SIMULATION_INTERFACE
 
     @property
-    @overrides(AbstractNengoMachineVertex.resources_required)
-    def resources_required(self):
+    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @overrides(
+        AbstractNengoMachineVertex.resources_required,
+        additional_arguments=["n_machine_time_steps"])
+    def resources_required(self, n_machine_time_steps):
         return self.generate_static_resources(
-            self._outgoing_partition_slice, self._n_machine_time_steps,
+            self._outgoing_partition_slice, n_machine_time_steps,
             self._is_recording_output)
 
     @staticmethod
@@ -181,11 +202,6 @@ class ValueSourceMachineVertex(
     @staticmethod
     def _sdram_size_in_bytes_for_output_region(n_atoms, n_machine_time_steps):
         return ((n_atoms * n_machine_time_steps) *
-                constants.BYTE_TO_WORD_MULTIPLIER)
-
-    @staticmethod
-    def _sdram_size_in_bytes_for_update_period_region():
-        return (ValueSourceMachineVertex.UPDATE_PERIOD_ITEMS *
                 constants.BYTE_TO_WORD_MULTIPLIER)
 
     def generate_static_resources(
@@ -207,8 +223,8 @@ class ValueSourceMachineVertex(
                 outgoing_partition_slice.n_atoms, n_machine_time_steps) +
             # recordings
             recording_utilities.get_recording_header_size(recording_regions) +
-            # update period
-            self._sdram_size_in_bytes_for_update_period_region())
+            # params region
+            (self.NEURON_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER))
 
         # the basic sdram
         basic_res = ResourceContainer(sdram=SDRAMResource(sdram))

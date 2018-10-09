@@ -573,8 +573,12 @@ class LIFApplicationVertex(
                 (input_slice, neuron_slice, output_slice, learnt_slice),
                 used_resources) in enumerate(all_slices_and_resources):
             vertex = LIFMachineVertex(
-                vertex_index, neuron_slice, input_slice, output_slice,
-                learnt_slice, used_resources, self._n_profiler_samples,
+                vertex_index=vertex_index, neuron_slice=neuron_slice,
+                input_slice=input_slice, output_slice=output_slice,
+                learnt_slice=learnt_slice, resources=used_resources,
+                n_profiler_samples=self._n_profiler_samples,
+                ensemble_size_in=self._ensemble_size_in,
+                encoders_with_gain=self._encoders_with_gain,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
                     "app vertex {}.".format(neuron_slice, self.label)))

@@ -45,6 +45,8 @@ class ValueSourceApplicationVertex(
     MAX_CHANNELS_PER_MACHINE_VERTEX = 10.0
     SYSTEM_REGION_DATA_ITEMS = 6
 
+    n_value_source_machine_vertices = 0
+
     def __init__(
             self, label, rng, nengo_output_function, size_out, update_period,
             utilise_extra_core_for_output_types_probe, seed):
@@ -110,6 +112,8 @@ class ValueSourceApplicationVertex(
             machine_time_step_in_seconds, maximum_sdram_for_buffering,
             using_auto_pause_and_resume, receive_buffer_host,
             receive_buffer_port, current_time_step):
+
+        # only generate the output data once.
         if self._output_data is None:
             self._output_data = self._generate_output_data(
                 operator_graph, n_machine_time_steps,
@@ -133,12 +137,16 @@ class ValueSourceApplicationVertex(
                     constants.MATRIX_CONVERSION_PARTITIONING.COLUMNS)
 
             machine_vertex = ValueSourceMachineVertex(
-                vertex_partition_slice, n_machine_time_steps,
+                vertex_partition_slice,
                 self._update_period, minimum_buffer_sdram,
                 receive_buffer_host, maximum_sdram_for_buffering,
                 using_auto_pause_and_resume, receive_buffer_port,
                 recording_output, this_cores_matrix,
                 label="{} for {}".format(vertex_partition_slice, self._label))
+
+            # tracker for rnadom back off
+            ValueSourceApplicationVertex.n_value_source_machine_vertices += 1
+
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
             machine_graph.add_vertex(machine_vertex)
@@ -150,9 +158,9 @@ class ValueSourceApplicationVertex(
             current_time_step):
 
         if self._update_period is not None:
-            max_n = min(n_machine_time_steps,
-                        int(numpy.ceil(self._update_period /
-                                       machine_time_step)))
+            max_n = min(
+                n_machine_time_steps,
+                int(numpy.ceil(self._update_period / machine_time_step)))
         else:
             max_n = n_machine_time_steps
 
