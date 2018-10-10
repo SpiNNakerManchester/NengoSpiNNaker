@@ -260,7 +260,7 @@ static bool read_key_region(address_t address){
     if (keys == NULL) {
         return false;
     }
-    spin1_memcpy(keys, &address[0], n_neurons * sizeof(uint));
+    spin1_memcpy(keys, address, n_neurons * sizeof(uint));
 }
 
 //! \brief entry method for reading the output data region
