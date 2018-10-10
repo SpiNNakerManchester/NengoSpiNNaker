@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class NengoSimulator(SpiNNaker):
-    """SpiNNaker simulator for Nengo models.
+    """SpiNNaker simulator for Nengo src.
 
     The simulator period determines how much data will be stored on SpiNNaker
     and is the maximum length of simulation allowed before data is transferred

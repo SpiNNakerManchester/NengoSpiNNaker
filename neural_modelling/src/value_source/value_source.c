@@ -3,7 +3,8 @@
 #include <debug.h>
 #include <simulation.h>
 #include <spin1_api.h>
-#include <slots.h>
+#include "slots.h"
+#include "nengo_typedefs.h"
 
 //! the number of timer ticks that this model should run for before exiting.
 uint32_t simulation_ticks = 0;
@@ -45,7 +46,7 @@ uint current_block = 0;
 static uint n_neurons;
 
 //! flag for when ive finished packets but not finished time steps
-bool has_finished = False;
+bool has_finished = false;
 
 //! holder for the buffers
 slots_t slots;
@@ -56,18 +57,21 @@ uint* keys;
 //! location of blocks in DRAM
 value_t* blocks;
 
+//! The expected current clock tick of timer_1
+static uint32_t expected_time;
+
 //! how much DTCM is to be allocated for the buffers
-#define DTCM_FOR_BUFFERS 20 * 1024  // 20 KB of DTCM
+#define DTCM_FOR_BUFFERS (20 * 1024)  // 20 KB of DTCM
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
     SYSTEM, OUTPUT_REGION, KEY_REGION, NEURON_REGION, RECORDING
-};
+} regions;
 
 //! enum mapping neuron params
 typedef enum neuron_params {
     IS_CYCLIC, N_NEURONS, RANDOM_BACK_OFF, TIME_BETWEEN_SPIKES
-};
+} neuron_params;
 
 //! callback priorities
 typedef enum callback_priorities{
@@ -87,7 +91,7 @@ typedef struct value_source_params {
 //! \brief runs any functions needed at resume time.
 //! \return None
 void resume_callback() {
-    recording_reset();
+
 }
 
 //! \brief Sends spikes linked to the given time step
@@ -214,7 +218,7 @@ void timer_callback(uint timer_count, uint unused){
     // Sleep for a random time so that packet transmission occurs some time
     // after the timer tick.  For shorter simulations this will hide the effect
     // of clock drift for a short period.
-    spin1_delay_us(global_parameters.random_backoff_us);
+    spin1_delay_us(random_backoff_us);
 
     // Set the next expected time to wait for between spike sending
     expected_time = tc[T1_COUNT] - time_between_spikes;
@@ -243,9 +247,9 @@ static bool read_neuron_region(address_t address){
     time_between_spikes = address[TIME_BETWEEN_SPIKES];
 
 
-    block_length = int(20 * 1024 / (n_neurons * 4.0));
-    n_blocks = int(math.floor(self.n_steps / frames_per_block))
-    partial_block_length = simulation_ticks % frames_per_block
+    block_length = (int) 20 * 1024 / (n_neurons * 4.0);
+    n_blocks = (int) (simulation_ticks / block_length);
+    partial_block_length = simulation_ticks % block_length;
     return true;
 }
 
@@ -261,6 +265,7 @@ static bool read_key_region(address_t address){
         return false;
     }
     spin1_memcpy(keys, address, n_neurons * sizeof(uint));
+    return true;
 }
 
 //! \brief entry method for reading the output data region
@@ -283,6 +288,7 @@ static bool read_output_region(address_t address){
             slots.current->data, address,
             n_neurons * partial_block_length * sizeof(value_t));
     }
+    return true;
 }
 
 //! Initialises the model by reading in the regions and checking recording
