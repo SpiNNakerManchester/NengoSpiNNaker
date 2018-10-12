@@ -10,20 +10,22 @@ def write_filter_region(
     low_pass_filters, none_type_filters, linear_filters = \
         _separate_filter_types(filters)
 
-    # process the low pass
+    #write sizes
     spec.write_value(len(low_pass_filters))
+    spec.write_value(len(none_type_filters))
+    spec.write_value(len(linear_filters))
+
+    # process the low pass
     for low_pass_filter in low_pass_filters:
         low_pass_filter.write_spec(
             spec, machine_time_step_in_seconds, input_slice.n_atoms)
 
     # process none
-    spec.write_value(len(none_type_filters))
     for none_type_filter in none_type_filters:
         none_type_filter.write_spec(
             spec, machine_time_step_in_seconds, input_slice.n_atoms)
 
     # process linear
-    spec.write_value(len(linear_filters))
     for linear_filter in linear_filters:
         linear_filter.write_spec(
             spec, machine_time_step_in_seconds, input_slice.n_atoms)

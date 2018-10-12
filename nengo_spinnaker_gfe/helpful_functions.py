@@ -76,7 +76,6 @@ def _expand_slice(matrix_slice, sliced_dimension, n_dim):
         (matrix_slice,) +
         tuple(slice(None) for _ in range(sliced_dimension.value + 1, n_dim)))
 
-
 def sdram_size_in_bytes_for_filter_region(filters):
     """ generates the number of bytes a filter region requires
     
@@ -84,14 +83,11 @@ def sdram_size_in_bytes_for_filter_region(filters):
     :return: the size in bytes
     """
     total = 0
-    total_n_filters = 0
     for outgoing_partition in filters:
         for input_filter in filters[outgoing_partition]:
             total += input_filter.size_words()
-            total_n_filters += 1
-    total += constants.N_FILTER_TYPES * constants.N_FILTER_COUNT_SIZE
-    total *= constants.BYTE_TO_WORD_MULTIPLIER
-    return total
+    return (
+        (constants.N_FILTER_TYPES + total) * constants.BYTE_TO_WORD_MULTIPLIER)
 
 
 def write_routing_region(spec, routing_info, machine_graph, vertex):

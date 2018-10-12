@@ -9,7 +9,6 @@ class BasicFilterImpl(AbstractFilter):
         AbstractFilter.__init__(self, width, latching)
 
     def write_basic_spec(self, spec, width):
-        spec.write_value(self.size_words())
         spec.write_value(width or self.width)
         spec.write_value(0x1 if self.latching else 0x0)
 

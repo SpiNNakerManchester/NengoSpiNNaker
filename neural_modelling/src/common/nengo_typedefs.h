@@ -7,4 +7,4 @@ typedef accum value_t;
 typedef value_t current_t;
 typedef value_t voltage_t;
 
-#endif
+#endif //__NENGO_TYPEDEFS_H__
