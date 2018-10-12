@@ -3,8 +3,8 @@
 #include <debug.h>
 #include <simulation.h>
 #include <spin1_api.h>
-#include "slots.h"
-#include "nengo_typedefs.h"
+#include <value_source/slots.h>
+#include <common/nengo_typedefs.h>
 
 //! the number of timer ticks that this model should run for before exiting.
 uint32_t simulation_ticks = 0;
