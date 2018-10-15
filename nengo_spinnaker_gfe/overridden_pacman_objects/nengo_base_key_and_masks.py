@@ -8,7 +8,8 @@ import numpy
 class NengoBaseKeysAndMasks(BaseKeyAndMask):
 
     __slots__ = [
-        "_key_space"
+        "_key_space",
+        "_neuron_mask"
     ]
 
     def __init__(self, key_space):
@@ -16,6 +17,15 @@ class NengoBaseKeysAndMasks(BaseKeyAndMask):
         BaseKeyAndMask.__init__(
             self, base_key=key_space.get_value(constants.ROUTING_TAG),
             mask=key_space.get_mask(constants.ROUTING_TAG))
+        self._neuron_mask = key_space.get_mask(constants.INDEX_FIELD_ID)
+
+    @property
+    def neuron_mask(self):
+        """ returns the mask for locating neuron id / dimension
+        
+        :return: the neuron mask
+        """
+        return self._neuron_mask
 
     @overrides(BaseKeyAndMask.get_keys)
     def get_keys(self, key_array=None, offset=0, n_keys=None):

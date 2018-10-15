@@ -1,5 +1,6 @@
 from data_specification.enums import DataType
 import numpy
+import collections
 
 from nengo_spinnaker_gfe import constants
 
@@ -76,6 +77,7 @@ def _expand_slice(matrix_slice, sliced_dimension, n_dim):
         (matrix_slice,) +
         tuple(slice(None) for _ in range(sliced_dimension.value + 1, n_dim)))
 
+
 def sdram_size_in_bytes_for_filter_region(filters):
     """ generates the number of bytes a filter region requires
     
@@ -90,12 +92,30 @@ def sdram_size_in_bytes_for_filter_region(filters):
         (constants.N_FILTER_TYPES + total) * constants.BYTE_TO_WORD_MULTIPLIER)
 
 
-def write_routing_region(spec, routing_info, machine_graph, vertex):
+def write_routing_region(
+        spec, routing_info, machine_graph, vertex, filter_to_index_map,
+        outgoing_partition_to_filter_map):
+
+    # record n key mask combos
+    spec.write_value(
+        len(machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
+            vertex)))
+
+    # setup for minimisation
     for outgoing_partition in (
             machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
                 vertex)):
+        nengo_base_key_and_mask = routing_info.first_key_and_mask()
+        key = nengo_base_key_and_mask.key
+        mask = nengo_base_key_and_mask.mask
+        neuron_mask = nengo_base_key_and_mask.neuron_mask
+
+        spec.write_value(key)
+        spec.write_value(mask)
+        spec.write_value(neuron_mask)
         spec.write_value(
-            routing_info.get_first_key_from_partition(outgoing_partition))
+            filter_to_index_map[
+                outgoing_partition_to_filter_map[outgoing_partition]])
 
 
 def sdram_size_in_bytes_for_routing_region(n_keys):

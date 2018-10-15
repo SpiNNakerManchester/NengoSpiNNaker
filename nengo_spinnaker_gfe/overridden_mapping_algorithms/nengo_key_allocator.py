@@ -7,8 +7,8 @@ from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.constraints.nengo_key_constraints import \
     NengoKeyConstraints
-from nengo_spinnaker_gfe.overridden_pacman_objects.nengo_base_key_and_mask import \
-    NengoBaseKeysAndMasks
+from nengo_spinnaker_gfe.overridden_pacman_objects.\
+    nengo_base_key_and_masks import NengoBaseKeysAndMasks
 from nengo_spinnaker_gfe.utility_objects.rigs_bitfield import BitField
 from pacman.model.graphs.common import EdgeTrafficType
 from pacman.model.routing_info import RoutingInfo, PartitionRoutingInfo
@@ -47,7 +47,6 @@ class NengoKeyAllocator(object):
         routing_infos = RoutingInfo()
         for outgoing_partition in machine_graph.outgoing_edge_partitions:
             if outgoing_partition.traffic_type == EdgeTrafficType.MULTICAST:
-                ks = outgoing_partition_key_spaces[outgoing_partition]
                 keys_and_masks = list([NengoBaseKeysAndMasks(
                     outgoing_partition_key_spaces[outgoing_partition])])
                 routing_infos.add_partition_info(

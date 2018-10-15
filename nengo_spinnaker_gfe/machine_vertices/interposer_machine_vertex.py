@@ -102,12 +102,13 @@ class InterposerMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
         self._write_key_data(spec, routing_info)
         spec.switch_write_focus(self.DATA_REGIONS.INPUT_FILTERS.value)
-        filter_region_writer.write_filter_region(
+        filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
         spec.switch_write_focus(self.DATA_REGIONS.INPUT_ROUTING.value)
         helpful_functions.write_routing_region(
-            spec, routing_info, machine_graph, self)
+            spec, routing_info, machine_graph, self, filter_to_index_map,
+            self._input_filters)
         spec.switch_write_focus(self.DATA_REGIONS.TRANSFORM.value)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
             self._transform_data))
