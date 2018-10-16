@@ -1,8 +1,8 @@
 #ifndef INPUT_FILTERING_H
 #define INPUT_FILTERING_H
 
-//! \biref needed to allow function step store
-typedef void (*FilterStep)(uint32_t, value_t*, value_t*, void*);
+#include "spin1_api.h"
+#include "common-typedefs.h"
 
 //! An input accumulator.
 typedef struct _if_accumulator_t
@@ -10,6 +10,11 @@ typedef struct _if_accumulator_t
     value_t *value;  // Value of the accumulator
     uint32_t mask;   // Mask used to make the accumulator latching or otherwise
 } if_accumulator_t;
+
+//! \biref needed to allow function step store
+typedef void (*FilterStep)(
+    uint32_t n_dims, value_t *input, value_t *output, void *s);
+
 
 //! A pair of input and output which are are joined by a filter function.
 typedef struct _if_filter_t
@@ -20,6 +25,11 @@ typedef struct _if_filter_t
     void *state;              // State maintained by the filter
     FilterStep step;          // Filter evaluation function
 } if_filter_t;
+
+//! \brief needed to allow function init store
+typedef bool (*FilterInit)(
+    address_t data_address, uint32_t offset, uint32_t *size_of_words_read,
+    if_filter_t *filter, uint32_t size);
 
 //! A pseudo routing table entry which can be used to determine which input a
 //! packet should be included in.
@@ -92,10 +102,8 @@ static inline void _if_filter_step(if_filter_t* filter)
 //! \param[in] key: ??????
 //! \param[in] max_dim_sub_one: ????????
 static inline bool input_filtering_input_with_dimension_offset(
-    if_collection_t* filters, uint32_t key, uint32_t payload,
-    uint32_t dim_offset, uint32_t max_dim_sub_one
-)
-{
+        if_collection_t* filters, uint32_t key, uint32_t payload,
+        uint32_t dim_offset, uint32_t max_dim_sub_one) {
     bool handled = false;
 
     // Look at all the routing entries, if we match an entry then include the
@@ -133,9 +141,7 @@ static inline bool input_filtering_input_with_dimension_offset(
 //! \param[in] key: ??????
 //! \param[in] payload: ??????????
 static inline bool input_filtering_input(
-    if_collection_t* filters, uint32_t key, uint32_t payload
-)
-{
+    if_collection_t* filters, uint32_t key, uint32_t payload) {
     // Input with no dimensional offset, the given arguments result in an
     // optimised version of the previous method being inlined.
     return input_filtering_input_with_dimension_offset(
@@ -190,26 +196,25 @@ static inline void input_filtering_step(
 //! \brief Copy in a set of routing entries.
 //! \param[in] filters: the set of filters
 //! \param[in] routes: array of if_routes.
-void input_filtering_initialise_routes(
-    if_collection_t *filters,
-    uint32_t *routes);
+//! \return bool stating if successfully initialised routes
+bool input_filtering_initialise_routes(
+    if_collection_t *filters, uint32_t *routes);
 
 //! \brief creates input filters
 //! \param[in] filter_output_array: where to store filters ouputs
 //! \param[in] sdram_data: location in sdram where the filter data resides
 //! \param[in] filters: where to store filters
-void input_filtering_initialise_filters(
-    if_collection_t *filters,
-    uint32_t *data,
-    value_t **filter_output_array);
+//! \return bool stating if successfully initialised filters
+bool input_filtering_initialise_filters(
+    if_collection_t *filters, uint32_t *data, value_t **filter_output_array);
 
 //! \brief Initialise a filter collection with an output accumulator.
 //! \param[in] filters: set of filters
 //! \param[in] n_dimensions: size of accumulator. Use zero to indicate that
 //!                          no output accumulator should be assigned.
-void input_filtering_initialise_output(
-    if_collection_t *filters,
-    uint32_t n_dimensions);
+//! \return bool stating if successfully initialised output
+bool input_filtering_initialise_output(
+    if_collection_t *filters, uint32_t n_dimensions);
 
 
 #endif //INPUT_FILTERING_H

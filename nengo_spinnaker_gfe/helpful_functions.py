@@ -101,18 +101,15 @@ def write_routing_region(
         len(machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
             vertex)))
 
-    # setup for minimisation
+    # write for each outgoing partition
     for outgoing_partition in (
             machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
                 vertex)):
         nengo_base_key_and_mask = routing_info.first_key_and_mask()
-        key = nengo_base_key_and_mask.key
-        mask = nengo_base_key_and_mask.mask
-        neuron_mask = nengo_base_key_and_mask.neuron_mask
 
-        spec.write_value(key)
-        spec.write_value(mask)
-        spec.write_value(neuron_mask)
+        spec.write_value(nengo_base_key_and_mask.key)
+        spec.write_value(nengo_base_key_and_mask.mask)
+        spec.write_value(nengo_base_key_and_mask.neuron_mask)
         spec.write_value(
             filter_to_index_map[
                 outgoing_partition_to_filter_map[outgoing_partition]])

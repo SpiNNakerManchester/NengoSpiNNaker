@@ -6,7 +6,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "nengo-common.h"
 
 #define __PACKET_QUEUE_LENGTH 1024
 
@@ -25,8 +24,7 @@ typedef struct
 
 
 // Create an initialise a packet queue
-static inline void packet_queue_init(packet_queue_t *queue)
-{
+static inline void packet_queue_init(packet_queue_t *queue){
   // Store the current position
   queue->current = 0;
 }

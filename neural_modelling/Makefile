@@ -1,4 +1,4 @@
-BUILDS = value_source
+BUILDS = value_source value_sink
 DIRS = $(BUILDS:%=makefiles/%)
 
 all: $(DIRS)

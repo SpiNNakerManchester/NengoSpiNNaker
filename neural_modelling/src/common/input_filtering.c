@@ -1,8 +1,9 @@
 #include <common/nengo_typedefs.h>
-#include "input_filtering.h"
-#include "fixed_point.h"
+#include <common/input_filtering.h>
+#include <common/fixed_point.h>
 #include <string.h>
 #include <debug.h>
+#include "common-typedefs.h"
 
 // Filter specification flags
 #define LATCHING 1
@@ -10,7 +11,6 @@
 #define LATCHING_MASK 0xFFFFFFFF
 #define NOT_LATCHING_MASK 0x00000000
 #define BASIC_FILTER_PARAMETER_SIZE 2
-
 
 //! enum mapping region ids to regions in python
 typedef enum filter_region_counter_positions {
@@ -21,7 +21,7 @@ typedef enum filter_region_counter_positions {
 //! enum mapping params in region
 typedef enum routing_region_paramter_positions{
     N_ROUTES, STARTS_OF_DATA
-};
+} routing_region_paramter_positions;
 
 // Generic filter parameters
 typedef struct _filter_parameters_t
@@ -69,7 +69,7 @@ typedef struct _lti_state_t
 struct _lti_filter_init_params {
     uint32_t order;
     value_t data;  // Array of parameters 2*order longer (a[...] || b[...])
-};
+} _lti_filter_init_params;
 
 
 
@@ -98,7 +98,8 @@ bool _none_filter_initialise(
         if_filter_t *filter, uint32_t size){
     use(data_address);
     use(offset);
-    use(size)
+    use(size);
+    use(size_of_words_read);
 
     log_debug(">> None filter\n");
 
@@ -160,7 +161,8 @@ bool _lowpass_filter_initialise(
         log_error("Cant allocate dtcm for filter state");
         return false;
     }
-    spin1_memcpy(filter->state, data_address[offset], sizeof(value_t_pair_t));
+    spin1_memcpy(filter->state, (void*) data_address[offset],
+                 sizeof(value_t_pair_t));
 
     log_debug(">> Lowpass filter (%k, %k)\n",
               ((value_t_pair_t *)filter->state)->a,
@@ -168,8 +170,8 @@ bool _lowpass_filter_initialise(
 
     // Store a reference to the step function
     filter->step = _lowpass_filter_step;
-    size_of_words_read =
-        (int) sizeof(value_t_pair_t) / BYTES_TO_WORD_CONVERSION;
+    *size_of_words_read =
+        (int) (sizeof(value_t_pair_t) / BYTES_TO_WORD_CONVERSION);
     return true;
 }
 
@@ -242,8 +244,8 @@ bool _lti_filter_initialise(
     // Cast the parameters block
     struct _lti_filter_init_params *params = \
       (struct _lti_filter_init_params *) data_address[offset];
-    size_of_words_read =
-        (int) sizeof(_lti_filter_init_params) / BYTES_TO_WORD_CONVERSION;
+    *size_of_words_read =
+        (int) (sizeof(_lti_filter_init_params) / BYTES_TO_WORD_CONVERSION);
 
     // Malloc space for the parameters
     filter->state = spin1_malloc(sizeof(lti_state_t));
@@ -301,12 +303,10 @@ bool input_filtering_initialise_filters(
         value_t **filter_output_array) {
     // Get the number of filters and malloc sufficient space for the filter
     // parameters.
-    uint n_low_pass_filters = sdram_data[0];
-
 
     filters->n_filters = (
-        data[N_LOW_PASS_FILTERS] + data[N_NONE_PASS_FILTERS] +
-        data[N_LINEAR_FILTERS]);
+        sdram_data[N_LOW_PASS_FILTERS] + sdram_data[N_NONE_PASS_FILTERS] +
+        sdram_data[N_LINEAR_FILTERS]);
 
     filters->filters = spin1_malloc(filters->n_filters * sizeof(if_filter_t));
     if (filters->filters == NULL){
@@ -317,8 +317,8 @@ bool input_filtering_initialise_filters(
     log_debug(
         "Loading %d low pass filters, %d none pass filters and %d linear "
         "filters\n",
-        data[N_LOW_PASS_FILTERS], data[N_NONE_PASS_FILTERS],
-        data[N_LINEAR_FILTERS]);
+        sdram_data[N_LOW_PASS_FILTERS], sdram_data[N_NONE_PASS_FILTERS],
+        sdram_data[N_LINEAR_FILTERS]);
 
     // Allow casting filters pointer to a _filter_parameters pointer
     filter_parameters_t *filter_params;
@@ -332,22 +332,22 @@ bool input_filtering_initialise_filters(
 
     // map of filter types to n filters
     uint32_t n_filters[] = {
-        data[N_LOW_PASS_FILTERS],
-        data[N_NONE_PASS_FILTERS],
-        data[N_LINEAR_FILTERS],
+        sdram_data[N_LOW_PASS_FILTERS],
+        sdram_data[N_NONE_PASS_FILTERS],
+        sdram_data[N_LINEAR_FILTERS],
     };
 
     uint32_t n_filter_types = sizeof(n_filters) / sizeof(*n_filters);
 
     // process low pass filters
     uint32_t data_index = START_OF_LOW_PASS_FILTERS;
-    for (filter_type_index=0; fiter_type_index<n_filter_types,
+    for (uint32_t filter_type_index=0; filter_type_index<n_filter_types;
             filter_type_index++){
-        for (uint32_t filter_index = 0,
-                filter_index < n_filters[filter_type_index],
+        for (uint32_t filter_index = 0;
+                filter_index < n_filters[filter_type_index];
                 filter_index++) {
             // Get the parameters
-            filter_params = (filter_parameters_t *) data[data_index];
+            filter_params = (filter_parameters_t *) sdram_data[data_index];
 
             // Get the size of the filter, store it
             filters->filters[filter_index].size = filter_params->size;
@@ -356,16 +356,17 @@ bool input_filtering_initialise_filters(
                 "> Filter [%d] size = %d\n", filter_index, filter_params->size);
 
             // Initialise the input accumulator
-            filters->filters[f].input = spin1_malloc(sizeof(if_accumulator_t));
-            if (filters->filters[f].input == NULL) {
+            filters->filters[filter_index].input = spin1_malloc(
+                sizeof(if_accumulator_t));
+            if (filters->filters[filter_index].input == NULL) {
                 log_error("Failed to allocate filter DTCM memory");
                 return false;
             }
 
             // Initialise the input accumulator value
-            filters->filters[f].input->value = spin1_malloc(
+            filters->filters[filter_index].input->value = spin1_malloc(
                 sizeof(value_t) * filter_params->size);
-            if (filters->filters[f].input->value == NULL) {
+            if (filters->filters[filter_index].input->value == NULL) {
                 log_error("Failed to allocate filters input values");
                 return false;
             }
@@ -397,10 +398,11 @@ bool input_filtering_initialise_filters(
             memset(filters->filters[filter_index].output, 0,
                    sizeof(value_t) * filter_params->size);
 
-            uint32_t size_of_words_read
+            // pointer for tracking number of words a filter reads
+            uint32_t size_of_words_read = 0;
 
             if(!filter_types_init[filter_type_index](
-                    data, data_index + BASIC_FILTER_PARAMETER_SIZE,
+                    sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
                     &size_of_words_read, &filters->filters[filter_index],
                     filter_params->size)){
                 log_error("failed to instaniate filter");
@@ -409,16 +411,18 @@ bool input_filtering_initialise_filters(
             data_index += BASIC_FILTER_PARAMETER_SIZE + size_of_words_read;
         }
     }
+    return true;
 }
 
 //! \brief Copy in a set of routing entries.
 //! \param[in] filters: the set of filters
 //! \param[in] routes: array of if_routes.
-void input_filtering_initialise_routes(
+//! \return bool that states if the initialisation succeeds.
+bool input_filtering_initialise_routes(
         if_collection_t *filters, uint32_t *routes){
     // Copy in the number of routing entries
     filters->n_routes = routes[N_ROUTES];
-    info_debug("Loading %d filter routes\n", filters->n_routes);
+    log_debug("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
     filters->routes = spin1_malloc(filters->n_routes * sizeof(if_route_t));
@@ -428,7 +432,7 @@ void input_filtering_initialise_routes(
     }
 
     // Copy the entries across
-    spin1_memcpy(filters->routes, routes[STARTS_OF_DATA],
+    spin1_memcpy(filters->routes, &routes[STARTS_OF_DATA],
                  filters->n_routes * sizeof(if_route_t));
 
     // debug print
@@ -439,6 +443,7 @@ void input_filtering_initialise_routes(
               filters->routes[n].dimension_mask,
               filters->routes[n].input_index);
     }
+    return true;
 }
 
 //! \brief Initialise a filter collection with an output accumulator.
