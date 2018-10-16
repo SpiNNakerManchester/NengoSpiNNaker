@@ -24,7 +24,6 @@ typedef struct sdp_tx_parameters {
     uint transmission_delay; //!< Number of ticks between output transmissions
     uint n_dimensions;       //!< Number of dimensions to represent
     value_t *input;          //!< Input buffer
-    uint *keys;              //!< Output keys
     uint tag_id;             //!< TAG id for transmissions
     uint dest_addr;          //!< address to send to
 } sdp_tx_parameters_t;
