@@ -31,8 +31,6 @@ typedef struct sdp_tx_parameters {
 //! parameter holder
 sdp_tx_parameters_t g_sdp_tx;
 
-
-
 //! input queue.
 if_collection_t g_input;
 
