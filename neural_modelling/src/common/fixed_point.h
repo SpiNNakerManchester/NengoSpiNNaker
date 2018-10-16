@@ -12,7 +12,7 @@
 
 static inline int32_t convert_s32_30_s16_15(int64_t value)
 {
-  return (int32_t) (value >> 15);
+    return (int32_t) (value >> 15);
 }
 
 /*****************************************************************************/
@@ -22,25 +22,25 @@ static inline int32_t convert_s32_30_s16_15(int64_t value)
 static inline value_t dot_product(
         uint32_t order, const value_t *a, const value_t *b)
 {
-  // Initialise the accumulator with the first product
-  register int32_t x = bitsk(a[0]);
-  register int32_t y = bitsk(b[0]);
-  register int64_t acc = __smull(x, y);
+    // Initialise the accumulator with the first product
+    register int32_t x = bitsk(a[0]);
+    register int32_t y = bitsk(b[0]);
+    register int64_t acc = __smull(x, y);
 
-  // Include the remaining product terms (looping backward over the vector)
-  for (uint32_t i = order - 1; i > 0; i--)
-  {
-    // Get the individual components to multiply
-    x = bitsk(a[i]);
-    y = bitsk(b[i]);
+    // Include the remaining product terms (looping backward over the vector)
+    for (uint32_t i = order - 1; i > 0; i--)
+    {
+        // Get the individual components to multiply
+        x = bitsk(a[i]);
+        y = bitsk(b[i]);
 
-    // Perform a signed multiply with accumulate
-    //   acc = acc + x * y;
-    acc = __smlal(acc, x, y);
-  }
+        // Perform a signed multiply with accumulate
+        //   acc = acc + x * y;
+        acc = __smlal(acc, x, y);
+    }
 
-  // Convert from the S32.30 value back to S16.15 before returning
-  return kbits(convert_s32_30_s16_15(acc));
+    // Convert from the S32.30 value back to S16.15 before returning
+    return kbits(convert_s32_30_s16_15(acc));
 }
 
 /*****************************************************************************/

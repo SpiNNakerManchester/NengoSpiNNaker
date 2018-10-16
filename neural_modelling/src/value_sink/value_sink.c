@@ -59,55 +59,55 @@ typedef enum slice_data_parameters{
 //! \param[in] payload: the packet payload
 void mcpl_callback(uint key, uint payload)
 {
-  // Queue the packet for later processing, if no processing is scheduled then
-  // trigger the queue processor.
-  if (packet_queue_push(&packets, key, payload))
-  {
-    if (!queue_processing)
+    // Queue the packet for later processing, if no processing is scheduled then
+    // trigger the queue processor.
+    if (packet_queue_push(&packets, key, payload))
     {
-      spin1_trigger_user_event(0, 0);
-      queue_processing = true;
+        if (!queue_processing)
+        {
+            spin1_trigger_user_event(0, 0);
+            queue_processing = true;
+        }
     }
-  }
-  else
-  {
-    // The packet couldn't be included in the queue, thus it was essentially
-    // dropped.
-    queue_overflows++;
-  }
+    else
+    {
+        // The packet couldn't be included in the queue, thus it was essentially
+        // dropped.
+        queue_overflows++;
+    }
 }
 
 //! \brief process the packet queue
 void process_queue()
 {
-  // Continuously remove packets from the queue and include them in filters
-  while (packet_queue_not_empty(&packets))
-  {
-    // Pop a packet from the queue (critical section)
-    packet_t packet;
-    uint cpsr = spin1_fiq_disable();
-    bool packet_is_valid = packet_queue_pop(&packets, &packet);
-    spin1_mode_restore(cpsr);
-
-    // Process the received packet
-    if (packet_is_valid)
+    // Continuously remove packets from the queue and include them in filters
+    while (packet_queue_not_empty(&packets))
     {
-      uint32_t key = packet.key;
-      uint32_t payload = packet.payload;
+        // Pop a packet from the queue (critical section)
+        packet_t packet;
+        uint cpsr = spin1_fiq_disable();
+        bool packet_is_valid = packet_queue_pop(&packets, &packet);
+        spin1_mode_restore(cpsr);
 
-      input_filtering_input_with_dimension_offset(
-        &filters, key, payload,
-        input_lo_atom,   // Offset for all packets
-        input_atoms - 1  // Max expected dimension
-      );
+        // Process the received packet
+        if (packet_is_valid)
+        {
+            uint32_t key = packet.key;
+            uint32_t payload = packet.payload;
+
+            input_filtering_input_with_dimension_offset(
+                &filters, key, payload,
+                input_lo_atom,   // Offset for all packets
+                input_atoms - 1  // Max expected dimension
+            );
+        }
+        else
+        {
+            log_error("Popped packet from empty queue.\n");
+            rt_error(RTE_ABORT);
+        }
     }
-    else
-    {
-      log_error("Popped packet from empty queue.\n");
-      rt_error(RTE_ABORT);
-    }
-  }
-  queue_processing = false;
+    queue_processing = false;
 }
 
 //! \brief user event which processes the queue
@@ -164,13 +164,13 @@ void timer_callback(uint timer_count, uint unused){
     }
 
     // Process any remaining unprocessed packets
-  process_queue();
+    process_queue();
 
-  // Filter inputs, write the latest value to SRAM
-  input_filtering_step(&filters);
-  spin1_memcpy(
-      recording_address, filters.output, input_atoms * sizeof(value_t));
-  recording_address = &recording_address[input_atoms];
+    // Filter inputs, write the latest value to SRAM
+    input_filtering_step(&filters);
+    spin1_memcpy(
+        recording_address, filters.output, input_atoms * sizeof(value_t));
+    recording_address = &recording_address[input_atoms];
 }
 
 //! \brief entry method for reading the slice data region
@@ -275,5 +275,4 @@ void c_main(void){
 
     // set up run
     simulation_run();
-
 }
