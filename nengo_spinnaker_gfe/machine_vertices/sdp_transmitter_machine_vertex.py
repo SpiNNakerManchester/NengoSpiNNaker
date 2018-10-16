@@ -1,3 +1,4 @@
+import struct
 import threading
 
 import numpy
@@ -49,10 +50,11 @@ class SDPTransmitterMachineVertex(
                ('FILTER', 2),
                ('ROUTING', 3)])
 
-    TRANSMITTER_REGION_ELEMENTS = 2
+    TRANSMITTER_REGION_ELEMENTS = 4
     TRANSMISSION_DELAY = 1
     IPTAG_TRAFFIC_IDENTIFIER = "SDP_RECEIVER_FEED"
-    USE_IPTAG = False
+    _ONE_SHORT = struct.Struct("<H")
+    _TWO_BYTES = struct.Struct("<BB")
 
     def __init__(self, size_in, input_filters, inputs_n_keys, hostname, label):
         AbstractNengoMachineVertex.__init__(self, label=label)
@@ -93,12 +95,11 @@ class SDPTransmitterMachineVertex(
         vertex for those inputs. 
         """
         iptags = list()
-        if SDPTransmitterMachineVertex.USE_IPTAG:
-            iptags.append(
-                IPtagResource(
-                    ip_address=hostname, port=None, strip_sdp=False,
-                    tag=None, traffic_identifier=(
-                        SDPTransmitterMachineVertex.IPTAG_TRAFFIC_IDENTIFIER)))
+        iptags.append(
+            IPtagResource(
+                ip_address=hostname, port=None, strip_sdp=False,
+                tag=None, traffic_identifier=(
+                    SDPTransmitterMachineVertex.IPTAG_TRAFFIC_IDENTIFIER)))
 
         return ResourceContainer(
             sdram=SDRAMResource(
@@ -155,6 +156,9 @@ class SDPTransmitterMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.TRANSMITTER.value)
         spec.write_value(self._size_in)
         spec.write_value(self.TRANSMISSION_DELAY)
+        spec.write_value(iptags[0].tag)
+        spec.write_value(self._ONE_SHORT.unpack(self._TWO_BYTES.pack(
+            iptags[0].destination_y, iptags[0].destination_x))[0])
         spec.end_specification()
 
     def _reserve_memory_regions(self, spec):

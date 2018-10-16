@@ -227,15 +227,15 @@ static bool initialize(uint32_t *timer_period) {
 
     // Get the timing details and set up the simulation interface
     if (!simulation_initialise(
-        data_specification_get_region(SYSTEM, address),
-        APPLICATION_NAME_HASH, timer_period, &simulation_ticks,
-        &infinite_run, SDP, DMA)) {
+            data_specification_get_region(SYSTEM, address),
+            APPLICATION_NAME_HASH, timer_period, &simulation_ticks,
+            &infinite_run, SDP, DMA)) {
         return false;
     }
 
     // get slice data
     if (!read_slice_data_region(
-        data_specification_get_region(SLICE_DATA, address))){
+            data_specification_get_region(SLICE_DATA, address))){
         return false;
     }
 

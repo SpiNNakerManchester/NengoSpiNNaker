@@ -17,7 +17,8 @@ class NengoBaseKeysAndMasks(BaseKeyAndMask):
         BaseKeyAndMask.__init__(
             self, base_key=key_space.get_value(constants.ROUTING_TAG),
             mask=key_space.get_mask(constants.ROUTING_TAG))
-        self._neuron_mask = key_space.get_mask(constants.INDEX_FIELD_ID)
+        self._neuron_mask = key_space.get_mask(
+            field=constants.INDEX_FIELD_ID)
 
     @property
     def neuron_mask(self):
