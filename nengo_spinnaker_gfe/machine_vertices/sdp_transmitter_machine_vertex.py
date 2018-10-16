@@ -141,14 +141,15 @@ class SDPTransmitterMachineVertex(
 
         # fill in filter region
         spec.switch_write_focus(self.DATA_REGIONS.FILTER.value)
-        filter_region_writer.write_filter_region(
+        filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
 
         # fill in routing region
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
         helpful_functions.write_routing_region(
-            spec, routing_info, machine_graph, self)
+            spec, routing_info, machine_graph, self,
+            filter_to_index_map, self._input_filters)
 
         # fill in transmitter region
         spec.switch_write_focus(self.DATA_REGIONS.TRANSMITTER.value)

@@ -118,8 +118,7 @@ class ValueSourceMachineVertex(
 
         # add routing region
         spec.switch_write_focus(self.DATA_REGIONS.KEY_REGION.value)
-        helpful_functions.write_routing_region(
-            spec, routing_info, machine_graph, self)
+        self._write_key_region(machine_graph, routing_info, spec)
 
         # add params region
         spec.switch_write_focus(self.DATA_REGIONS.PARAMS_REGION.value)
@@ -148,11 +147,16 @@ class ValueSourceMachineVertex(
         spec.end_specification()
 
     def _write_key_region(self, spec, routing_info, machine_graph):
-        for outgoing_partition in (
-                machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
-                    self)):
-            spec.write_value(
-                routing_info.get_first_key_from_partition(outgoing_partition))
+        outgoing_partition = machine_graph. \
+            get_outgoing_edge_partitions_starting_at_vertex(self)[0]
+        partition_routing_info = \
+            routing_info.get_routing_info_from_partition(outgoing_partition)
+        keys = partition_routing_info.get_keys(
+            self._outgoing_partition_slice.n_atoms)
+
+        spec.write_value(self._outgoing_partition_slice.n_atoms)
+        for key in keys:
+            spec.write_value(key)
 
     def _reverse_memory_regions(self, spec, output_data, machine_graph):
         input_n_keys = len(

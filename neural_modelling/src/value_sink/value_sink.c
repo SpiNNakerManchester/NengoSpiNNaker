@@ -2,7 +2,6 @@
 #include <data_specification.h>
 #include <debug.h>
 #include <simulation.h>
-#include <spin1_api.h>
 #include <common/nengo_typedefs.h>
 #include <common/input_filtering.h>
 #include <common/packet_queue.h>
