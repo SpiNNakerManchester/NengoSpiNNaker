@@ -2,7 +2,6 @@
 #include <data_specification.h>
 #include <debug.h>
 #include <simulation.h>
-#include <spin1_api.h>
 #include <value_source/slots.h>
 #include <common/nengo_typedefs.h>
 
@@ -60,6 +59,8 @@ value_t* blocks;
 //! The expected current clock tick of timer_1
 static uint32_t expected_time;
 
+static uint32_t dma_port;
+
 //! how much DTCM is to be allocated for the buffers
 #define DTCM_FOR_BUFFERS (20 * 1024)  // 20 KB of DTCM
 
@@ -70,12 +71,12 @@ typedef enum regions {
 
 //! enum mapping neuron params
 typedef enum neuron_params {
-    IS_CYCLIC, N_NEURONS, RANDOM_BACK_OFF, TIME_BETWEEN_SPIKES
+    IS_CYCLIC, N_NEURONS, RANDOM_BACK_OFF, TIME_BETWEEN_SPIKES, DMA_PORT
 } neuron_params;
 
 //! callback priorities
 typedef enum callback_priorities{
-    SDP = -1, TIMER = 0, DMA = 1
+    SDP = -1, TIMER = 1, DMA = 0
 } callback_priorities;
 
 typedef struct value_source_params {
@@ -130,23 +131,23 @@ void bring_in_next_block(){
 
             if (current_block == n_blocks - 1) {
                 // Subsequent block is the LAST block
-                spin1_dma_transfer(
-                    0, s_addr, slots.next->data, DMA_READ,
+                slots_set_up_dma(
+                    s_addr, slots.next->data, DMA_READ,
                     partial_block_length * n_neurons * sizeof(value_t));
                 slots.next->length = partial_block_length;
             } else if (current_block == n_blocks) {
                 // Current block is the LAST block
                 if (is_cyclic) {
                     // We are wrapping, so next block is the FIRST block
-                    spin1_dma_transfer(
-                        0, blocks, slots.next->data, DMA_READ,
+                    slots_set_up_dma(
+                        blocks, slots.next->data, DMA_READ,
                         block_length * n_neurons * sizeof(value_t));
                     slots.next->length = block_length;
                 }
             } else {
                 // Nothing special about subsequent block
-                spin1_dma_transfer(
-                    0, s_addr, slots.next->data, DMA_READ,
+                slots_set_up_dma(
+                    s_addr, slots.next->data, DMA_READ,
                     block_length * n_neurons * sizeof(value_t));
                 slots.next->length = block_length;
             }
@@ -245,7 +246,7 @@ static bool read_neuron_region(address_t address){
     n_neurons = address[N_NEURONS];
     random_backoff_us = address[RANDOM_BACK_OFF];
     time_between_spikes = address[TIME_BETWEEN_SPIKES];
-
+    dma_port = address[DMA_PORT];
 
     block_length = (int) 20 * 1024 / (n_neurons * 4.0);
     n_blocks = (int) (simulation_ticks / block_length);
@@ -295,8 +296,6 @@ static bool read_output_region(address_t address){
 //! data.
 //! \param[out] timer_period a pointer for the memory address where the timer
 //!            period should be stored during the function.
-//! \param[out] update_sdp_port The SDP port on which to listen for rate
-//!             updates
 //! \return boolean of True if it successfully read all the regions and set up
 //!         all its internal data structures. Otherwise returns False
 static bool initialize(uint32_t *timer_period){
@@ -326,7 +325,7 @@ static bool initialize(uint32_t *timer_period){
     }
 
     // setup slots
-    if(!initialise_slots(&slots, DTCM_FOR_BUFFERS)){
+    if(!initialise_slots(&slots, DTCM_FOR_BUFFERS, dma_port)){
         return false;
     }
 

@@ -55,7 +55,8 @@ class ValueSourceMachineVertex(
 
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
     N_RECORDING_REGIONS = 1
-    NEURON_REGION_ITEMS = 4
+    NEURON_REGION_ITEMS = 5
+    DMA_PORT = 6
 
     def __init__(
             self, outgoing_partition_slice,
@@ -121,7 +122,7 @@ class ValueSourceMachineVertex(
         self._write_key_region(machine_graph, routing_info, spec)
 
         # add params region
-        spec.switch_write_focus(self.DATA_REGIONS.PARAMS_REGION.value)
+        spec.switch_write_focus(self.DATA_REGIONS.NEURON_REGION.value)
         spec.write_value(self._update_period is not None)
         spec.write_value(self._outgoing_partition_slice.n_atoms)
 
@@ -144,6 +145,9 @@ class ValueSourceMachineVertex(
                 (machine_time_step * time_scale_factor) /
                 (spikes_per_time_step * 2.0))
         spec.write_value(data=int(time_between_spikes))
+
+        # sdp port
+        spec.write_value(self.DMA_PORT)
         spec.end_specification()
 
     def _write_key_region(self, spec, routing_info, machine_graph):
