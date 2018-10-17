@@ -311,7 +311,7 @@ static bool get_transform_data(address_t dsg_address){
         log_error("cannot allocate dtcm for transform data");
         return false;
     }
-    spin1_memcpy(transform, &dsg_address[0], matrix_size);
+    spin1_memcpy(transform, dsg_address, matrix_size);
     return true;
 }
 
