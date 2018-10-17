@@ -1,4 +1,4 @@
-BUILDS = value_source value_sink sdp_transmitter sdp_receiver interposer
+BUILDS = value_source value_sink sdp_transmitter sdp_receiver interposer ensemble
 DIRS = $(BUILDS:%=makefiles/%)
 
 all: $(DIRS)

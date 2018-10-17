@@ -4,7 +4,7 @@
 //! enum mapping region ids to regions in python
 typedef enum voja_initalise {
     N_LEARNING_RULES, ONE_OVER_RADIUS, START_OF_VOJA_RULES
-} regions;
+} voja_initalise;
 
 
 //! \brief Copy in data controlling the Voja learning
