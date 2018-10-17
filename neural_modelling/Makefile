@@ -1,4 +1,4 @@
-BUILDS = value_source value_sink sdp_transmitter
+BUILDS = value_source value_sink sdp_transmitter sdp_receiver 
 DIRS = $(BUILDS:%=makefiles/%)
 
 all: $(DIRS)
