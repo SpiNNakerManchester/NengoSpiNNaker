@@ -111,6 +111,8 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
     MAX_COLUMNS_SUPPORTED = 128
     MAX_ROWS_SUPPORTED = 64
 
+    n_interposer_machine_vertices = 0
+
     def __init__(self, size_in, label, rng, seed):
         """Create a new parallel Filter.
         
@@ -231,6 +233,8 @@ class InterposerApplicationVertex(AbstractNengoApplicationVertex):
                 machine_vertex=machine_vertex, application_vertex=self)
             resource_tracker.allocate_resources(
                 machine_vertex.resources_required)
+
+            InterposerApplicationVertex.n_interposer_machine_vertices += 1
         return self.cores
 
     def add_constraint(self, constraint):

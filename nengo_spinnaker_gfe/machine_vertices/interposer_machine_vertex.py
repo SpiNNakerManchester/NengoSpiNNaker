@@ -1,4 +1,5 @@
 from enum import Enum
+import random
 
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
@@ -47,9 +48,11 @@ class InterposerMachineVertex(
                ('KEYS', 2),
                ('INPUT_FILTERS', 3),
                ('INPUT_ROUTING', 4),
-               ('TRANSFORM', 5)])
+               ('TRANSFORM', 5),
+               ('MC_TRANSMISSION', 6)])
 
     SLICE_DATA_ITEMS = 3
+    MC_TRANSMISSION_REGION_ITEMS = 2
 
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
@@ -84,13 +87,14 @@ class InterposerMachineVertex(
         return out_set
 
     @inject_items(
-        {"machine_time_step_in_seconds": "MachineTimeStepInSeconds"})
+        {"machine_time_step_in_seconds": "MachineTimeStepInSeconds",
+         "graph_mapper": "NengoGraphMapper"})
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification,
                additional_arguments=["machine_time_step_in_seconds"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
-            machine_time_step_in_seconds):
+            machine_time_step_in_seconds, graph_mapper):
 
         self._allocate_memory_regions(spec)
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
@@ -112,16 +116,36 @@ class InterposerMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.TRANSFORM.value)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
             self._transform_data))
+        spec.switch_write_focus(self.DATA_REGIONS.MC_TRANSMISSION.value)
+        self._write_mc_transmission_params(
+            spec, graph_mapper, machine_time_step, time_scale_factor)
         spec.end_specification()
+
+    def _write_mc_transmission_params(
+            self, spec, graph_mapper, machine_time_step, time_scale_factor):
+        # Write the random back off value
+        app_vertex = graph_mapper.get_application_vertex(self)
+        spec.write_value(random.randint(0, min(
+            app_vertex.n_sdp_receiver_machine_vertices,
+            constants.MICROSECONDS_PER_SECOND // machine_time_step)))
+
+        # avoid a possible division by zero / small number (which may
+        # result in a value that doesn't fit in a uint32) by only
+        # setting time_between_spikes if spikes_per_timestep is > 1
+        time_between_spikes = 0.0
+        if self._output_slice.n_atoms > 1:
+            time_between_spikes = (
+                (machine_time_step * time_scale_factor) /
+                (self._output_slice.n_atoms * 2.0)) / 2
+        spec.write_value(data=int(time_between_spikes))
 
     def _write_key_data(self, spec, routing_info):
         partition_routing_info = routing_info.get_routing_info_from_partition(
             self._managing_outgoing_partition)
         if partition_routing_info is None:
-            spec.write_value(1)
             spec.write_value(0)
         else:
-            spec.write_value(0)
+            spec.write_value(len(partition_routing_info.get_keys()))
             for key in partition_routing_info.get_keys():
                 spec.write_value(key)
 
@@ -156,6 +180,12 @@ class InterposerMachineVertex(
             helpful_functions.sdram_size_in_bytes_for_routing_region(
                 self._n_keys),
             label="routing data")
+        self.reserve_memory_region(
+            self.DATA_REGIONS.MC_TRANSMISSION.value,
+            (self.MC_TRANSMISSION_REGION_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER),
+            label="mc_transmission data")
+
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -176,6 +206,8 @@ class InterposerMachineVertex(
         sdram = (
             fec_constants.SYSTEM_BYTES_REQUIREMENT +
             (InterposerMachineVertex.SLICE_DATA_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER) +
+            (InterposerMachineVertex.MC_TRANSMISSION_REGION_ITEMS *
              constants.BYTE_TO_WORD_MULTIPLIER) +
             transform_data.nbytes + (constants.BYTES_PER_KEY * n_keys) +
             helpful_functions.sdram_size_in_bytes_for_filter_region(filters) +
