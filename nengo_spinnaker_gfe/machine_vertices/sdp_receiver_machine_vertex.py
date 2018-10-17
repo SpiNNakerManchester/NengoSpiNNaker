@@ -39,7 +39,8 @@ class SDPReceiverMachineVertex(
         value="DATA_REGIONS",
         names=[('SYSTEM', 0),
                ('SDP_PORT', 1),
-               ('KEYS', 2)])
+               ('KEYS', 2),
+               ('MC_TRANSMISSION_PARAMS', 3)])
 
     BYTES_PER_FIELD = 4
     SDP_PORT_SIZE = 1
@@ -135,7 +136,7 @@ class SDPReceiverMachineVertex(
             time_scale_factor))
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
         self._write_keys_region(spec, routing_info)
-        spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT)
+        spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT.value)
         spec.write_value(self.SDP_PORT)
         spec.switc_write_focus(self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value)
         self._write_mc_transmission_params(
