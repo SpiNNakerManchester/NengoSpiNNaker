@@ -46,6 +46,7 @@ class SDPReceiverMachineVertex(
     SDP_PORT_SIZE = 1
     USE_REVERSE_IPTAGS = False
     SDP_PORT = 6
+    MC_TRANSMISSION_REGION_ITEMS = 2
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
     # the next timer ticks worth of changes. future could be modded to remove
@@ -97,6 +98,8 @@ class SDPReceiverMachineVertex(
             sdram=SDRAMResource(
                 fec_constants.SYSTEM_BYTES_REQUIREMENT +
                 (SDPReceiverMachineVertex.SDP_PORT_SIZE *
+                 constants.BYTE_TO_WORD_MULTIPLIER) +
+                (SDPReceiverMachineVertex.MC_TRANSMISSION_REGION_ITEMS *
                  constants.BYTE_TO_WORD_MULTIPLIER) +
                 SDPReceiverMachineVertex._calculate_sdram_for_keys(keys)),
             dtcm=DTCMResource(0),
@@ -180,6 +183,11 @@ class SDPReceiverMachineVertex(
             self.DATA_REGIONS.KEYS.value,
             self._calculate_sdram_for_keys(self._n_keys),
             label="keys region")
+        self.reserve_memory_region(
+            self.DATA_REGIONS.MC_TRANSMISSION.value,
+            (self.MC_TRANSMISSION_REGION_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER),
+            label="mc_transmission data")
 
     def send_output_to_spinnaker(self, value, placement, transceiver):
         # Apply the pre-slice, the connection function and the transform.
