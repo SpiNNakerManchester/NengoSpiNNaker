@@ -1,7 +1,6 @@
 import numpy
 from enum import Enum
 
-from data_specification.enums import DataType
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe import helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
@@ -32,17 +31,18 @@ class SDPReceiverMachineVertex(
 
         #
         "_managing_outgoing_partition",
-
     ]
 
     DATA_REGIONS = Enum(
         value="DATA_REGIONS",
         names=[('SYSTEM', 0),
-               ('N_KEYS', 1),
+               ('SDP_PORT', 1),
                ('KEYS', 2)])
-    N_KEYS_REGION_ITEMS = 2
+
     BYTES_PER_FIELD = 4
+    SDP_PORT_SIZE = 1
     USE_REVERSE_IPTAGS = False
+    SDP_PORT = 6
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
     # the next timer ticks worth of changes. future could be modded to remove
@@ -93,7 +93,7 @@ class SDPReceiverMachineVertex(
         return ResourceContainer(
             sdram=SDRAMResource(
                 fec_constants.SYSTEM_BYTES_REQUIREMENT +
-                (SDPReceiverMachineVertex.N_KEYS_REGION_ITEMS *
+                (SDPReceiverMachineVertex.SDP_PORT_SIZE *
                  constants.BYTE_TO_WORD_MULTIPLIER) +
                 SDPReceiverMachineVertex._calculate_sdram_for_keys(keys)),
             dtcm=DTCMResource(0),
@@ -127,30 +127,26 @@ class SDPReceiverMachineVertex(
         spec.write_array(simulation_utilities.get_simulation_header_array(
             self.get_binary_file_name(), machine_time_step,
             time_scale_factor))
-        spec.switch_write_focus(self.DATA_REGIONS.N_KEYS.value)
-        spec.write_value(self._n_keys, DataType.UINT32)
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
         self._write_keys_region(spec, routing_info)
+        spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT)
+        spec.write_value(self.SDP_PORT)
         spec.end_specification()
 
     def _write_keys_region(self, spec, routing_info):
         partition_routing_info = routing_info.get_routing_info_from_partition(
             self._managing_outgoing_partition)
-        if partition_routing_info is None:
-            spec.write_value(1)
-            spec.write_value(0)
-        else:
-            spec.write_value(0)
-            for key in partition_routing_info.get_keys():
-                spec.write_value(key)
+        spec.write_value(self._n_keys)
+        for key in partition_routing_info.get_keys():
+            spec.write_value(key)
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(
             self.DATA_REGIONS.SYSTEM.value,
             fec_constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
         spec.reserve_memory_region(
-            self.DATA_REGIONS.N_KEYS.value,
-            (self.N_KEYS_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER),
+            self.DATA_REGIONS.SDP_PORT.value,
+            (self.SDP_PORT_SIZE * constants.BYTE_TO_WORD_MULTIPLIER),
             label="n_keys region")
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEYS.value,
