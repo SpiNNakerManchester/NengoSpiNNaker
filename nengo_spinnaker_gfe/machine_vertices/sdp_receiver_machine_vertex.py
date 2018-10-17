@@ -1,5 +1,6 @@
 import numpy
 from enum import Enum
+import random
 
 from nengo_spinnaker_gfe import constants
 from nengo_spinnaker_gfe import helpful_functions
@@ -7,6 +8,7 @@ from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
+from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource, ReverseIPtagResource
 from spinn_front_end_common.abstract_models import \
@@ -118,10 +120,14 @@ class SDPReceiverMachineVertex(
             transmission_params ==
             self._managing_outgoing_partition.identifier.transmission_parameter)
 
+    @inject_items({"graph_mapper": "NengoGraphMapper"})
+    @overrides(
+        MachineDataSpecableVertex.generate_machine_data_specification,
+        additional_arguments=["graph_mapper"])
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
-            self, spec, placement, machine_graph, routing_info,
-            iptags, reverse_iptags, machine_time_step, time_scale_factor):
+            self, spec, placement, machine_graph, routing_info, iptags,
+            reverse_iptags, machine_time_step, time_scale_factor, graph_mapper):
         self._reserve_memory_regions(spec)
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
@@ -131,7 +137,28 @@ class SDPReceiverMachineVertex(
         self._write_keys_region(spec, routing_info)
         spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT)
         spec.write_value(self.SDP_PORT)
+        spec.switc_write_focus(self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value)
+        self._write_mc_transmission_params(
+            spec, graph_mapper, machine_time_step, time_scale_factor)
         spec.end_specification()
+
+    def _write_mc_transmission_params(
+            self, spec, graph_mapper, machine_time_step, time_scale_factor):
+        # Write the random back off value
+        app_vertex = graph_mapper.get_application_vertex(self)
+        spec.write_value(random.randint(0, min(
+            app_vertex.n_sdp_receiver_machine_vertices,
+            constants.MICROSECONDS_PER_SECOND // machine_time_step)))
+
+        # avoid a possible division by zero / small number (which may
+        # result in a value that doesn't fit in a uint32) by only
+        # setting time_between_spikes if spikes_per_timestep is > 1
+        time_between_spikes = 0.0
+        if self._n_keys > 1:
+            time_between_spikes = (
+                (machine_time_step * time_scale_factor) /
+                (self._n_keys * 2.0))
+        spec.write_value(data=int(time_between_spikes))
 
     def _write_keys_region(self, spec, routing_info):
         partition_routing_info = routing_info.get_routing_info_from_partition(

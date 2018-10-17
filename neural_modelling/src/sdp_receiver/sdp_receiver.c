@@ -33,6 +33,11 @@ typedef enum sdp_port_region {
     SDP_PORT_VALUE
 } sdp_port_region;
 
+//! enum mapping for the mc transmission region
+typedef enum mc_transmission_region{
+    RANDOM_BACK_OFF, TIME_BETWEEN_SPIKES
+}mc_transmission_region;
+
 //! enum mapping for keys region
 typedef enum key_region{
     N_KEYS, START_OF_KEYS
@@ -160,6 +165,14 @@ static bool get_keys_data(address_t dsg_address){
         g_sdp_rx.keys, &dsg_address[START_OF_KEYS],
         g_sdp_rx.n_dimensions * sizeof(uint));
     return true;
+}
+
+//! \brief read sdram for mc transmission params
+//! \param[in] dsg_address: the sdram address for the mc transmission data
+//! \return bool indicating if successful
+static bool get_mc_transmission_data(address_t dsg_address){
+    random_backoff_us = dsg_address[RANDOM_BACK_OFF];
+    time_between_spikes = dsg_address[TIME_BETWEEN_SPIKES];
 }
 
 //! \brief allocates DTCM for some params and instantiates them to correct values

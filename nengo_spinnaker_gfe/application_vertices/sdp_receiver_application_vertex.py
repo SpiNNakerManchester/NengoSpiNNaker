@@ -25,6 +25,8 @@ class SDPReceiverApplicationVertex(
         "_size_in"
     ]
 
+    n_sdp_receiver_machine_vertices = 0
+
     def __init__(self, label, rng, size_in, seed):
         AbstractNengoApplicationVertex.__init__(
             self, label=label, rng=rng, seed=seed)
@@ -81,6 +83,10 @@ class SDPReceiverApplicationVertex(
                 resource_tracker.allocate_constrained_resources(
                     machine_vertex.resources_required,
                     machine_vertex.constraints)
+
+                # update the tracker for n instances for mc spreader
+                SDPReceiverApplicationVertex.\
+                    n_sdp_receiver_machine_vertices += 1
             else:
                 raise Exception(
                     "The SDP receiver does not know what to do with output"
