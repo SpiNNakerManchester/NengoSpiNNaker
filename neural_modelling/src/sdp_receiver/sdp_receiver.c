@@ -23,6 +23,9 @@ static uint32_t time_between_spikes;
 //! The random backoff between timer ticks to desynchronize sources
 static uint32_t random_backoff_us;
 
+//! start value for
+#define START_VALUE_OUTPUT 0x00000000
+
 //! enum mapping region ids to regions in python
 typedef enum regions {
     SYSTEM, SDP_PORT, KEYS
@@ -126,7 +129,6 @@ void timer_callback(uint timer_count, uint unused) {
             while (tc[T1_COUNT] > expected_time) {
                 // Do Nothing
             }
-
             expected_time -= time_between_spikes;
 
             // try to send message
@@ -192,7 +194,7 @@ static bool malloc_dtcm_and_init(){
 
     // set the allocated dtcm to correct values
     for (uint d = 0; d < g_sdp_rx.n_dimensions; d++) {
-        g_sdp_rx.output[d] = 0x00000000;
+        g_sdp_rx.output[d] = START_VALUE_OUTPUT;
         g_sdp_rx.fresh[d] = false;
     }
     return true;
@@ -225,19 +227,24 @@ static bool initialize(uint32_t *timer_period, uint32_t *sdp_port){
         return false;
     }
 
+    // get sdp port for sending sdp messages
     if (!get_sdp_port_data(
             data_specification_get_region(SDP_PORT, address), sdp_port)){
         return false;
     }
 
+    // get key data
     if (!get_keys_data(
             data_specification_get_region(KEYS, address))){
         return false;
     }
 
+    // allocate the dtcm and sdram for sdp fresh and output
     if(!malloc_dtcm_and_init()){
         return false;
     }
+
+    //passed
     return true;
 }
 

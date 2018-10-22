@@ -50,6 +50,9 @@ static uint32_t time_between_spikes;
 //! The random backoff between timer ticks to desynchronize sources
 static uint32_t random_backoff_us;
 
+//! the number of phases to offset the timer by
+#define N_PHASES 2
+
 //! enum mapping region ids to regions in python
 typedef enum regions {
     SYSTEM, SLICE_DATA, KEYS, INPUT_FILTERS, INPUT_ROUTING, TRANSFORM,
@@ -236,9 +239,9 @@ void timer_callback(uint timer_count, uint unused) {
         while (tc[T1_COUNT] > expected_time) {
             // Do Nothing
         }
-
         expected_time -= time_between_spikes;
 
+        // try sending mc packet
         while (!spin1_send_mc_packet(key, bitsk(output), WITH_PAYLOAD))
         {
             spin1_delay_us(1);
@@ -390,7 +393,7 @@ void c_main(void){
     time = UINT32_MAX;
 
     // Set timer tick and timer offset (in microseconds)
-    spin1_set_timer_tick_and_phase(timer_period, timer_period / 2);
+    spin1_set_timer_tick_and_phase(timer_period, timer_period / N_PHASES);
 
     // Register callback
     spin1_callback_on(TIMER_TICK, timer_callback, TIMER);
