@@ -28,7 +28,7 @@ static uint32_t random_backoff_us;
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
-    SYSTEM, SDP_PORT, KEYS
+    SYSTEM, SDP_PORT, KEYS, MC_TRANSMISSION_PARAMS
 } regions;
 
 //! enum mapping sdp_port region
@@ -175,6 +175,7 @@ static bool get_keys_data(address_t dsg_address){
 static bool get_mc_transmission_data(address_t dsg_address){
     random_backoff_us = dsg_address[RANDOM_BACK_OFF];
     time_between_spikes = dsg_address[TIME_BETWEEN_SPIKES];
+    return true;
 }
 
 //! \brief allocates DTCM for some params and instantiates them to correct values
@@ -227,6 +228,12 @@ static bool initialize(uint32_t *timer_period, uint32_t *sdp_port){
         return false;
     }
 
+    // get the transmission params for spreading purposes
+    if (!get_mc_transmission_data(
+        data_specification_get_region(MC_TRANSMISSION_PARAMS, address))){
+        return false;
+    }
+
     // get sdp port for sending sdp messages
     if (!get_sdp_port_data(
             data_specification_get_region(SDP_PORT, address), sdp_port)){
@@ -253,7 +260,7 @@ static bool initialize(uint32_t *timer_period, uint32_t *sdp_port){
 void c_main(void){
     // Load DTCM data
     uint32_t timer_period;
-    uint32_t sdp_port;
+    uint32_t sdp_port = 0;
     if (!initialize(&timer_period, &sdp_port)) {
         log_error("Error in initialisation - exiting!");
         rt_error(RTE_SWERR);
