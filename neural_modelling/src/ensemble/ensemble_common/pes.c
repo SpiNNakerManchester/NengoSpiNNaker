@@ -1,10 +1,8 @@
 #include "pes.h"
 #include "filtered_activity.h"
+#include <debug.h>
 
-//----------------------------------
-// Structs
-//----------------------------------
-// Structure containing parameters and state required for PES learning
+//! Structure containing parameters and state required for PES learning
 typedef struct pes_parameters_t
 {
     // Scalar learning rate used in PES decoder delta calculation
@@ -30,17 +28,13 @@ typedef enum pes_initalise {
     N_LEARNING_RULES, START_LEARNING_RULES
 } pes_initalise;
 
-//-----------------------------------------------------------------------------
-// Global variables
-//-----------------------------------------------------------------------------
+//! counter for how many learning rules of pes there are
 static uint32_t g_num_pes_learning_rules = 0;
+
+//! the param tracker for pes learning rules
 static pes_parameters_t *g_pes_learning_rules = NULL;
 
-//-----------------------------------------------------------------------------
-// Global functions
-//-----------------------------------------------------------------------------
-
-//! \brief applies a pes
+//! \brief When using non-filtered activity, applies PES to a spike vector
 //! \param[in] ensemble
 //! \param[in] modulatory_filters
 void pes_apply(
@@ -56,11 +50,12 @@ void pes_apply(
     const uint32_t *spike_vector = ensemble->spikes;
 
     // Loop through all the learning rules
-    for(uint32_t l = 0; l < g_num_pes_learning_rules; l++)
-    {
+    for(uint32_t learning_rule = 0; learning_rule < g_num_pes_learning_rules;
+            learning_rule++) {
+
         // If this learning rule operates on un-filtered activity and should,
         // therefore be updated here
-        const pes_parameters_t *params = &g_pes_learning_rules[l];
+        const pes_parameters_t *params = &g_pes_learning_rules[learning_rule];
         if(params->activity_filter_index == -1)
         {
             // Extract input signal from filter's output
@@ -85,13 +80,13 @@ void pes_apply(
                 {
                     // Determine how many neurons are in the next word of the
                     // spike vector.
-                    uint32_t n = (pop_length > 32) ? 32 : pop_length;
+                    uint32_t n_neurons = (pop_length > 32) ? 32 : pop_length;
 
                     // Load the next word of the spike vector
                     uint32_t data = *(spike_vector++);
 
                     // Include the contribution from each neuron
-                    while (n)  // While there are still neurons left
+                    while (n_neurons)  // While there are still neurons left
                     {
                         // Work out how many neurons we can skip
                         // XXX: The GCC documentation claims that
@@ -106,7 +101,7 @@ void pes_apply(
                         // neurons left in the word (`skip` == 32) or the
                         // first `1` in the word
                         // is beyond the range of bits we care about anyway.
-                        if (skip < n)
+                        if (skip < n_neurons)
                         {
                             // Skip until we reach the next neuron which fired
                             decoder_col += skip;
@@ -115,12 +110,13 @@ void pes_apply(
                             // learning
                             value_t *neuron_decoder =
                                 &rule_decoder[decoder_col];
-                            for(uint d = params->error_start_dim;
-                                d < params->error_end_dim;
-                                d++, neuron_decoder += n_neurons_total)
+                            for(uint dimension = params->error_start_dim;
+                                dimension < params->error_end_dim;
+                                dimension++, neuron_decoder += n_neurons_total)
                             {
                                 *neuron_decoder -=
-                                    (params->learning_rate * error_val[d]);
+                                    (params->learning_rate *
+                                     error_val[dimension]);
                             }
 
                             // Prepare to test the neuron after the one we
@@ -131,7 +127,7 @@ void pes_apply(
                             // Reduce the number of neurons left
                             pop_length -= skip;
                             // and the number left in this word.
-                            n -= skip;
+                            n_neurons -= skip;
                             // Shift out processed neurons
                             data <<= skip;
 
@@ -141,11 +137,11 @@ void pes_apply(
                         else
                         {
                             // Point at the decoder for the next neuron
-                            decoder_col += n;
+                            decoder_col += n_neurons;
                             // Reduce the number left in the population
-                            pop_length -= n;
+                            pop_length -= n_neurons;
                             // No more neurons left to process
-                            n = 0;
+                            n_neurons = 0;
                         }
                     }
                 }
@@ -162,7 +158,7 @@ bool pes_initialise(address_t address)
     // Read number of PES learning rules that are configured
     g_num_pes_learning_rules = address[N_LEARNING_RULES];
 
-    io_printf(IO_BUF, "PES learning: Num rules:%u\n", g_num_pes_learning_rules);
+    log_info("PES learning: Num rules:%u\n", g_num_pes_learning_rules);
 
     if(g_num_pes_learning_rules > 0)
     {

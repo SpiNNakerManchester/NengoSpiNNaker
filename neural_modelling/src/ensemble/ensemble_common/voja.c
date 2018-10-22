@@ -1,5 +1,6 @@
 #include "voja.h"
 #include "filtered_activity.h"
+#include <debug.h>
 
 //! enum mapping region ids to regions in python
 typedef enum voja_initalise {
@@ -36,14 +37,16 @@ bool voja_initialise(address_t address)
             g_num_voja_learning_rules * sizeof(voja_parameters_t));
 
         // Display debug
-        for(uint32_t l = 0; l < g_num_voja_learning_rules; l++)
+        for(uint32_t learning_rule = 0;
+                learning_rule < g_num_voja_learning_rules; learning_rule++)
         {
-            const voja_parameters_t *parameters = &g_voja_learning_rules[1];
+            const voja_parameters_t *parameters =
+                &g_voja_learning_rules[learning_rule];
             log_debug(
                 "\tRule %u, Learning rate:%k, Learning signal filter "
                 "index:%d, Encoder output offset:%u, Decoded input filter "
                 "index:%u, Activity filter index:%d\n",
-                l, parameters->learning_rate,
+                learning_rule, parameters->learning_rate,
                 parameters->learning_signal_filter_index,
                 parameters->encoder_offset,
                 parameters->decoded_input_filter_index,

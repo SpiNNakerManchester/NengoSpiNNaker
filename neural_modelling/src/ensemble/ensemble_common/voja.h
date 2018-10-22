@@ -81,11 +81,14 @@ static inline void voja_neuron_spiked(
     const if_collection_t *modulatory_filters, const value_t **learnt_input)
 {
     // Loop through all the learning rules
-    for(uint32_t l = 0; l < g_num_voja_learning_rules; l++)
+    for(uint32_t learning_rule = 0; learning_rule < g_num_voja_learning_rules;
+        learning_rule++)
     {
-        // If this learning rule operates on un-filtered activity and should, therefore be updated here
-        const voja_parameters_t *parameters = &g_voja_learning_rules[l];
-        if(parameters->activity_filter_index == -1)
+        // If this learning rule operates on un-filtered activity and should,
+        // therefore be updated here
+        const voja_parameters_t *parameters =
+            &g_voja_learning_rules[learning_rule];
+        if(parameters->activity_filter_index == ERROR_RATE_INDEX)
         {
             // Get learning rate
             const value_t learning_rate =
@@ -104,11 +107,11 @@ static inline void voja_neuron_spiked(
                 learning_rate * gain * g_voja_one_over_radius;
 
             // Loop through input dimensions
-            for(uint d = 0; d < n_dims; d++)
+            for(uint dimension = 0; dimension < n_dims; dimension++)
             {
-                learnt_encoder_vector[d] +=
-                    (input_scale * decoded_input_signal[d]) -
-                    (learning_rate * learnt_encoder_vector[d]);
+                learnt_encoder_vector[dimension] +=
+                    (input_scale * decoded_input_signal[dimension]) -
+                    (learning_rate * learnt_encoder_vector[dimension]);
             }
         }
     }
