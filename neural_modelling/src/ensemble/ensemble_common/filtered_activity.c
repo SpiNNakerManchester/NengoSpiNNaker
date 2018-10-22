@@ -22,8 +22,7 @@ activity_filter_parameters_t *g_activity_filter_params = NULL;
 //! \param[in] address: sdram address of init data
 //! \param[in] n_neurons: the number of neurons to init for
 //! \return bool that states if init was successful or not
-bool filtered_activity_initialise(address_t address, uint32_t n_neurons)
-{
+bool filtered_activity_initialise(address_t address, uint32_t n_neurons) {
     // Read number of PES learning rules that are configured
     g_num_activity_filters = address[N_FILTERS];
 
@@ -51,8 +50,7 @@ bool filtered_activity_initialise(address_t address, uint32_t n_neurons)
 
         // Loop through filters
         for(uint32_t current_filter = 0;
-                current_filter < g_num_activity_filters; current_filter++)
-        {
+                current_filter < g_num_activity_filters; current_filter++){
             log_debug(
                 "\tFilter %u, Filter:%k, 1.0 - Filter:%f\n",
                 current_filter, g_activity_filter_params[current_filter].filter,
@@ -76,14 +74,11 @@ bool filtered_activity_initialise(address_t address, uint32_t n_neurons)
 
 //! \brief process the filters for a time step
 //! \param[in] n_neurons: the number of neurons to process.
-void filtered_activity_step(uint32_t n_neurons)
-{
+void filtered_activity_step(uint32_t n_neurons) {
     // Loop through filters
-    for(uint32_t f = 0; f < g_num_activity_filters; f++)
-    {
+    for(uint32_t f = 0; f < g_num_activity_filters; f++) {
         // Loop through neurons and apply propogators
-        for(uint32_t n = 0; n < n_neurons; n++)
-        {
+        for(uint32_t n = 0; n < n_neurons; n++) {
             g_filtered_activities[f][n] *= g_activity_filter_params[f].filter;
         }
     }
