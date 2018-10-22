@@ -112,6 +112,7 @@ void timer_callback(uint timer_count, uint unused) {
             sizeof(sdp_hdr_t) + sizeof(cmd_hdr_t) +
             g_sdp_tx.n_dimensions * sizeof(value_t);
 
+        // try to send sdp message. report when failed
         while (!spin1_send_sdp_msg(&message, SDP_TIMEOUT)) {
             log_error("cant send sdp packet");
         }
@@ -185,11 +186,13 @@ static bool initialize(uint32_t *timer_period) {
         return false;
     }
 
+    // handle routes
     if(!input_filtering_initialise_routes(
             &g_input, data_specification_get_region(FILTER_ROUTING, address))){
         return false;
     }
 
+    // passed
     return true;
 }
 
