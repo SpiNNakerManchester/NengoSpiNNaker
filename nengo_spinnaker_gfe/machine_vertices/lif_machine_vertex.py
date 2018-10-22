@@ -9,6 +9,7 @@ from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
+from nengo_spinnaker_gfe.nengo_filters import filter_region_writer
 from pacman.executor.injection_decorator import inject_items
 
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
@@ -38,7 +39,10 @@ class LIFMachineVertex(
         "_learnt_encoder_filters",
         "_sub_population_id",
         "_tau_refactory",
-        "_tau_rc"
+        "_tau_rc",
+        "_input_filters",
+        "_inhibitory_filters",
+        "_modulatory_filters"
     ]
 
     DATA_REGIONS = Enum(
@@ -83,7 +87,8 @@ class LIFMachineVertex(
     def __init__(
             self, sub_population_id, neuron_slice, input_slice, output_slice,
             learnt_slice, resources, encoders_with_gain, tau_rc, tau_refactory,
-            ensemble_size_in, label, learnt_encoder_filters):
+            ensemble_size_in, label, learnt_encoder_filters, input_filters,
+            inhibitory_filters, modulatory_filters):
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -97,9 +102,12 @@ class LIFMachineVertex(
         self._sub_population_id = sub_population_id
         self._ensemble_size_in = ensemble_size_in
         self._encoders_with_gain = encoders_with_gain
-        self._learnt_encoder_filters = learnt_encoder_filters
         self._tau_rc = tau_rc
         self._tau_refactory = tau_refactory
+        self._learnt_encoder_filters = learnt_encoder_filters
+        self._input_filters = input_filters
+        self._inhibitory_filters = inhibitory_filters
+        self._modulatory_filters = modulatory_filters
 
     @property
     def neuron_slice(self):
@@ -148,18 +156,45 @@ class LIFMachineVertex(
             spec, graph_mapper, machine_graph, machine_time_step_in_seconds,
             app_vertex)
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
-        self._write_filters_region(spec)
+        self._write_filters_region(spec, machine_time_step_in_seconds)
+        spec.switch_write_focus(self.DATA_REGIONS.ROUTES.value)
 
 
 
         raise Exception()
 
-    def _write_filters_region(self, spec):
-        pass
+    def _write_filters_region(self, spec, machine_time_step_in_seconds):
+        """
+        
+        :param spec: 
+        :param machine_time_step_in_seconds: 
+        :return: 
+        """
+        filter_region_writer.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._input_filters)
+        filter_region_writer.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._inhibitory_filters)
+        filter_region_writer.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._modulatory_filters)
+        filter_region_writer.write_filter_region(
+            spec, machine_time_step_in_seconds, self._input_slice,
+            self._learnt_encoder_filters)
 
     def _write_ensemble_neuron_pop_length_params(
             self, spec, graph_mapper, machine_graph,
             machine_time_step_in_seconds, app_vertex):
+        """
+        
+        :param spec: 
+        :param graph_mapper: 
+        :param machine_graph: 
+        :param machine_time_step_in_seconds: 
+        :param app_vertex: 
+        :return: 
+        """
 
         spec.write_value(self._neuron_slice.n_atoms)
         spec.write_value(self._ensemble_size_in)
@@ -225,6 +260,12 @@ class LIFMachineVertex(
             spec.write_value(chip_level_core_slice.n_atoms)
 
     def _allocate_memory_regions(self, spec, app_vertex):
+        """
+        
+        :param spec: 
+        :param app_vertex: 
+        :return: 
+        """
 
         # standard system region
         spec.reserve_memory_region(

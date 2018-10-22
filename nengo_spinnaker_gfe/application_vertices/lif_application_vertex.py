@@ -611,6 +611,9 @@ class LIFApplicationVertex(
                 encoders_with_gain=self._encoders_with_gain,
                 learnt_encoder_filters=self._learnt_encoder_filters,
                 tau_rc=self._tau_rc, tau_refactory=self._tau_refactory,
+                input_filters=self._input_filters,
+                inhibitory_filters=self._inhibition_filters,
+                modulatory_filters=self._modulatory_filters,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
                     "app vertex {}.".format(core_neuron_slice, self.label)))
