@@ -31,16 +31,17 @@
 //! number of items used for each learnt input vector
 #define SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR 2
 
-//! enum mapping region ids to regions in python
+//! enum mapping region ids to regions from python
 typedef enum regions {
     SYSTEM, ENSEMBLE_PARAMS, NEURON, ENCODER, BIAS, GAIN, DECODER,
     LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, FILTERED_ACTIVITY,
     RECORDING
 } regions;
 
-//! enum mapping ensemble params in sdram in python
+//! enum mapping ensemble params in sdram from python
 typedef enum ensemble_params_region_elements {
-    START_ENSEMBLE_PARAMS = 0, START_LEARNT_INPUT_SIGNALS = 16}
+    START_ENSEMBLE_PARAMS = 0, START_LEARNT_INPUT_SIGNALS = 16
+} ensemble_params_region_elements;
 
 //! enum mapping ensemble params in sdram from python after learnt encoders
 typedef enum ensemble_params_region_elements_after_learnt_encoders_addresses {
@@ -922,6 +923,58 @@ void set_spike_write_size() {
     spikes_write_size *= sizeof(uint32_t);
 }
 
+//! \brief reads in the filters for the ensemble. this includes the following
+//!        filters : INPUT, INHIB, MODULATORY, LEARNT
+//! \param[in] region_address: the sdram address for the start of the ensemble
+//!                            data
+//! \return bool that states if the init was successful
+bool ensemble_setup_filters(address_t address){
+    uint32_t words_read = 0;
+    uint32_t total_words_read = 0;
+
+    // process input filters
+    if(!input_filtering_initialise_filters(
+            &input_filters, address, NULL, &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process inhib filters
+    if(!input_filtering_initialise_filters(
+            &inhibition_filters, &address[total_words_read], NULL,
+            &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process modulatory filters
+    if(!input_filtering_initialise_filters(
+            &modulatory_filters, &address[total_words_read], NULL,
+            &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process learnt encoder filters
+    if(!input_filtering_initialise_filters(
+            &learnt_encoder_filters, &address[total_words_read],
+            ensemble.learnt_input_local, &words_read)){
+        return false;
+    }
+
+    // report success
+    return true;
+}
+
+//! \brief reads in the routes for the ensemble. this includes the following
+//!        routes : INPUT, INHIB, MODULATORY, LEARNT
+//! \param[in] region_address: the sdram address for the start of the ensemble
+//!                            data
+//! \return bool that states if the init was successful
+bool ensemble_setup_routes(address_t address){
+
+}
+
 
 //! Initialises the model by reading in the regions and checking recording
 //! data.
@@ -957,9 +1010,17 @@ static bool initialize(uint32_t *timer_period){
     // set up the spikes write size
     set_spike_write_size();
 
-    // set up input filters and routes for the different filters
-    if (!ensemble_setup_input_filteres_and_routes())
+    // set up filters for the different filter types
+    if (!ensemble_setup_filters(
+            data_specification_get_region(FILTERS, address))) {
+        return false;
+    }
 
+    // set up routes for the different filters/routes types
+    if (!ensemble_setup_routes(
+            data_specification_get_region(ROUTING, address))){
+        return false;
+    }
 
 
 
