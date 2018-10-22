@@ -64,6 +64,12 @@ static uint32_t dma_port;
 //! how much DTCM is to be allocated for the buffers
 #define DTCM_FOR_BUFFERS (20 * 1024)  // 20 KB of DTCM
 
+//! convert between bytes to words
+#define BYTE_TO_WORD_MULTIPLIER 4
+
+//! what index is the start of the buffers in cyclic mode
+#define START_BLOCK_INDEX 0
+
 //! enum mapping region ids to regions in python
 typedef enum regions {
     SYSTEM, OUTPUT_REGION, KEY_REGION, NEURON_REGION, RECORDING
@@ -123,7 +129,7 @@ void process_spikes_for_this_time_step(){
 //! \brief loads in next buffer
 //! \return None
 void bring_in_next_block(){
-    if (slots.current->current_pos == 0) {
+    if (slots.current->current_pos == START_BLOCK_INDEX) {
         if (total_blocks > 1) {
             // More than one block, need to copy in subsequent block
             value_t *s_addr = &blocks[
@@ -165,7 +171,7 @@ void switch_block_if_necessary(){
             // Only one block: wrap or exit
             if (is_cyclic) {
                 // Function is periodic: wrap to start
-                slots.current->current_pos = 0;
+                slots.current->current_pos = START_BLOCK_INDEX;
             } else {
                 // Function is not periodic: exit
                 has_finished = true;
@@ -182,7 +188,7 @@ void switch_block_if_necessary(){
 
                 // Wrap if necessary
                 if (current_block == n_blocks)
-                    current_block = 0;
+                    current_block = START_BLOCK_INDEX;
             }
         }
     }
@@ -248,7 +254,8 @@ static bool read_neuron_region(address_t address){
     time_between_spikes = address[TIME_BETWEEN_SPIKES];
     dma_port = address[DMA_PORT];
 
-    block_length = (int) 20 * 1024 / (n_neurons * 4.0);
+    block_length =
+        (int) DTCM_FOR_BUFFERS / (n_neurons * BYTE_TO_WORD_MULTIPLIER);
     n_blocks = (int) (simulation_ticks / block_length);
     partial_block_length = simulation_ticks % block_length;
     return true;
