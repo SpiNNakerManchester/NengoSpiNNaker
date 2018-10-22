@@ -4,7 +4,8 @@ import numpy
 from collections import defaultdict
 
 from nengo_spinnaker_gfe import constants, helpful_functions
-from nengo_spinnaker_gfe.nengo_filters.filter_and_routing_region_generator import \
+from nengo_spinnaker_gfe.nengo_filters.\
+    filter_and_routing_region_generator import \
     FilterAndRoutingRegionGenerator
 from pacman.executor.injection_decorator import inject_items
 from spinn_utilities.overrides import overrides
