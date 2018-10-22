@@ -20,15 +20,16 @@ from nengo_spinnaker_gfe.graph_components.\
 from nengo_spinnaker_gfe.graph_components.\
     segmented_spikes_sdram_machine_partition import \
     SegmentedSpikesSDRAMMachinePartition
-from nengo_spinnaker_gfe.learning_rules.pes_learning_rule import PESLearningRule
+from nengo_spinnaker_gfe.learning_rules.pes_learning_rule import \
+    PESLearningRule
 from nengo_spinnaker_gfe.learning_rules.voja_learning_rule import \
     VojaLearningRule
 from nengo_spinnaker_gfe.machine_vertices.lif_machine_vertex import \
     LIFMachineVertex
 from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
-from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner import \
-    NengoPartitioner
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_partitioner import NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
 from pacman.model.resources import CPUCyclesPerTickResource, DTCMResource, \
@@ -68,7 +69,6 @@ class LIFApplicationVertex(
         "_cluster_size_in",
         "_cluster_learnt_size_out",
         "_ensemble_size_in",
-        "_n_profiler_samples",
         "_n_neurons_in_current_cluster",
         "_encoders_with_gain",
         "_max_resources_to_use_per_core",
@@ -85,7 +85,11 @@ class LIFApplicationVertex(
         "_inputs_n_keys",
         "_inhibition_n_keys",
         "_modulatory_n_keys",
-        "_learnt_encoders_n_keys"]
+        "_learnt_encoders_n_keys",
+        "_tau_rc",
+        "_tau_refactory",
+        "_machine_vertex_slices",
+        "_core_slice_to_chip_slice"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -127,7 +131,7 @@ class LIFApplicationVertex(
     DTCM_BYTES_PER_NEURON = 3
 
     # SDRAM requirements
-    ENSEMBLE_REGION_N_ELEMENTS = 18
+    # TODO shift these to the machine vertex
     LIF_REGION_N_ELEMENTS = 2
     PES_REGION_N_ELEMENTS = 1
     PES_REGION_SLICED_RULE_N_ELEMENTS = 6
@@ -148,7 +152,7 @@ class LIFApplicationVertex(
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
             max_rates, intercepts, gain, bias, size_in, n_neurons,
-            utilise_extra_core_for_output_types_probe, n_profiler_samples):
+            utilise_extra_core_for_output_types_probe, tau_rc, tau_refactory):
         """ constructor for lifs
         
         :param label: label of the vertex
@@ -163,6 +167,9 @@ class LIFApplicationVertex(
         """
         AbstractNengoApplicationVertex.__init__(
             self, label=label, rng=rng, seed=seed)
+        AbstractProbeable.__init__(self)
+        AbstractSupportNengoPartitioner.__init__(self)
+
         self._eval_points = eval_points
         self._encoders = encoders
         self._scaled_encoders = scaled_encoders
@@ -175,11 +182,18 @@ class LIFApplicationVertex(
         self._ensemble_size_in = size_in
         self._n_neurons = n_neurons
 
+        # neuron params
+        self._tau_rc = tau_rc
+        self._tau_refactory = tau_refactory
+
+        # partition data
+        self._machine_vertex_slices = defaultdict(list)
+        self._core_slice_to_chip_slice = dict()
+
         # params to be used during partitioning
         self._cluster_size_out = None
         self._cluster_size_in = None
         self._cluster_learnt_size_out = None
-        self._n_profiler_samples = n_profiler_samples
         self._n_neurons_in_current_cluster = None
         self._pes_learning_rules = list()
         self._voja_learning_rules = list()
@@ -228,6 +242,14 @@ class LIFApplicationVertex(
                 constants.DECODER_OUTPUT_FLAG] = False
 
     @property
+    def machine_vertex_slices(self):
+        return self._machine_vertex_slices
+
+    @property
+    def core_slice_to_chip_slice(self):
+        return self._core_slice_to_chip_slice
+
+    @property
     def direct_input(self):
         return self._direct_input
 
@@ -262,6 +284,10 @@ class LIFApplicationVertex(
     @property
     def bias(self):
         return self._bias
+
+    @property
+    def n_neurons(self):
+        return self._n_neurons
 
     @overrides(AbstractProbeable.set_probeable_variable)
     def set_probeable_variable(self, variable):
@@ -299,8 +325,8 @@ class LIFApplicationVertex(
             # locate all modulating incoming partitions learning rules
             if (in_edge.input_port.destination_input_port ==
                     constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
-                        in_edge.input_port.destination_input_port ==
-                        constants.ENSEMBLE_INPUT_PORT.LEARNT):
+                    in_edge.input_port.destination_input_port ==
+                    constants.ENSEMBLE_INPUT_PORT.LEARNT):
                 if in_edge.reception_parameters.learning_rule is not None:
                     incoming_modulatory_learning_rules[
                         in_edge.reception_parameters.learning_rule] = in_edge
@@ -473,6 +499,7 @@ class LIFApplicationVertex(
     def _add_sdram_outgoing_partitions_and_edges(
             self, machine_graph, cluster_vertices):
 
+        # get one vertex to be the source, dont matter which, as chip wide
         pre_vertex_for_sdram_edges = cluster_vertices[0]
 
         # handle input vector
@@ -503,6 +530,7 @@ class LIFApplicationVertex(
                     learnt_encoder_filter)),
                 pre_vertex=pre_vertex_for_sdram_edges)
             machine_graph.add_outgoing_edge_partition(sdram_outgoing_partition)
+
             for post_vertex in cluster_vertices:
                 edge = SDRAMMachineEdge(
                     pre_vertex=pre_vertex_for_sdram_edges,
@@ -548,14 +576,14 @@ class LIFApplicationVertex(
             machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SEMAPHORE)
 
     def _create_cluster_and_verts(
-            self, neuron_slice, max_cores, resource_tracker):
+            self, chip_neuron_slice, max_cores, resource_tracker):
 
         cluster_vertices = list()
 
         # Partition the slice of neurons that we have
         sliced_objects = [
             Slice(0, int(self._encoders_with_gain.shape[1])),  # Input subspace
-            neuron_slice,  # Neurons
+            chip_neuron_slice,  # Neurons
             Slice(0, int(self._decoders.shape[0])),  # Outputs
             Slice(0, len(self._learnt_encoder_filters))  # Learnt output
         ]
@@ -564,24 +592,28 @@ class LIFApplicationVertex(
             sliced_objects, self, self._max_resources_to_use_per_core,
             max_cores, max_cores, resource_tracker)
 
-        neuron_slices = list()
-        for ((_, neuron_slice, _, _), used_resources) in \
-                all_slices_and_resources:
-            neuron_slices.append(neuron_slice)
+        # TODO this is assuming the core_neuron_slice's are incremental. This
+        # TODO is valid so far.
+        for (_, core_neuron_slice, __, ___) in all_slices_and_resources:
+            self._machine_vertex_slices[chip_neuron_slice].append(
+                core_neuron_slice)
+            self._core_slice_to_chip_slice[core_neuron_slice] = \
+                chip_neuron_slice
 
         for vertex_index, (
-                (input_slice, neuron_slice, output_slice, learnt_slice),
+                (input_slice, core_neuron_slice, output_slice, learnt_slice),
                 used_resources) in enumerate(all_slices_and_resources):
             vertex = LIFMachineVertex(
-                vertex_index=vertex_index, neuron_slice=neuron_slice,
+                sub_population_id=vertex_index, neuron_slice=core_neuron_slice,
                 input_slice=input_slice, output_slice=output_slice,
                 learnt_slice=learnt_slice, resources=used_resources,
-                n_profiler_samples=self._n_profiler_samples,
                 ensemble_size_in=self._ensemble_size_in,
                 encoders_with_gain=self._encoders_with_gain,
+                learnt_encoder_filters=self._learnt_encoder_filters,
+                tau_rc=self._tau_rc, tau_refactory=self._tau_refactory,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
-                    "app vertex {}.".format(neuron_slice, self.label)))
+                    "app vertex {}.".format(core_neuron_slice, self.label)))
             cluster_vertices.append(vertex)
         return cluster_vertices
 
@@ -637,11 +669,18 @@ class LIFApplicationVertex(
             self.PES_REGION_SLICED_RULE_N_ELEMENTS)
 
         # constant based regions
-        ensemble_region = ((self.ENSEMBLE_REGION_N_ELEMENTS +
-                            len(self._learnt_encoder_filters)) *
-                           constants.BYTE_TO_WORD_MULTIPLIER)
+        ensemble_region = (
+            (LIFMachineVertex.ENSEMBLE_PARAMS_ITEMS +
+             (len(self._learnt_encoder_filters) *
+              LIFMachineVertex.SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR) +
+             n_cores + LIFMachineVertex.POP_LENGTH_CONSTANT_ITEMS) *
+            constants.BYTE_TO_WORD_MULTIPLIER)
+
+        # lif region
         lif_region = (
             self.LIF_REGION_N_ELEMENTS * constants.BYTE_TO_WORD_MULTIPLIER)
+
+        # voja region
         voja_region = ((self.VOJA_REGION_N_ELEMENTS +
                         (len(self._voja_learning_rules) *
                          self.VOJA_REGION_RULE_N_ELEMENT)) *
@@ -701,11 +740,6 @@ class LIFApplicationVertex(
         learnt_encoder_routing_region = helpful_functions.\
             sdram_size_in_bytes_for_routing_region(self._learnt_encoders_n_keys)
 
-        # profile region
-        profiler_region = (self.PROFILER_N_SAMPLES_SIZE + (
-            self.PROFILER_SAMPLE_SIZE * self._n_profiler_samples) *
-            constants.BYTE_TO_WORD_MULTIPLIER)
-
         # recording region
         # TODO tie into buffering
         recording_region_size = 0
@@ -714,7 +748,7 @@ class LIFApplicationVertex(
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
             bias_region + gain_region + key_region + learnt_key_region +
-            population_length_region + profiler_region + input_filter_region
+            population_length_region + input_filter_region
             + inhib_filter_region + modulatory_filters_region +
             learnt_encoder_filters_region + input_routing_region +
             inhib_routing_region + modulatory_routing_region +

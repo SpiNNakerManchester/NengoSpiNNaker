@@ -215,8 +215,7 @@ class NengoApplicationGraphBuilder(object):
             self._ensemble_conversion(
                 nengo_ensemble, random_number_generator,
                 utilise_extra_core_for_output_types_probe,
-                nengo_operator_graph, nengo_to_app_graph_map,
-                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
+                nengo_operator_graph, nengo_to_app_graph_map)
 
         # convert from nodes to either pass through nodes or sources.
         for nengo_node in progress_bar.over(nengo_network.nodes, False):
@@ -399,8 +398,7 @@ class NengoApplicationGraphBuilder(object):
     def _ensemble_conversion(
             nengo_ensemble, random_number_generator,
             utilise_extra_core_for_output_types_probe, nengo_operator_graph,
-            nengo_to_app_graph_map, nengo_ensemble_profiling,
-            nengo_ensemble_profiling_n_samples):
+            nengo_to_app_graph_map):
         """  This converts a nengo ensemble into a nengo operator used in the \
         nengo operator graph. 
         
@@ -420,12 +418,6 @@ class NengoApplicationGraphBuilder(object):
                 ParameterExtractionFromNengoEnsemble(
                     nengo_ensemble, random_number_generator)
 
-            n_profiler_samples = 0
-            if nengo_ensemble_profiling:
-                # If it's not specified, calculate sensible default
-                if nengo_ensemble_profiling_n_samples is None:
-                    n_profiler_samples = None
-
             operator = LIFApplicationVertex(
                 label="LIF neurons for ensemble {}".format(
                     nengo_ensemble.label),
@@ -442,7 +434,8 @@ class NengoApplicationGraphBuilder(object):
                 gain=params_from_nengo_ensemble.gain,
                 bias=params_from_nengo_ensemble.bias,
                 n_neurons=nengo_ensemble.n_neurons,
-                n_profiler_samples=n_profiler_samples)
+                tau_rc=nengo_ensemble.neuron_type.tau_rc,
+                tau_refactory=nengo_ensemble.neuron_type.tau_ref)
         else:
             raise NeuronTypeConstructorNotFoundException(
                 "could not find a constructor for neuron type {}. I have "
