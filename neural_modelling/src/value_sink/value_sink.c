@@ -249,6 +249,8 @@ static bool initialize(uint32_t *timer_period) {
 
     // Multicast packet queue
     packet_queue_init(&packets);
+
+    // passed
     return true;
 }
 
@@ -267,7 +269,7 @@ void c_main(void){
     // Set timer tick (in microseconds)
     spin1_set_timer_tick(timer_period);
 
-    // Register callback
+    // Register callbacks
     spin1_callback_on(TIMER_TICK, timer_callback, TIMER);
     spin1_callback_on(MCPL_PACKET_RECEIVED,  mcpl_callback, MCPL);
     spin1_callback_on(USER_EVENT, user_event, USER);
