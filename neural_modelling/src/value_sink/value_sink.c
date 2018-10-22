@@ -192,9 +192,13 @@ static bool set_up_filters(address_t dsg_address){
     if(!input_filtering_initialise_output(&filters, input_atoms)){
         return false;
     }
+
+    uint32_t *words_read;
+    words_read = 0;
+
     if(!input_filtering_initialise_filters(
-            &filters,
-            data_specification_get_region(FILTERS, dsg_address), NULL)){
+            &filters, data_specification_get_region(FILTERS, dsg_address),
+            NULL, words_read)){
         return false;
     }
     if(!input_filtering_initialise_routes(

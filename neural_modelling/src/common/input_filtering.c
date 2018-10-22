@@ -295,14 +295,17 @@ bool _lti_filter_initialise(
 
 
 //! \brief creates input filters
-//! \param[in] filter_output_array: where to store filters ouputs
+//! \param[in] filter_output_array: where to store filters outputs
 //! \param[in] sdram_data: location in sdram where the filter data resides
 //! \param[in] filters: where to store filters
+//! \param[out] sdram_words_read: the number of words read during this init
+//! \return bool stating if the initialisation was successful
 bool input_filtering_initialise_filters(
         if_collection_t *filters, uint32_t *sdram_data,
-        value_t **filter_output_array) {
+        value_t **filter_output_array, uint32_t *sdram_words_read) {
     // Get the number of filters and malloc sufficient space for the filter
     // parameters.
+    use(*sdram_words_read);
 
     filters->n_filters = (
         sdram_data[N_LOW_PASS_FILTERS] + sdram_data[N_NONE_PASS_FILTERS] +
@@ -405,12 +408,13 @@ bool input_filtering_initialise_filters(
                     sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
                     &size_of_words_read, &filters->filters[filter_index],
                     filter_params->size)){
-                log_error("failed to instaniate filter");
+                log_error("failed to instantiate filter");
                 return false;
             }
             data_index += BASIC_FILTER_PARAMETER_SIZE + size_of_words_read;
         }
     }
+    *sdram_words_read = data_index;
     return true;
 }
 

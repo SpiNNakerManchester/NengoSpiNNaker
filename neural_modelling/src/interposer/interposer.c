@@ -289,9 +289,11 @@ static bool get_key_data(address_t dsg_address){
 //! \param[in] address: the sdram address for the dsg region data
 //! \return bool indicating if successful
 static bool sort_out_input_filters_routes(address_t address){
+    uint32_t *words_read;
+    words_read = 0;
     if(!input_filtering_initialise_filters(
             &filters, data_specification_get_region(INPUT_FILTERS, address),
-            NULL)){
+            NULL, words_read)){
         return false;
     }
     if(!input_filtering_initialise_routes(

@@ -181,8 +181,11 @@ static bool initialize(uint32_t *timer_period) {
     g_sdp_tx.input = g_input.output;
 
     // handle filters
+    uint32_t *words_read;
+    words_read = 0;
     if(!input_filtering_initialise_filters(
-            &g_input, data_specification_get_region(FILTERS, address), NULL)){
+            &g_input, data_specification_get_region(FILTERS, address), NULL,
+            words_read)){
         return false;
     }
 
