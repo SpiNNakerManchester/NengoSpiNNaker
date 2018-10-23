@@ -174,7 +174,7 @@ class SDPReceiverMachineVertex(
         partition_routing_info = routing_info.get_routing_info_from_partition(
             machine_outgoing_partition)
         spec.write_value(self._n_keys)
-        for key in partition_routing_info.get_keys():
+        for key in partition_routing_info.get_keys(n_keys=self._n_keys):
             spec.write_value(key)
 
     def _reserve_memory_regions(self, spec):
