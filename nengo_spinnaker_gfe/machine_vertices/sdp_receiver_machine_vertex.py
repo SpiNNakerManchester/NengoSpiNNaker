@@ -31,8 +31,8 @@ class SDPReceiverMachineVertex(
         # keys to transmit with i think
         '_n_keys',
 
-        #
-        "_managing_outgoing_partition",
+        # the outgoing partition this sdp receiver is managing for the host
+        "_managing_app_outgoing_partition",
     ]
 
     DATA_REGIONS = Enum(
@@ -62,9 +62,9 @@ class SDPReceiverMachineVertex(
         AbstractProvidesNKeysForPartition.__init__(self)
 
         # TODO WHY DO WE PARTITION OVER OUTGOING PARTITIONS!!!
-        self._managing_outgoing_partition = outgoing_partition
+        self._managing_app_outgoing_partition = outgoing_partition
 
-        transform = self._managing_outgoing_partition.identifier\
+        transform = self._managing_app_outgoing_partition.identifier\
             .transmission_parameter.full_transform(
                 slice_out=self.TRANSFORM_SLICE_OUT)
         self._n_keys = transform.shape[0]
@@ -78,7 +78,8 @@ class SDPReceiverMachineVertex(
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
-        if partition.identifier != self._managing_outgoing_partition.identifier:
+        if (partition.identifier !=
+                self._managing_app_outgoing_partition.identifier):
             raise Exception("don't recognise this partition")
         else:
             return self._n_keys
@@ -121,8 +122,9 @@ class SDPReceiverMachineVertex(
     @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
         return (
-            transmission_params ==
-            self._managing_outgoing_partition.identifier.transmission_parameter)
+            transmission_params == (
+                self._managing_app_outgoing_partition.
+                identifier.transmission_parameter))
 
     @inject_items({"graph_mapper": "NengoGraphMapper"})
     @overrides(
@@ -137,7 +139,7 @@ class SDPReceiverMachineVertex(
             self.get_binary_file_name(), machine_time_step,
             time_scale_factor))
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
-        self._write_keys_region(spec, routing_info)
+        self._write_keys_region(spec, routing_info, graph_mapper, machine_graph)
         spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT.value)
         spec.write_value(self.SDP_PORT)
         spec.switc_write_focus(self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value)
@@ -163,9 +165,14 @@ class SDPReceiverMachineVertex(
                 (self._n_keys * 2.0))
         spec.write_value(data=int(time_between_spikes))
 
-    def _write_keys_region(self, spec, routing_info):
+    def _write_keys_region(
+            self, spec, routing_info, graph_mapper, machine_graph):
+        app_edge = self._managing_app_outgoing_partition.edges.peek()
+        machine_edge = graph_mapper.get_machine_edges(app_edge).peek()
+        machine_outgoing_partition = \
+            machine_graph.get_outgoing_partition_for_edge(machine_edge)
         partition_routing_info = routing_info.get_routing_info_from_partition(
-            self._managing_outgoing_partition)
+            machine_outgoing_partition)
         spec.write_value(self._n_keys)
         for key in partition_routing_info.get_keys():
             spec.write_value(key)
@@ -182,8 +189,8 @@ class SDPReceiverMachineVertex(
             self.DATA_REGIONS.KEYS.value,
             self._calculate_sdram_for_keys(self._n_keys),
             label="keys region")
-        self.reserve_memory_region(
-            self.DATA_REGIONS.MC_TRANSMISSION.value,
+        spec.reserve_memory_region(
+            self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value,
             (self.MC_TRANSMISSION_REGION_ITEMS *
              constants.BYTE_TO_WORD_MULTIPLIER),
             label="mc_transmission data")
@@ -194,10 +201,10 @@ class SDPReceiverMachineVertex(
 
         # locate required transforms and functions
         partition_transmission_function = \
-            self._managing_outgoing_partition.identifier\
+            self._managing_app_outgoing_partition.identifier\
                 .transmission_parameter.function
         partition_transmission_transform = \
-            self._managing_outgoing_partition.identifier\
+            self._managing_app_outgoing_partition.identifier\
                 .transmission_parameter.full_transform(slice_out=False)
 
         # execute function if required
