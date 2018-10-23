@@ -1,5 +1,4 @@
 #include "voja.h"
-#include "filtered_activity.h"
 #include <debug.h>
 
 //! enum mapping region ids to regions in python

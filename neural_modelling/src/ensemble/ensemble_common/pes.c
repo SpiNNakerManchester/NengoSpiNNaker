@@ -1,5 +1,4 @@
 #include "pes.h"
-#include "filtered_activity.h"
 #include <debug.h>
 
 //! Structure containing parameters and state required for PES learning
