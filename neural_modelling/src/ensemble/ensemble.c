@@ -34,8 +34,7 @@
 //! enum mapping region ids to regions from python
 typedef enum regions {
     SYSTEM, ENSEMBLE_PARAMS, NEURON, ENCODER, BIAS, GAIN, DECODER,
-    LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, FILTERED_ACTIVITY,
-    RECORDING
+    LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, RECORDING
 } regions;
 
 //! enum mapping ensemble params in sdram from python
