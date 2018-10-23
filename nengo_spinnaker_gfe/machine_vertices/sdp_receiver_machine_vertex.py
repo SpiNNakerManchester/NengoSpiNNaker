@@ -128,7 +128,6 @@ class SDPReceiverMachineVertex(
     @overrides(
         MachineDataSpecableVertex.generate_machine_data_specification,
         additional_arguments=["graph_mapper"])
-    @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor, graph_mapper):

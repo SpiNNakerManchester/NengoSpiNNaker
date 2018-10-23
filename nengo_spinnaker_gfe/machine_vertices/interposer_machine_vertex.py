@@ -90,7 +90,8 @@ class InterposerMachineVertex(
         {"machine_time_step_in_seconds": "MachineTimeStepInSeconds",
          "graph_mapper": "NengoGraphMapper"})
     @overrides(MachineDataSpecableVertex.generate_machine_data_specification,
-               additional_arguments=["machine_time_step_in_seconds"])
+               additional_arguments=[
+                   "machine_time_step_in_seconds", "graph_mapper"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
