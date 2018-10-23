@@ -1,17 +1,12 @@
 import logging
 import os
-import time
 
 import numpy
 from nengo.cache import NoDecoderCache
 from nengo_spinnaker_gfe.application_vertices.\
     value_sink_application_vertex import ValueSinkApplicationVertex
-from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_host_graph_update_builder import \
-    NengoHostGraphUpdateBuilder
 from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
     NengoMachineGraphGenerator
-from spinn_front_end_common.interface.interface_functions import \
-    NotificationProtocol
 
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.utilities.utility_objs import ExecutableFinder
@@ -131,8 +126,9 @@ class NengoSimulator(SpiNNaker):
 
         # basic mapping extras
         extra_mapping_algorithms = [
-            "NengoKeyAllocator", "NengoHostGraphUpdateBuilder",
-            "NengoCreateHostSimulator", "NengoSetUpLiveIO"]
+            "NengoSDRAMOutgoingPartitionAllocator", "NengoKeyAllocator",
+            "NengoHostGraphUpdateBuilder", "NengoCreateHostSimulator",
+            "NengoSetUpLiveIO"]
 
         if function_of_time_nodes is None:
             function_of_time_nodes = list()
@@ -292,6 +288,12 @@ class NengoSimulator(SpiNNaker):
         self._nengo_app_machine_graph_mapper = \
             executor_items.get("NengoGraphMapper")
         self._max_machine_outputs = executor_items
+
+        # if the machine is set, then not gone though spalloc, so the new max
+        # machine outputs are also the new machine outputs.
+        if self._machine is not None:
+            self._machine_outputs = self._max_machine_outputs
+
         self.update_extra_mapping_inputs(
             {"NengoGraphMapper": self._nengo_app_machine_graph_mapper})
 
