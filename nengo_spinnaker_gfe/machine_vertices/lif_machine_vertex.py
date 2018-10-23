@@ -88,12 +88,14 @@ class LIFMachineVertex(
             self, sub_population_id, neuron_slice, input_slice, output_slice,
             learnt_slice, resources, encoders_with_gain, tau_rc, tau_refactory,
             ensemble_size_in, label, learnt_encoder_filters, input_filters,
-            inhibitory_filters, modulatory_filters):
+            inhibitory_filters, modulatory_filters, input_n_keys,
+            inhibition_n_keys, modulatory_n_keys, learnt_encoders_n_keys):
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
+
         self._resources = resources
         self._neuron_slice = neuron_slice
         self._input_slice = input_slice
@@ -108,6 +110,11 @@ class LIFMachineVertex(
         self._input_filters = input_filters
         self._inhibitory_filters = inhibitory_filters
         self._modulatory_filters = modulatory_filters
+
+        self._input_n_keys = input_n_keys
+        self._inhibition_n_keys = inhibition_n_keys
+        self._modulatory_n_keys = modulatory_n_keys
+        self._learnt_encoders_n_keys = learnt_encoders_n_keys
 
     @property
     def neuron_slice(self):
@@ -138,30 +145,42 @@ class LIFMachineVertex(
     @overrides(
         MachineDataSpecableVertex.generate_machine_data_specification,
         additional_arguments=["graph_mapper", "machine_time_step_in_seconds"])
-    @overrides(MachineDataSpecableVertex.generate_machine_data_specification)
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
             graph_mapper, machine_time_step_in_seconds):
 
+        # get the associated app vertex.
         app_vertex = graph_mapper.get_application_vertex(self)
 
+        # allocate the memory regions
         self._allocate_memory_regions(spec, app_vertex)
+
+        # process the system region
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
-            self.get_binary_file_name(), machine_time_step,
-            time_scale_factor))
+            self.get_binary_file_name(), machine_time_step, time_scale_factor))
+
+        # process the ensemble params region
         spec.switch_write_focus(self.DATA_REGIONS.ENSEMBLE_PARAMS.value)
         self._write_ensemble_neuron_pop_length_params(
             spec, graph_mapper, machine_graph, machine_time_step_in_seconds,
             app_vertex)
+
+        # process the filters region
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
         self._write_filters_region(spec, machine_time_step_in_seconds)
-        spec.switch_write_focus(self.DATA_REGIONS.ROUTES.value)
+
+        # process the routes region
+        spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
+        self._write_routes_region(spec)
 
 
 
         raise Exception()
+
+    def _write_routes_region(self, spec):
+        pass
 
     def _write_filters_region(self, spec, machine_time_step_in_seconds):
         """
@@ -170,7 +189,7 @@ class LIFMachineVertex(
         :param machine_time_step_in_seconds: 
         :return: 
         """
-        filter_region_writer.write_filter_region(
+        filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
         filter_region_writer.write_filter_region(
@@ -229,7 +248,8 @@ class LIFMachineVertex(
         # the semaphore point
         spec.write_value(
             machine_graph.get_edges_ending_at_vertex_with_partition_name(
-                self, app_vertex.SDRAM_OUTGOING_LEARNT)[0].sdram_base_address)
+                self,
+                app_vertex.SDRAM_OUTGOING_SEMAPHORE)[0].sdram_base_address)
 
         # write each sdram address for each learnt encoder
         spec.write_value(len(self._learnt_encoder_filters))
@@ -237,7 +257,7 @@ class LIFMachineVertex(
             machine_graph_edge = \
                 machine_graph.get_edges_ending_at_vertex_with_partition_name(
                     self,
-                    (app_vertex.SDRAM_OUTGOING_SPIKE_VECTOR,
+                    (app_vertex.SDRAM_OUTGOING_LEARNT,
                      learnt_encoder_filter))[0]
             outgoing_partition = \
                 machine_graph.get_outgoing_partition_for_edge(
@@ -247,14 +267,15 @@ class LIFMachineVertex(
 
         # add the neuron params to this region.
         spec.write_value(
-            (-numpy.expm1(-machine_time_step_in_seconds / self.tau_rc) *
+            (-numpy.expm1(-machine_time_step_in_seconds / self._tau_rc) *
              self.FUNCTION_OF_NEURON_TIME_CONSTANT),
             data_type=DataType.S1615)
-        spec.write_value((self.tau_ref // self.dt), data_type=DataType.S1615)
+        spec.write_value((self._tau_refactory // machine_time_step_in_seconds),
+                         data_type=DataType.S1615)
 
         # add pop length data
-        chip_level_machine_vertex_slices = app_vertex.machine_vertex_slices(
-            app_vertex.core_slice_to_chip_slice()[self])
+        chip_level_machine_vertex_slices = app_vertex.machine_vertex_slices[
+            app_vertex.core_slice_to_chip_slice[self.neuron_slice]]
         spec.write_value(len(chip_level_machine_vertex_slices))
         for chip_level_core_slice in chip_level_machine_vertex_slices:
             spec.write_value(chip_level_core_slice.n_atoms)
@@ -273,32 +294,41 @@ class LIFMachineVertex(
             fec_constants.SYSTEM_BYTES_REQUIREMENT, label="system region")
 
         # ensemble / neuron / pop length region
-        n_pop_length_sizes = len(app_vertex.machine_vertex_slices(
-            app_vertex.core_slice_to_chip_slice()[self]))
+        n_pop_length_sizes = len(app_vertex.machine_vertex_slices[
+            app_vertex.core_slice_to_chip_slice[self.neuron_slice]])
         spec.reserve_memory_region(
             self.DATA_REGIONS.ENSEMBLE_PARAMS.value,
             (self.ENSEMBLE_PARAMS_ITEMS + self.NEURON_PARAMS_ITEMS +
-             (self._learnt_encoder_filters *
+             (len(self._learnt_encoder_filters) *
               self.SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR) +
              self.POP_LENGTH_CONSTANT_ITEMS + n_pop_length_sizes) *
             constants.BYTE_TO_WORD_MULTIPLIER,
             label="ensemble params")
 
-        # filters and routes regions
+        # reserve filter region
         spec.reserve_memory_region(
             self.DATA_REGIONS.FILTERS.value,
             (helpful_functions.sdram_size_in_bytes_for_filter_region(
                 self._input_filters) +
              helpful_functions.sdram_size_in_bytes_for_filter_region(
-                 self._inhibition_filters) +
+                 self._inhibitory_filters) +
              helpful_functions.sdram_size_in_bytes_for_filter_region(
                  self._modulatory_filters) +
              helpful_functions.sdram_size_in_bytes_for_filter_region(
                  self._learnt_encoder_filters)), label="filters")
 
-
-
-
+        # reserve routing region
+        spec.reserve_memory_region(
+            self.DATA_REGIONS.ROUTING.value,
+            (helpful_functions.sdram_size_in_bytes_for_routing_region(
+                self._input_n_keys) +
+             helpful_functions.sdram_size_in_bytes_for_routing_region(
+                 self._inhibition_n_keys) +
+             helpful_functions.sdram_size_in_bytes_for_routing_region(
+                 self._modulatory_n_keys) +
+             helpful_functions.sdram_size_in_bytes_for_routing_region(
+                 self._learnt_encoders_n_keys)),
+            label="routing")
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
@@ -311,7 +341,4 @@ class LIFMachineVertex(
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
-        if self._n_profiler_samples > 0:
-            return "lif_profiled.aplx"
-        else:
-            return "lif.aplx"
+        return "lif.aplx"

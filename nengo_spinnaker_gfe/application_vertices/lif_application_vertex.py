@@ -594,7 +594,7 @@ class LIFApplicationVertex(
 
         # TODO this is assuming the core_neuron_slice's are incremental. This
         # TODO is valid so far.
-        for (_, core_neuron_slice, __, ___) in all_slices_and_resources:
+        for (_, core_neuron_slice, __, ___), ___ in all_slices_and_resources:
             self._machine_vertex_slices[chip_neuron_slice].append(
                 core_neuron_slice)
             self._core_slice_to_chip_slice[core_neuron_slice] = \
@@ -614,6 +614,10 @@ class LIFApplicationVertex(
                 input_filters=self._input_filters,
                 inhibitory_filters=self._inhibition_filters,
                 modulatory_filters=self._modulatory_filters,
+                input_n_keys=self._inputs_n_keys,
+                inhibition_n_keys=self._inhibition_n_keys,
+                modulatory_n_keys=self._modulatory_n_keys,
+                learnt_encoders_n_keys=self._learnt_encoders_n_keys,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
                     "app vertex {}.".format(core_neuron_slice, self.label)))
