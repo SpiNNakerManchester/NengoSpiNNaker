@@ -130,20 +130,7 @@ class LIFApplicationVertex(
     # dtcm calculation
     DTCM_BYTES_PER_NEURON = 3
 
-    # SDRAM requirements
-    # TODO shift these to the machine vertex
-    LIF_REGION_N_ELEMENTS = 2
-    PES_REGION_N_ELEMENTS = 1
-    PES_REGION_SLICED_RULE_N_ELEMENTS = 6
-    VOJA_REGION_N_ELEMENTS = 2
-    VOJA_REGION_RULE_N_ELEMENT = 5
-    POPULATION_LENGTH_REGION_SIZE_IN_BYTES = 4
-    PROFILER_SAMPLE_SIZE = 2
-    PROFILER_N_SAMPLES_SIZE = 1
-
-    # shared sdram constants
-    SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
-
+    # the outgoing partition ids for sdram partitions
     SDRAM_OUTGOING_INPUT = "SDRAM_LINK_FOR_INPUT_VECTOR"
     SDRAM_OUTGOING_LEARNT = "SDRAM_LINK_FOR_LEARNT_VECTOR"
     SDRAM_OUTGOING_SPIKE_VECTOR = "SDRAM_LINK_FOR_SPIKE"
@@ -205,6 +192,7 @@ class LIFApplicationVertex(
         self._inhibition_n_keys = 0
         self._modulatory_n_keys = 0
         self._learnt_encoders_n_keys = 0
+
         self._input_filters = defaultdict(list)
         self._inhibition_filters = defaultdict(list)
         self._modulatory_filters = defaultdict(list)
@@ -240,6 +228,30 @@ class LIFApplicationVertex(
                 constants.DECODER_OUTPUT_FLAG)
             self._is_recording_probeable_variable[
                 constants.DECODER_OUTPUT_FLAG] = False
+
+    @property
+    def input_n_keys(self):
+        return self._inputs_n_keys
+
+    @property
+    def inhibition_n_keys(self):
+        return self._inhibition_n_keys
+
+    @property
+    def modulatory_n_keys(self):
+        return self._modulatory_n_keys
+
+    @property
+    def learnt_encoders_n_keys(self):
+        return self._learnt_encoders_n_keys
+
+    @property
+    def output_n_keys(self):
+        return self._n_output_keys
+
+    @property
+    def learnt_output_n_keys(self):
+        return self._n_learnt_output_keys
 
     @property
     def machine_vertex_slices(self):
@@ -288,6 +300,10 @@ class LIFApplicationVertex(
     @property
     def n_neurons(self):
         return self._n_neurons
+
+    @property
+    def voja_learning_rules(self):
+        return self._voja_learning_rules
 
     @overrides(AbstractProbeable.set_probeable_variable)
     def set_probeable_variable(self, variable):
@@ -398,7 +414,7 @@ class LIFApplicationVertex(
 
         # deduce the shared sdram requirements per cluster.
         shared_sdram_requirements = (
-            self.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES +
+            LIFMachineVertex.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES +
             (self._ensemble_size_in * constants.BYTE_TO_WORD_MULTIPLIER))
         for _ in range(len(self._learnt_encoder_filters)):
             shared_sdram_requirements += (
@@ -571,7 +587,8 @@ class LIFApplicationVertex(
             edge = SDRAMMachineEdge(
                 pre_vertex=pre_vertex_for_sdram_edges,
                 post_vertex=post_vertex,
-                sdram_size=self.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES,
+                sdram_size=(
+                    LIFMachineVertex.SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES),
                 label="SDRAM_EDGE_FOR_SEMAPHORE")
             machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SEMAPHORE)
 
@@ -594,19 +611,21 @@ class LIFApplicationVertex(
 
         # TODO this is assuming the core_neuron_slice's are incremental. This
         # TODO is valid so far.
-        for (_, core_neuron_slice, __, ___), ___ in all_slices_and_resources:
+        for slices, _ in all_slices_and_resources:
             self._machine_vertex_slices[chip_neuron_slice].append(
-                core_neuron_slice)
-            self._core_slice_to_chip_slice[core_neuron_slice] = \
-                chip_neuron_slice
+                slices[self.SLICES_POSITIONS.NEURON.value])
+            self._core_slice_to_chip_slice[
+                slices[self.SLICES_POSITIONS.NEURON.value]] = chip_neuron_slice
 
-        for vertex_index, (
-                (input_slice, core_neuron_slice, output_slice, learnt_slice),
-                used_resources) in enumerate(all_slices_and_resources):
+        for vertex_index, (slices, used_resources) in enumerate(
+                all_slices_and_resources):
             vertex = LIFMachineVertex(
-                sub_population_id=vertex_index, neuron_slice=core_neuron_slice,
-                input_slice=input_slice, output_slice=output_slice,
-                learnt_slice=learnt_slice, resources=used_resources,
+                sub_population_id=vertex_index,
+                neuron_slice=slices[self.SLICES_POSITIONS.NEURON.value],
+                input_slice=slices[self.SLICES_POSITIONS.INPUT.value],
+                output_slice=slices[self.SLICES_POSITIONS.OUTPUT.value],
+                learnt_slice=slices[self.SLICES_POSITIONS.LEARNT_OUTPUT.value],
+                resources=used_resources,
                 ensemble_size_in=self._ensemble_size_in,
                 encoders_with_gain=self._encoders_with_gain,
                 learnt_encoder_filters=self._learnt_encoder_filters,
@@ -614,13 +633,12 @@ class LIFApplicationVertex(
                 input_filters=self._input_filters,
                 inhibitory_filters=self._inhibition_filters,
                 modulatory_filters=self._modulatory_filters,
-                input_n_keys=self._inputs_n_keys,
-                inhibition_n_keys=self._inhibition_n_keys,
-                modulatory_n_keys=self._modulatory_n_keys,
-                learnt_encoders_n_keys=self._learnt_encoders_n_keys,
+                pes_learning_rules=(
+                    self._get_sliced_learning_rules(
+                        slices[self.SLICES_POSITIONS.LEARNT_OUTPUT.value])),
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
-                    "app vertex {}.".format(core_neuron_slice, self.label)))
+                    "app vertex {}.".format(slices, self.label)))
             cluster_vertices.append(vertex)
         return cluster_vertices
 
@@ -671,9 +689,9 @@ class LIFApplicationVertex(
 
         # pes learning rule region
         pes_region = (
-            self.PES_REGION_N_ELEMENTS + len(
+            LIFMachineVertex.PES_REGION_N_ELEMENTS + len(
                 self._get_sliced_learning_rules(learnt_output_slice)) +
-            self.PES_REGION_SLICED_RULE_N_ELEMENTS)
+            LIFMachineVertex.PES_REGION_SLICED_RULE_N_ELEMENTS)
 
         # constant based regions
         ensemble_region = (
@@ -685,13 +703,15 @@ class LIFApplicationVertex(
 
         # lif region
         lif_region = (
-            self.LIF_REGION_N_ELEMENTS * constants.BYTE_TO_WORD_MULTIPLIER)
+            LIFMachineVertex.NEURON_PARAMS_ITEMS *
+            constants.BYTE_TO_WORD_MULTIPLIER)
 
         # voja region
-        voja_region = ((self.VOJA_REGION_N_ELEMENTS +
-                        (len(self._voja_learning_rules) *
-                         self.VOJA_REGION_RULE_N_ELEMENT)) *
-                       constants.BYTE_TO_WORD_MULTIPLIER)
+        voja_region = (
+            (LIFMachineVertex.VOJA_REGION_N_ELEMENTS +
+             (len(self._voja_learning_rules) *
+              LIFMachineVertex.VOJA_REGION_RULE_N_ELEMENT)
+             ) * constants.BYTE_TO_WORD_MULTIPLIER)
 
         # matrix based regions
         decoders_region = \
@@ -720,12 +740,18 @@ class LIFApplicationVertex(
                 constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
         # basic key regions
-        key_region = constants.BYTES_PER_KEY * self._n_output_keys
-        learnt_key_region = constants.BYTES_PER_KEY * self._n_learnt_output_keys
+        key_region = (
+            constants.BYTES_PER_KEY * self._n_output_keys *
+            output_slice.n_atoms)
+
+        learnt_key_region = (
+            constants.BYTES_PER_KEY * self._n_learnt_output_keys *
+            learnt_output_slice.n_atoms)
 
         # partitioning data for the machine vertices
         population_length_region = (
-            self.POPULATION_LENGTH_REGION_SIZE_IN_BYTES * n_cores)
+            (LIFMachineVertex.POP_LENGTH_CONSTANT_ITEMS *
+             constants.BYTE_TO_WORD_MULTIPLIER) * n_cores)
 
         # filter regions
         input_filter_region = helpful_functions.\
@@ -755,10 +781,10 @@ class LIFApplicationVertex(
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
             bias_region + gain_region + key_region + learnt_key_region +
-            population_length_region + input_filter_region
-            + inhib_filter_region + modulatory_filters_region +
+            population_length_region + input_filter_region +
+            inhib_filter_region + modulatory_filters_region +
             learnt_encoder_filters_region + input_routing_region +
-            inhib_routing_region + modulatory_routing_region +
+            inhib_routing_region +  modulatory_routing_region +
             learnt_encoder_routing_region + recording_region_size)
 
         if len(slices) == 1:
@@ -833,6 +859,7 @@ class LIFApplicationVertex(
                     n_neurons, size_out_per_core) +
                 self._get_decode_and_transmit_cycles(
                     n_neurons, size_learnt_out_per_core))
+
         else:  # handling core size chunks
             filtered_dims_slice = slices[self.SLICES_POSITIONS.INPUT.value]
             neuron_slice = slices[self.SLICES_POSITIONS.NEURON.value]

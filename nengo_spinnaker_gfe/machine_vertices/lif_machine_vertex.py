@@ -42,7 +42,8 @@ class LIFMachineVertex(
         "_tau_rc",
         "_input_filters",
         "_inhibitory_filters",
-        "_modulatory_filters"
+        "_modulatory_filters",
+        "_local_pes_learning_rules"
     ]
 
     DATA_REGIONS = Enum(
@@ -60,8 +61,7 @@ class LIFMachineVertex(
             ('ROUTING', 9),  # INPUT ROUTING, INHIB ROUTING, MOD ROUTING, LEANT ENCODER ROUTING
             ('PES', 10),
             ('VOJA', 11),
-            ('FILTERED_ACTIVITY', 12),
-            ('RECORDING', 13)  # only one for SPike Voltage Encoder
+            ('RECORDING', 12)  # only one for SPike Voltage Encoder
            ])  # 26
 
     # SDRAM calculation
@@ -69,27 +69,19 @@ class LIFMachineVertex(
     SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR = 2
     NEURON_PARAMS_ITEMS = 2
     POP_LENGTH_CONSTANT_ITEMS = 1
-
-
-    FUNCTION_OF_NEURON_TIME_CONSTANT = (1.0 - 2**-11)
-
-    # SDRAM requirements
-    ENSEMBLE_REGION_N_ELEMENTS = 18
-    LIF_REGION_N_ELEMENTS = 2
     PES_REGION_N_ELEMENTS = 1
-    PES_REGION_SLICED_RULE_N_ELEMENTS = 6
     VOJA_REGION_N_ELEMENTS = 2
     VOJA_REGION_RULE_N_ELEMENT = 5
-    POPULATION_LENGTH_REGION_SIZE_IN_BYTES = 4
-    PROFILER_SAMPLE_SIZE = 2
-    PROFILER_N_SAMPLES_SIZE = 1
+    PES_REGION_SLICED_RULE_N_ELEMENTS = 6
+    SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
+
+    FUNCTION_OF_NEURON_TIME_CONSTANT = (1.0 - 2**-11)
 
     def __init__(
             self, sub_population_id, neuron_slice, input_slice, output_slice,
             learnt_slice, resources, encoders_with_gain, tau_rc, tau_refactory,
             ensemble_size_in, label, learnt_encoder_filters, input_filters,
-            inhibitory_filters, modulatory_filters, input_n_keys,
-            inhibition_n_keys, modulatory_n_keys, learnt_encoders_n_keys):
+            inhibitory_filters, modulatory_filters, pes_learning_rules):
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -110,11 +102,8 @@ class LIFMachineVertex(
         self._input_filters = input_filters
         self._inhibitory_filters = inhibitory_filters
         self._modulatory_filters = modulatory_filters
+        self._local_pes_learning_rules = pes_learning_rules
 
-        self._input_n_keys = input_n_keys
-        self._inhibition_n_keys = inhibition_n_keys
-        self._modulatory_n_keys = modulatory_n_keys
-        self._learnt_encoders_n_keys = learnt_encoders_n_keys
 
     @property
     def neuron_slice(self):
@@ -175,12 +164,33 @@ class LIFMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
         self._write_routes_region(spec)
 
+        # process the keys region
+        spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
+        self._write_keys_region(spec)
 
+        # process the pes region
+        spec.switch_write_focus(self.DATA_REGIONS.PES.value)
+        self._write_pes_region(spec)
 
-        raise Exception()
+        # process the voja region
+        spec.switch_write_focus(self.DATA_REGIONS.VOJA.value)
+        self._write_voja_region(spec)
+
+        spec.end_specification()
+
+    def _write_pes_region(self, spec):
+        pass
+
+    def _write_voja_region(self, spec):
+        pass
+
+    def _write_keys_region(self, spec):
+        pass
 
     def _write_routes_region(self, spec):
         pass
+
+
 
     def _write_filters_region(self, spec, machine_time_step_in_seconds):
         """
@@ -315,20 +325,46 @@ class LIFMachineVertex(
              helpful_functions.sdram_size_in_bytes_for_filter_region(
                  self._modulatory_filters) +
              helpful_functions.sdram_size_in_bytes_for_filter_region(
-                 self._learnt_encoder_filters)), label="filters")
+                 self._learnt_encoder_filters)),
+            label="filters")
 
         # reserve routing region
         spec.reserve_memory_region(
             self.DATA_REGIONS.ROUTING.value,
             (helpful_functions.sdram_size_in_bytes_for_routing_region(
-                self._input_n_keys) +
+                app_vertex.input_n_keys) +
              helpful_functions.sdram_size_in_bytes_for_routing_region(
-                 self._inhibition_n_keys) +
+                 app_vertex.inhibition_n_keys) +
              helpful_functions.sdram_size_in_bytes_for_routing_region(
-                 self._modulatory_n_keys) +
+                 app_vertex.modulatory_n_keys) +
              helpful_functions.sdram_size_in_bytes_for_routing_region(
-                 self._learnt_encoders_n_keys)),
+                 app_vertex.learnt_encoders_n_keys)),
             label="routing")
+
+        # reserve the key region
+        spec.reserve_memory_region(
+            self.DATA_REGIONS.KEYS.value,
+            ((constants.BYTES_PER_KEY * app_vertex.output_n_keys *
+             self._output_slice.n_atoms) +
+             (constants.BYTES_PER_KEY * app_vertex.learnt_output_n_keys *
+              self._learnt_slice.n_atoms)),
+            label="keys region")
+
+        # reserve the pes region
+        spec.reserve_memory_region(
+            self.DATA_REGIONS.PES.value,
+            # pes learning rule region
+            (self.PES_REGION_N_ELEMENTS + len(self._local_pes_learning_rules) +
+             self.PES_REGION_SLICED_RULE_N_ELEMENTS),
+            label="pes region")
+
+        # reserve the voja region
+        spec.reserve_memory_region(
+            self.DATA_REGIONS.VOJA.value,
+            ((self.VOJA_REGION_N_ELEMENTS +
+              (len(app_vertex.voja_learning_rules) *
+               self.VOJA_REGION_RULE_N_ELEMENT)) *
+             constants.BYTE_TO_WORD_MULTIPLIER))
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
