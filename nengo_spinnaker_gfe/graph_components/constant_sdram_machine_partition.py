@@ -26,7 +26,7 @@ class ConstantSDRAMMachinePartition(AbstractTrafficTypeSecureOutgoingPartition):
         return self._pre_vertex
 
     def total_sdram_requirements(self):
-        expected_size = self.edges[0].sdram_size
+        expected_size = self.edges.peek().sdram_size
         for edge in self.edges:
             if edge.sdram_size != expected_size:
                 raise NengoSDRAMSizeException(
@@ -42,4 +42,4 @@ class ConstantSDRAMMachinePartition(AbstractTrafficTypeSecureOutgoingPartition):
     def sdram_base_address(self, new_value):
         self._sdram_base_address = new_value
         for edge in self.edges:
-            edge.sdram_base_address(self._sdram_base_address)
+            edge.sdram_base_address = self._sdram_base_address

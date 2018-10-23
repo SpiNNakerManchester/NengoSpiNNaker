@@ -46,7 +46,7 @@ class SegmentedSpikesSDRAMMachinePartition(
 
         base_address_offset = new_value
         for edge in sorted_by_low_atom:
-            edge.sdram_base_address(new_value)
+            edge.sdram_base_address = new_value
             base_address_offset += (
                 math.ceil(edge.post_vertex.neuron_slice.n_atoms /
                           constants.WORD_TO_BIT_CONVERSION))

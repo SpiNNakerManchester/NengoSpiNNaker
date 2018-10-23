@@ -40,6 +40,6 @@ class SegmentedInputSDRAMMachinePartition(
     def sdram_base_address(self, new_value):
         self._sdram_base_address = new_value
         for edge in self.edges:
-            edge.sdram_base_address(
+            edge.sdram_base_address = (
                 new_value + (edge.pre_vertex.input_slice.lo_atom *
                              constants.BYTE_TO_WORD_MULTIPLIER))
