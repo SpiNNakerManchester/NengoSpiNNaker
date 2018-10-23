@@ -297,7 +297,8 @@ static bool sort_out_input_filters_routes(address_t address){
         return false;
     }
     if(!input_filtering_initialise_routes(
-            &filters, data_specification_get_region(INPUT_ROUTING, address))){
+            &filters, data_specification_get_region(INPUT_ROUTING, address),
+            words_read)){
         return false;
     }
     if(!input_filtering_initialise_output(&filters, params.input_size)){

@@ -196,9 +196,10 @@ static inline void input_filtering_step(
 //! \brief Copy in a set of routing entries.
 //! \param[in] filters: the set of filters
 //! \param[in] routes: array of if_routes.
+//! \param[out] sdram_words_read: the number of words read during this init
 //! \return bool stating if successfully initialised routes
 bool input_filtering_initialise_routes(
-    if_collection_t *filters, uint32_t *routes);
+    if_collection_t *filters, uint32_t *routes, uint32_t *sdram_words_read);
 
 //! \brief creates input filters
 //! \param[in] filter_output_array: where to store filters ouputs

@@ -203,7 +203,8 @@ static bool set_up_filters(address_t dsg_address){
     }
     if(!input_filtering_initialise_routes(
             &filters,
-            data_specification_get_region(FILTER_ROUTING, dsg_address))){
+            data_specification_get_region(FILTER_ROUTING, dsg_address),
+            words_read)){
         return false;
     }
     return true;

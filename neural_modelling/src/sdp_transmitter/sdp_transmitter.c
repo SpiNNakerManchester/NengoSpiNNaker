@@ -191,7 +191,8 @@ static bool initialize(uint32_t *timer_period) {
 
     // handle routes
     if(!input_filtering_initialise_routes(
-            &g_input, data_specification_get_region(FILTER_ROUTING, address))){
+            &g_input, data_specification_get_region(FILTER_ROUTING, address),
+            words_read)){
         return false;
     }
 

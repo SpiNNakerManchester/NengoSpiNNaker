@@ -420,12 +420,17 @@ bool input_filtering_initialise_filters(
 
 //! \brief Copy in a set of routing entries.
 //! \param[in] filters: the set of filters
-//! \param[in] routes: array of if_routes.
+//! \param[in] address: array of if_routes.
+//! \param[out] sdram_words_read: the number of words read during this init
 //! \return bool that states if the initialisation succeeds.
 bool input_filtering_initialise_routes(
-        if_collection_t *filters, uint32_t *routes){
+        if_collection_t *filters, uint32_t *address,
+        uint32_t *sdram_words_read){
+
+    use(sdram_words_read);
+
     // Copy in the number of routing entries
-    filters->n_routes = routes[N_ROUTES];
+    filters->n_routes = address[N_ROUTES];
     log_debug("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
@@ -436,8 +441,12 @@ bool input_filtering_initialise_routes(
     }
 
     // Copy the entries across
-    spin1_memcpy(filters->routes, &routes[STARTS_OF_DATA],
+    spin1_memcpy(filters->routes, &address[STARTS_OF_DATA],
                  filters->n_routes * sizeof(if_route_t));
+
+    // update n words written
+    sdram_words_read = STARTS_OF_DATA + (
+        (filters->n_routes * sizeof(if_route_t)) / BYTES_TO_WORD_CONVERSION);
 
     // debug print
     for (uint32_t n = 0; n < filters->n_routes; n++)
@@ -447,6 +456,7 @@ bool input_filtering_initialise_routes(
               filters->routes[n].dimension_mask,
               filters->routes[n].input_index);
     }
+
     return true;
 }
 

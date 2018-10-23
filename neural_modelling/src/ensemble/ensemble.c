@@ -972,7 +972,100 @@ bool ensemble_setup_filters(address_t address){
 //!                            data
 //! \return bool that states if the init was successful
 bool ensemble_setup_routes(address_t address){
+    uint32_t words_read = 0;
+    uint32_t total_words_read = 0;
 
+    // process input filters
+    if(!input_filtering_initialise_routes(
+        &input_filters, address, NULL, &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process inhib filters
+    if(!input_filtering_initialise_routes(
+        &inhibition_filters, &address[total_words_read], &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process modulatory filters
+    if(!input_filtering_initialise_routes(
+        &modulatory_filters, &address[total_words_read], &words_read)){
+        return false;
+    }
+    total_words_read += words_read;
+
+    // process learnt encoder filters
+    if(!input_filtering_initialise_routes(
+        &learnt_encoder_filters, &address[total_words_read], &words_read)){
+        return false;
+    }
+
+    // report success
+    return true;
+}
+
+//! \brief reads in all matrix based regions from python (
+//!        encoder, bias, gain, decoders and learnt decoders)
+//! \param[in] dsg_address: the address to the dsg pointer table.
+//! \return bool stating if the setup was successful.
+bool ensemble_setup_matrix_based_regions(address_t dsg_address){
+    // Copy in encoders
+    uint encoder_size =
+        sizeof(value_t) * params->n_neurons * params->encoder_width;
+    ensemble.encoders = spin1_malloc(encoder_size);
+    if (ensemble.encoders == NULL){
+        log_error("failed to allocate DTCM for ensemble encoders");
+        return false;
+    }
+    spin1_memcpy(
+        ensemble.encoders, data_specification_get_region(ENCODER, dsg_address),
+        encoder_size);
+
+    // copy in bias
+    uint bias_size = sizeof(value_t) * params->n_neurons;
+    ensemble.bias = spin1_malloc(bias_size);
+    if (ensemble.bias == NULL){
+        log_error("failed to allocate DTCM for ensemble bias");
+        return false;
+    }
+    spin1_memcpy(
+        ensemble.bias, data_specification_get_region(BIAS, dsg_address),
+        bias_size);
+
+    // copy in gain
+    uint gain_size = sizeof(value_t) * params->n_neurons;
+    ensemble.gain = spin1_malloc(gain_size);
+    if (ensemble.gain == NULL){
+        log_error("failed to allocate DTCM for ensemble gain");
+        return false;
+    }
+    spin1_memcpy(
+        ensemble.gain, data_specification_get_region(GAIN, dsg_address),
+        gain_size);
+
+    // copy in decoders and learnt decoders
+    const uint32_t decoder_words =
+        params->n_neurons_total * params->n_decoder_rows;
+    const uint32_t learnt_decoder_words =
+        params->n_neurons_total * params->n_learnt_decoder_rows;
+
+    ensemble.decoders = spin1_malloc(
+        (decoder_words + learnt_decoder_words) * sizeof(value_t));
+    if (ensemble.decoders == NULL){
+        log_error("failed to allocate DTCM for ensemble decoders and learnt "
+                  "decoders");
+        return false;
+    }
+    spin1_memcpy(
+        ensemble.decoders, data_specification_get_region(DECODER, dsg_address),
+        decoder_words * sizeof(value_t));
+    spin1_memcpy(
+        ensemble.decoders + decoder_words,
+        data_specification_get_region(LEARNT_DECODER, dsg_address),
+        learnt_decoder_words * sizeof(value_t));
+    return true;
 }
 
 
@@ -1019,6 +1112,11 @@ static bool initialize(uint32_t *timer_period){
     // set up routes for the different filters/routes types
     if (!ensemble_setup_routes(
             data_specification_get_region(ROUTING, address))){
+        return false;
+    }
+
+    // sort out matrix reads for encoder, bias, gain, decoders
+    if (!ensemble_setup_matrix_based_regions(address)){
         return false;
     }
 
