@@ -89,7 +89,8 @@ class LIFApplicationVertex(
         "_tau_rc",
         "_tau_refactory",
         "_machine_vertex_slices",
-        "_core_slice_to_chip_slice"]
+        "_core_slice_to_chip_slice",
+        "_radius"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -138,7 +139,7 @@ class LIFApplicationVertex(
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
-            max_rates, intercepts, gain, bias, size_in, n_neurons,
+            max_rates, intercepts, gain, bias, size_in, n_neurons, radius,
             utilise_extra_core_for_output_types_probe, tau_rc, tau_refactory):
         """ constructor for lifs
         
@@ -168,6 +169,7 @@ class LIFApplicationVertex(
         self._direct_input = numpy.zeros(size_in)
         self._ensemble_size_in = size_in
         self._n_neurons = n_neurons
+        self._radius = radius
 
         # neuron params
         self._tau_rc = tau_rc
@@ -636,6 +638,7 @@ class LIFApplicationVertex(
                 pes_learning_rules=(
                     self._get_sliced_learning_rules(
                         slices[self.SLICES_POSITIONS.LEARNT_OUTPUT.value])),
+                ensemble_radius=self._radius,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
                     "app vertex {}.".format(slices, self.label)))

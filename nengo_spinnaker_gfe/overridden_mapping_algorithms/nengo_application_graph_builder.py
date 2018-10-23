@@ -435,7 +435,8 @@ class NengoApplicationGraphBuilder(object):
                 bias=params_from_nengo_ensemble.bias,
                 n_neurons=nengo_ensemble.n_neurons,
                 tau_rc=nengo_ensemble.neuron_type.tau_rc,
-                tau_refactory=nengo_ensemble.neuron_type.tau_ref)
+                tau_refactory=nengo_ensemble.neuron_type.tau_ref,
+                radius=nengo_ensemble.radius)
         else:
             raise NeuronTypeConstructorNotFoundException(
                 "could not find a constructor for neuron type {}. I have "

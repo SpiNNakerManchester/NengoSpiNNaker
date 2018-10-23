@@ -43,7 +43,8 @@ class LIFMachineVertex(
         "_input_filters",
         "_inhibitory_filters",
         "_modulatory_filters",
-        "_local_pes_learning_rules"
+        "_local_pes_learning_rules",
+        "_ensemble_radius"
     ]
 
     DATA_REGIONS = Enum(
@@ -76,12 +77,14 @@ class LIFMachineVertex(
     SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
 
     FUNCTION_OF_NEURON_TIME_CONSTANT = (1.0 - 2**-11)
+    ONE = 1.0
 
     def __init__(
             self, sub_population_id, neuron_slice, input_slice, output_slice,
             learnt_slice, resources, encoders_with_gain, tau_rc, tau_refactory,
             ensemble_size_in, label, learnt_encoder_filters, input_filters,
-            inhibitory_filters, modulatory_filters, pes_learning_rules):
+            inhibitory_filters, modulatory_filters, pes_learning_rules,
+            ensemble_radius):
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -103,7 +106,7 @@ class LIFMachineVertex(
         self._inhibitory_filters = inhibitory_filters
         self._modulatory_filters = modulatory_filters
         self._local_pes_learning_rules = pes_learning_rules
-
+        self._ensemble_radius = ensemble_radius
 
     @property
     def neuron_slice(self):
@@ -174,15 +177,36 @@ class LIFMachineVertex(
 
         # process the voja region
         spec.switch_write_focus(self.DATA_REGIONS.VOJA.value)
-        self._write_voja_region(spec)
+        self._write_voja_region(spec, app_vertex)
 
         spec.end_specification()
 
     def _write_pes_region(self, spec):
-        pass
+        spec.write_value(len(self._local_pes_learning_rules))
+        for pes_learning_rule in self._local_pes_learning_rules:
 
-    def _write_voja_region(self, spec):
-        pass
+
+    def _write_voja_region(self, spec, app_vertex):
+        """
+        
+        :param spec: 
+        :param app_vertex: 
+        :return: 
+        """
+        spec.write_value(len(app_vertex.voja_learning_rules))
+        spec.write_value(
+            self.ONE / self._ensemble_radius, data_type=DataType.S1615)
+
+        for learning_rule in app_vertex.voja_learning_rules:
+            spec.write_value(
+                learning_rule.learning_rate, data_type=DataType.S1615)
+            spec.write_value(
+                learning_rule.learning_signal_filter_index,
+                data_type=DataType.INT32)
+            spec.write_value(learning_rule.encoder_offset)
+            spec.write_value(learning_rule.decoded_input_filter_index)
+            spec.write_value(learning_rule.activity_filter_index,
+                             data_type=DataType.INT32)
 
     def _write_keys_region(self, spec):
         pass
