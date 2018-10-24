@@ -14,7 +14,12 @@ class NengoApplicationGraphGenerator(object):
             function_of_time_nodes_time_period, insert_interposers,
             print_timings, do_timings, xml_paths,
             pacman_executor_provenance_path,
-            nengo_ensemble_profile, nengo_ensemble_profile_num_samples):
+            nengo_ensemble_profile, nengo_ensemble_profile_num_samples,
+            receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+            maximum_sdram_for_sink_vertex_buffing,
+            using_auto_pause_and_resume, time_between_requests,
+            buffer_size_before_receive, spike_buffer_max_size,
+            variable_buffer_max_size):
 
         # create data holders
         inputs = dict()
@@ -43,6 +48,15 @@ class NengoApplicationGraphGenerator(object):
         inputs["NengoEnsembleProfile"] = nengo_ensemble_profile
         inputs["NengoEnsembleProfileNumSamples"] = (
             nengo_ensemble_profile_num_samples)
+        inputs["ReceiveBufferPort"] = receive_buffer_port
+        inputs["ReceiveBufferHost"] = receive_buffer_host
+        inputs["MinBufferSize"] = minimum_buffer_sdram
+        inputs["MaxSinkBuffingSize"] = maximum_sdram_for_sink_vertex_buffing
+        inputs["UsingAutoPauseAndResume"] = using_auto_pause_and_resume
+        inputs["TimeBetweenRequests"] = time_between_requests
+        inputs["BufferSizeBeforeReceive"] = buffer_size_before_receive
+        inputs["SpikeBufferMaxSize"] = spike_buffer_max_size
+        inputs["VariableBufferMaxSize"] = variable_buffer_max_size
 
         # Execute the algorithms
         executor = PACMANAlgorithmExecutor(

@@ -1,18 +1,19 @@
 #include "voja.h"
+#include "stdfix_full-iso.h"
 #include <debug.h>
 
 //! enum mapping region ids to regions in python
-typedef enum voja_initalise {
+typedef enum voja_initialize {
     N_LEARNING_RULES, ONE_OVER_RADIUS, START_OF_VOJA_RULES
-} voja_initalise;
+} voja_initialize;
 
 
 //! \brief Copy in data controlling the Voja learning
 //!        rule from the Voja region of the Ensemble.
 //! \param[in] address: the dsg address for the voja region
-bool voja_initialise(address_t address)
-{
-    // Read number of Voja learning rules that are configured and the scaling factor
+bool voja_initialise(address_t address){
+    // Read number of Voja learning rules that are configured and the scaling
+    // factor
     g_num_voja_learning_rules = address[N_LEARNING_RULES];
     g_voja_one_over_radius = kbits(address[ONE_OVER_RADIUS]);
 
@@ -20,8 +21,7 @@ bool voja_initialise(address_t address)
         "Voja learning: Num rules:%u, One over radius:%k\n",
         g_num_voja_learning_rules, g_voja_one_over_radius);
 
-    if(g_num_voja_learning_rules > 0)
-    {
+    if(g_num_voja_learning_rules > 0){
         // Allocate memory
         g_voja_learning_rules = spin1_malloc(
             g_num_voja_learning_rules * sizeof(voja_parameters_t));
@@ -37,19 +37,17 @@ bool voja_initialise(address_t address)
 
         // Display debug
         for(uint32_t learning_rule = 0;
-                learning_rule < g_num_voja_learning_rules; learning_rule++)
-        {
+                learning_rule < g_num_voja_learning_rules; learning_rule++){
             const voja_parameters_t *parameters =
                 &g_voja_learning_rules[learning_rule];
             log_debug(
                 "\tRule %u, Learning rate:%k, Learning signal filter "
                 "index:%d, Encoder output offset:%u, Decoded input filter "
-                "index:%u, Activity filter index:%d\n",
+                "index:%u\n",
                 learning_rule, parameters->learning_rate,
                 parameters->learning_signal_filter_index,
                 parameters->encoder_offset,
-                parameters->decoded_input_filter_index,
-                parameters->activity_filter_index);
+                parameters->decoded_input_filter_index);
         }
     }
     return true;

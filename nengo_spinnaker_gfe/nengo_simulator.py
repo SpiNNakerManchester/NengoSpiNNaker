@@ -126,9 +126,14 @@ class NengoSimulator(SpiNNaker):
 
         # basic mapping extras
         extra_mapping_algorithms = [
-            "NengoSDRAMOutgoingPartitionAllocator", "NengoKeyAllocator",
-            "NengoHostGraphUpdateBuilder", "NengoCreateHostSimulator",
-            "NengoSetUpLiveIO"]
+            "NengoKeyAllocator", "NengoHostGraphUpdateBuilder",
+            "NengoCreateHostSimulator", "NengoSetUpLiveIO"]
+
+        # only add the sdram edge allocator if not using a virtual board
+        if not helpful_functions.read_config_boolean(
+                self.config, "Machine", "virtual_board"):
+            extra_mapping_algorithms.append(
+                "NengoSDRAMOutgoingPartitionAllocator")
 
         if function_of_time_nodes is None:
             function_of_time_nodes = list()
@@ -155,7 +160,25 @@ class NengoSimulator(SpiNNaker):
              "NengoUtiliseExtraCoreForProbes":
                 self.config.getboolean(
                     "Node", "utilise_extra_core_for_probes"),
-             "MachineTimeStepInSeconds": dt})
+             "MachineTimeStepInSeconds": dt,
+             "ReceiveBufferPort": helpful_functions.read_config_int(
+                self.config, "Buffers", "receive_buffer_port"),
+             "ReceiveBufferHost": self.config.get(
+                 "Buffers", "receive_buffer_host"),
+             "MinBufferSize": self.config.getint(
+                 "Buffers", "minimum_buffer_sdram"),
+             "MaxSinkBuffingSize": self.config.getint(
+                 "Buffers", "sink_vertex_max_sdram_for_buffing"),
+             "UsingAutoPauseAndResume": self.config.getboolean(
+                 "Buffers", "use_auto_pause_and_resume"),
+             "TimeBetweenRequests": self.config.getint(
+                 "Buffers", "time_between_requests"),
+             "BufferSizeBeforeReceive": self.config.getint(
+                 "Buffers", "buffer_size_before_receive"),
+             "SpikeBufferMaxSize": self.config.getint(
+                "Buffers", "spike_buffer_size"),
+             "VariableBufferMaxSize": self.config.getint(
+                "Buffers", "variable_buffer_size")})
 
         # build app graph, machine graph, as the main tools expect an
         # application / machine graph level, and cannot go from random to app
@@ -175,7 +198,16 @@ class NengoSimulator(SpiNNaker):
             self._print_timings, self._do_timings, self._xml_paths,
             self._pacman_executor_provenance_path,
             self._extra_inputs["NengoEnsembleProfile"],
-            self._extra_inputs["NengoEnsembleProfileNumSamples"])
+            self._extra_inputs["NengoEnsembleProfileNumSamples"],
+            self._extra_inputs["ReceiveBufferPort"],
+            self._extra_inputs["ReceiveBufferHost"],
+            self._extra_inputs["MinBufferSize"],
+            self._extra_inputs["MaxSinkBuffingSize"],
+            self._extra_inputs["UsingAutoPauseAndResume"],
+            self._extra_inputs["TimeBetweenRequests"],
+            self._extra_inputs["BufferSizeBeforeReceive"],
+            self._extra_inputs["SpikeBufferMaxSize"],
+            self._extra_inputs["VariableBufferMaxSize"])
 
         # add the extra outputs as new inputs
         self.update_extra_inputs(
@@ -266,23 +298,10 @@ class NengoSimulator(SpiNNaker):
             machine_time_step=self._machine_time_step,
             pacman_executor_provenance_path=(
                 self._pacman_executor_provenance_path),
-            receive_buffer_port=helpful_functions.read_config_int(
-                self._config, "Buffers", "receive_buffer_port"),
-            receive_buffer_host=self._config.get(
-                "Buffers", "receive_buffer_host"),
-            minimum_buffer_sdram=self._config.getint(
-                "Buffers", "minimum_buffer_sdram"),
-            maximum_sdram_for_sink_vertex_buffing=self._config.getint(
-                "Buffers", "sink_vertex_max_sdram_for_buffing"),
-            using_auto_pause_and_resume=self._config.getboolean(
-                "Buffers", "use_auto_pause_and_resume"),
-            time_between_requests=self._config.getint(
-                "Buffers", "time_between_requests"),
-            buffer_size_before_receive=self._config.getint(
-                "Buffers", "buffer_size_before_receive"),
             first_machine_time_step=self._current_run_timesteps,
             machine_time_step_in_seconds=(
-                self._extra_inputs["MachineTimeStepInSeconds"]))
+                self._extra_inputs["MachineTimeStepInSeconds"]),
+            )
 
         self._original_machine_graph = executor_items.get("MemoryMachineGraph")
         self._nengo_app_machine_graph_mapper = \

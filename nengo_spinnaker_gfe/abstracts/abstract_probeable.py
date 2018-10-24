@@ -34,3 +34,10 @@ class AbstractProbeable(object):
         :param variable: 
         :return: 
         """
+
+    @abstractmethod
+    def get_possible_probeable_variables(self):
+        """
+        
+        :return: 
+        """

@@ -84,7 +84,12 @@ class NengoApplicationGraphBuilder(object):
             utilise_extra_core_for_probes,
             nengo_nodes_as_function_of_time,
             function_of_time_nodes_time_period, nengo_ensemble_profiling,
-            nengo_ensemble_profiling_n_samples):
+            nengo_ensemble_profiling_n_samples,
+            receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+            maximum_sdram_for_sink_vertex_buffing,
+            using_auto_pause_and_resume, time_between_requests,
+            buffer_size_before_receive, spike_buffer_max_size,
+            variable_buffer_max_size):
         """ entrance method to start converting from nengo objects to nengo 
         operator graph (spinnaker app graph, including pass through nodes). 
         
@@ -144,7 +149,12 @@ class NengoApplicationGraphBuilder(object):
             nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
             function_of_time_nodes_time_period, progress_bar,
-            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+            receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+            maximum_sdram_for_sink_vertex_buffing,
+            using_auto_pause_and_resume, time_between_requests,
+            buffer_size_before_receive, spike_buffer_max_size,
+            variable_buffer_max_size)
         progress_bar.end()
 
         return (nengo_operator_graph, host_network, nengo_to_app_graph_map,
@@ -168,7 +178,12 @@ class NengoApplicationGraphBuilder(object):
             host_network, nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
             function_of_time_nodes_time_period, progress_bar,
-            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples):
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+            receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+            maximum_sdram_for_sink_vertex_buffing,
+            using_auto_pause_and_resume, time_between_requests,
+            buffer_size_before_receive, spike_buffer_max_size,
+            variable_buffer_max_size):
         """ Builds an entire sub network from the nengo network. 
         
         :param nengo_network: the nengo network 
@@ -208,14 +223,23 @@ class NengoApplicationGraphBuilder(object):
                 host_network, nengo_nodes_as_function_of_time, decoder_cache,
                 nengo_random_number_generator_seed,
                 function_of_time_nodes_time_period, progress_bar,
-                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
+                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+                receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+                maximum_sdram_for_sink_vertex_buffing,
+                using_auto_pause_and_resume, time_between_requests,
+                buffer_size_before_receive, spike_buffer_max_size,
+                variable_buffer_max_size)
 
         # convert from ensembles to neuron model operators
         for nengo_ensemble in progress_bar.over(nengo_network.ensembles, False):
             self._ensemble_conversion(
                 nengo_ensemble, random_number_generator,
                 utilise_extra_core_for_output_types_probe,
-                nengo_operator_graph, nengo_to_app_graph_map)
+                nengo_operator_graph, nengo_to_app_graph_map,
+                receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+                using_auto_pause_and_resume, time_between_requests,
+                buffer_size_before_receive, spike_buffer_max_size,
+                variable_buffer_max_size)
 
         # convert from nodes to either pass through nodes or sources.
         for nengo_node in progress_bar.over(nengo_network.nodes, False):
@@ -398,7 +422,10 @@ class NengoApplicationGraphBuilder(object):
     def _ensemble_conversion(
             nengo_ensemble, random_number_generator,
             utilise_extra_core_for_output_types_probe, nengo_operator_graph,
-            nengo_to_app_graph_map):
+            nengo_to_app_graph_map, receive_buffer_port, receive_buffer_host,
+            minimum_buffer_sdram, using_auto_pause_and_resume,
+            time_between_requests, buffer_size_before_receive,
+            spike_buffer_max_size, variable_buffer_max_size):
         """  This converts a nengo ensemble into a nengo operator used in the \
         nengo operator graph. 
         
@@ -436,7 +463,15 @@ class NengoApplicationGraphBuilder(object):
                 n_neurons=nengo_ensemble.n_neurons,
                 tau_rc=nengo_ensemble.neuron_type.tau_rc,
                 tau_refactory=nengo_ensemble.neuron_type.tau_ref,
-                radius=nengo_ensemble.radius)
+                radius=nengo_ensemble.radius,
+                receive_buffer_port=receive_buffer_port,
+                receive_buffer_host=receive_buffer_host,
+                minimum_buffer_sdram=minimum_buffer_sdram,
+                using_auto_pause_and_resume=using_auto_pause_and_resume,
+                time_between_requests=time_between_requests,
+                buffer_size_before_receive=buffer_size_before_receive,
+                spike_buffer_max_size=spike_buffer_max_size,
+                variable_buffer_max_size=variable_buffer_max_size)
         else:
             raise NeuronTypeConstructorNotFoundException(
                 "could not find a constructor for neuron type {}. I have "

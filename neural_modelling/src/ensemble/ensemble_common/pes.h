@@ -4,9 +4,6 @@
 // Common includes
 #include "input_filtering.h"
 
-// Ensemble includes
-#include "ensemble.h"
-
 //! \brief When using non-filtered activity, applies PES to a spike vector
 //! \param[in] ensemble
 //! \param[in] modulatory_filters

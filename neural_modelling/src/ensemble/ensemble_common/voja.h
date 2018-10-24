@@ -20,14 +20,9 @@ typedef struct voja_parameters_t
     // Index of the input signal filter than contains
     // the decoded input from the pre-synaptic ensemble
     uint32_t decoded_input_filter_index;
-
-    // Index of the activity filter to extract input from
-    // -1 if this learning rule should use unfiltered activity
-    int32_t activity_filter_index;
 } voja_parameters_t;
 
 #define CONSTANT_ERROR_RATE 1.0k
-#define ERROR_RATE_INDEX -1
 
 //----------------------------------
 // External variables
@@ -44,18 +39,17 @@ extern value_t g_voja_one_over_radius;
 //----------------------------------
 // Inline functions
 //----------------------------------
-//! \brief Helper to get the Voja learning rate - can be modified at runtime with a signal
+//! \brief Helper to get the Voja learning rate - can be modified at runtime
+//!        with a signal
 //! \param[in] modulatory_filters: the filters for modulatory filters
 //! \param[in] parameters: the voja learning rules parameters
 //! \return the learning rate
 static inline value_t voja_get_learning_rate(
-    const voja_parameters_t *parameters,
-    const if_collection_t *modulatory_filters)
-{
+        const voja_parameters_t *parameters,
+        const if_collection_t *modulatory_filters){
     // If a learning signal filter index is specified, read the value
     // from it's first dimension and multiply by the constant error rate
-    if(parameters->learning_signal_filter_index != ERROR_RATE_INDEX)
-    {
+    if(parameters->learning_signal_filter_index != ERROR_RATE_INDEX){
         const if_filter_t *decoded_learning_input =
             &modulatory_filters->filters[
                 parameters->learning_signal_filter_index];
@@ -64,8 +58,7 @@ static inline value_t voja_get_learning_rate(
         return parameters->learning_rate * positive_learning_rate;
     }
         // Otherwise, just return the constant learning rate
-    else
-    {
+    else{
         return parameters->learning_rate;
     }
 }
@@ -77,42 +70,36 @@ static inline value_t voja_get_learning_rate(
 //! \param[in] modulatory_filters:
 //! \param[in] n_dims:
 static inline void voja_neuron_spiked(
-    value_t *encoder_vector, value_t gain, uint32_t n_dims,
-    const if_collection_t *modulatory_filters, const value_t **learnt_input)
-{
+        value_t *encoder_vector, value_t gain, uint32_t n_dims,
+        const if_collection_t *modulatory_filters,
+        const value_t **learnt_input){
     // Loop through all the learning rules
     for(uint32_t learning_rule = 0; learning_rule < g_num_voja_learning_rules;
-        learning_rule++)
-    {
-        // If this learning rule operates on un-filtered activity and should,
-        // therefore be updated here
+        learning_rule++){
+
         const voja_parameters_t *parameters =
             &g_voja_learning_rules[learning_rule];
-        if(parameters->activity_filter_index == ERROR_RATE_INDEX)
-        {
-            // Get learning rate
-            const value_t learning_rate =
-                voja_get_learning_rate(parameters, modulatory_filters);
+        // Get learning rate
+        const value_t learning_rate =
+            voja_get_learning_rate(parameters, modulatory_filters);
 
-            // Get correct signal from learnt input
-            const value_t *decoded_input_signal =
-                learnt_input[parameters->decoded_input_filter_index];
+        // Get correct signal from learnt input
+        const value_t *decoded_input_signal =
+            learnt_input[parameters->decoded_input_filter_index];
 
-            // Get this neuron's encoder vector, offset by the encoder offset
-            value_t *learnt_encoder_vector =
-                encoder_vector + parameters->encoder_offset;
+        // Get this neuron's encoder vector, offset by the encoder offset
+        value_t *learnt_encoder_vector =
+            encoder_vector + parameters->encoder_offset;
 
-            // Calculate scaling factor for input
-            const value_t input_scale =
-                learning_rate * gain * g_voja_one_over_radius;
+        // Calculate scaling factor for input
+        const value_t input_scale =
+            learning_rate * gain * g_voja_one_over_radius;
 
-            // Loop through input dimensions
-            for(uint dimension = 0; dimension < n_dims; dimension++)
-            {
-                learnt_encoder_vector[dimension] +=
-                    (input_scale * decoded_input_signal[dimension]) -
-                    (learning_rate * learnt_encoder_vector[dimension]);
-            }
+        // Loop through input dimensions
+        for(uint dimension = 0; dimension < n_dims; dimension++){
+            learnt_encoder_vector[dimension] +=
+                (input_scale * decoded_input_signal[dimension]) -
+                (learning_rate * learnt_encoder_vector[dimension]);
         }
     }
 }

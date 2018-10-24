@@ -11,10 +11,7 @@ class NengoMachineGraphGenerator(object):
             max_machine_available, steps, partitioning_algorithm,
             system_pre_alloc_res_algorithms, print_timings, do_timings,
             xml_paths, pacman_executor_provenance_path, nengo_operator_graph,
-            machine_time_step, minimum_buffer_sdram, receive_buffer_host,
-            maximum_sdram_for_sink_vertex_buffing, using_auto_pause_and_resume,
-            receive_buffer_port, time_between_requests,
-            buffer_size_before_receive, first_machine_time_step,
+            machine_time_step, first_machine_time_step,
             machine_time_step_in_seconds):
 
         inputs = dict()
@@ -29,13 +26,7 @@ class NengoMachineGraphGenerator(object):
         inputs["TotalMachineTimeSteps"] = steps
         inputs["NengoOperatorGraph"] = nengo_operator_graph
         inputs["MachineTimeStep"] = machine_time_step
-        inputs["MinBufferSize"] = minimum_buffer_sdram
-        inputs["MaxSinkBuffingSize"] = maximum_sdram_for_sink_vertex_buffing
-        inputs["UsingAutoPauseAndResume"] = using_auto_pause_and_resume
-        inputs["ReceiveBufferHost"] = receive_buffer_host
-        inputs["ReceiveBufferPort"] = receive_buffer_port
-        inputs["TimeBetweenRequests"] = time_between_requests
-        inputs["BufferSizeBeforeReceive"] = buffer_size_before_receive
+
         inputs["FirstMachineTimeStep"] = first_machine_time_step
         inputs["MachineTimeStepInSeconds"] = machine_time_step_in_seconds
 

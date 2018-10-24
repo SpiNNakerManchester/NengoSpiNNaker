@@ -30,12 +30,7 @@ from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
 from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
     nengo_partitioner import NengoPartitioner
-from pacman.executor.injection_decorator import inject_items
-from pacman.model.graphs.common import Slice
-from pacman.model.resources import CPUCyclesPerTickResource, DTCMResource, \
-    ResourceContainer, SDRAMResource
-from spinn_machine import Processor, SDRAM
-from spinn_utilities.overrides import overrides
+from nengo_spinnaker_gfe.utility_objects.neuron_recorder import NeuronRecorder
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts. \
     abstract_nengo_application_vertex import \
@@ -44,6 +39,18 @@ from nengo_spinnaker_gfe.connection_parameters. \
     ensemble_transmission_parameters import \
     EnsembleTransmissionParameters
 from nengo_spinnaker_gfe.nengo_exceptions import NengoException
+
+from pacman.executor.injection_decorator import inject_items
+from pacman.model.graphs.common import Slice
+from pacman.model.resources import CPUCyclesPerTickResource, DTCMResource, \
+    ResourceContainer, SDRAMResource
+
+from spinn_machine import Processor, SDRAM
+
+from spinn_utilities.overrides import overrides
+
+from spinn_front_end_common.interface.buffer_management\
+    import recording_utilities
 
 from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
 
@@ -90,7 +97,13 @@ class LIFApplicationVertex(
         "_tau_refactory",
         "_machine_vertex_slices",
         "_core_slice_to_chip_slice",
-        "_radius"]
+        "_radius",
+        "_receive_buffer_port",
+        "_receive_buffer_host",
+        "_minimum_buffer_sdram",
+        "_using_auto_pause_and_resume",
+        "_time_between_requests",
+        "_buffer_size_before_receive"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -140,7 +153,12 @@ class LIFApplicationVertex(
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
             max_rates, intercepts, gain, bias, size_in, n_neurons, radius,
-            utilise_extra_core_for_output_types_probe, tau_rc, tau_refactory):
+            utilise_extra_core_for_output_types_probe, tau_rc, tau_refactory,
+            receive_buffer_port, receive_buffer_host, minimum_buffer_sdram,
+            using_auto_pause_and_resume, time_between_requests,
+            buffer_size_before_receive, spike_buffer_max_size,
+            variable_buffer_max_size
+    ):
         """ constructor for lifs
         
         :param label: label of the vertex
@@ -224,12 +242,32 @@ class LIFApplicationVertex(
         for flag in self._probeable_variables:
             self._is_recording_probeable_variable[flag] = False
 
+        self._neuron_recorder = NeuronRecorder(
+            self._is_recording_probeable_variable.keys(), n_neurons)
+
         # add extra probes based off recording on core or not
         if not utilise_extra_core_for_output_types_probe:
             self._probeable_variables.append(
                 constants.DECODER_OUTPUT_FLAG)
             self._is_recording_probeable_variable[
                 constants.DECODER_OUTPUT_FLAG] = False
+
+        # store recording params for buffering
+        self._receive_buffer_port = receive_buffer_port
+        self._receive_buffer_host = receive_buffer_host
+        self._minimum_buffer_sdram = minimum_buffer_sdram
+        self._using_auto_pause_and_resume = using_auto_pause_and_resume
+        self._time_between_requests = time_between_requests
+        self._buffer_size_before_receive = buffer_size_before_receive
+        self._maximum_sdram_for_buffering = []
+
+        for variable in self._is_recording_probeable_variable:
+            if variable == constants.RECORD_SPIKES_FLAG:
+                self._maximum_sdram_for_buffering.append(
+                    spike_buffer_max_size)
+            else:
+                self._maximum_sdram_for_buffering.append(
+                    variable_buffer_max_size)
 
     @property
     def input_n_keys(self):
@@ -307,9 +345,25 @@ class LIFApplicationVertex(
     def voja_learning_rules(self):
         return self._voja_learning_rules
 
+    @property
+    def maximum_sdram_for_buffering(self):
+        return self._maximum_sdram_for_buffering
+
+    @property
+    def time_between_requests(self):
+        return self._time_between_requests
+
+    @property
+    def buffer_size_before_receive(self):
+        return self._buffer_size_before_receive
+
     @overrides(AbstractProbeable.set_probeable_variable)
     def set_probeable_variable(self, variable):
         self._is_recording_probeable_variable[variable] = True
+
+    @overrides(AbstractProbeable.get_possible_probeable_variables)
+    def get_possible_probeable_variables(self):
+        return self._probeable_variables
 
     @overrides(AbstractProbeable.get_data_for_variable)
     def get_data_for_variable(self, variable):
@@ -447,13 +501,15 @@ class LIFApplicationVertex(
         return words * constants.BYTE_TO_WORD_MULTIPLIER
 
     @inject_items({"operator_graph": "NengoOperatorGraph",
-                   "machine_time_step": "MachineTimeStep"})
+                   "machine_time_step": "MachineTimeStep",
+                   "n_machine_time_steps": "TotalMachineTimeSteps"})
     @overrides(
         AbstractNengoApplicationVertex.create_machine_vertices,
-        additional_arguments=["operator_graph", "machine_time_step"])
+        additional_arguments=["operator_graph", "machine_time_step",
+                              "n_machine_time_steps"])
     def create_machine_vertices(
             self, resource_tracker, machine_graph, graph_mapper,
-            operator_graph, machine_time_step):
+            operator_graph, machine_time_step, n_machine_time_steps):
 
         machine_vertices = list()
 
@@ -489,7 +545,8 @@ class LIFApplicationVertex(
             else:
                 self._n_neurons_in_current_cluster = self._n_neurons
                 cluster_vertices = self._create_cluster_and_verts(
-                    Slice(0, self._n_neurons - 1), max_cores, resource_tracker)
+                    Slice(0, self._n_neurons - 1), max_cores, resource_tracker,
+                    n_machine_time_steps)
                 machine_vertices.extend(cluster_vertices)
 
             # update the atom tracker
@@ -595,7 +652,8 @@ class LIFApplicationVertex(
             machine_graph.add_edge(edge, self.SDRAM_OUTGOING_SEMAPHORE)
 
     def _create_cluster_and_verts(
-            self, chip_neuron_slice, max_cores, resource_tracker):
+            self, chip_neuron_slice, max_cores, resource_tracker,
+            n_machine_time_steps):
 
         cluster_vertices = list()
 
@@ -621,6 +679,19 @@ class LIFApplicationVertex(
 
         for vertex_index, (slices, used_resources) in enumerate(
                 all_slices_and_resources):
+
+            # recording items
+            buffered_sdram = self.get_buffered_sdram(
+                slices[self.SLICES_POSITIONS.NEURON.value],
+                n_machine_time_steps)
+            minimum_buffer_sdram = recording_utilities.get_minimum_buffer_sdram(
+                buffered_sdram, self._minimum_buffer_sdram)
+            buffered_sdram_per_timestep = self._get_buffered_sdram_per_timestep(
+                slices[self.SLICES_POSITIONS.NEURON.value])
+            overflow_sdram = self._neuron_recorder.get_sampling_overflow_sdram(
+                slices[self.SLICES_POSITIONS.NEURON.value])
+
+            # build the new machine vertex
             vertex = LIFMachineVertex(
                 sub_population_id=vertex_index,
                 neuron_slice=slices[self.SLICES_POSITIONS.NEURON.value],
@@ -641,9 +712,31 @@ class LIFApplicationVertex(
                 ensemble_radius=self._radius,
                 label=(
                     "LIF_machine_vertex_covering_slices{} for lif "
-                    "app vertex {}.".format(slices, self.label)))
+                    "app vertex {}.".format(slices, self.label)),
+                overflow_sdram=overflow_sdram,
+                buffered_sdram_per_timestep=buffered_sdram_per_timestep,
+                minimum_buffer_sdram_usage=minimum_buffer_sdram)
             cluster_vertices.append(vertex)
         return cluster_vertices
+
+    def _get_buffered_sdram_per_timestep(self, vertex_slice):
+        values = list()
+        for recordable_variable in self._is_recording_probeable_variable:
+            if self._is_recording_probeable_variable[recordable_variable]:
+                values.append(
+                    self._neuron_recorder.get_buffered_sdram_per_timestep(
+                        recordable_variable, vertex_slice))
+        return values
+
+    def get_buffered_sdram(self, vertex_slice, n_machine_time_steps):
+        values = list()
+        for recordable_variable in self._is_recording_probeable_variable:
+            if self._is_recording_probeable_variable[recordable_variable]:
+                values.append(
+                    self._neuron_recorder.get_buffered_sdram(
+                        recordable_variable, vertex_slice,
+                        n_machine_time_steps))
+        return values
 
     def _get_input_filtering_cycles(self, size_in):
         """Cycles required to perform filtering of received values."""
@@ -670,12 +763,25 @@ class LIFApplicationVertex(
                 if (l.decoder_start < learnt_output_slice.hi_atom and
                     l.decoder_stop > learnt_output_slice.lo_atom)]
 
-    @overrides(AbstractSupportNengoPartitioner.get_resources_for_slices)
-    def get_resources_for_slices(self, slices, n_cores):
-        return ResourceContainer(
+    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @overrides(AbstractSupportNengoPartitioner.get_resources_for_slices,
+               additional_arguments=["n_machine_time_steps"])
+    def get_resources_for_slices(self, slices, n_cores, n_machine_time_steps):
+        resources = ResourceContainer(
             cpu_cycles=self._cpu_usage_for_slices(slices, n_cores),
             dtcm=self._dtcm_usage_for_slices(slices, n_cores),
             sdram=self._sdram_usage_for_slices(slices, n_cores))
+
+        recording_sizes = recording_utilities.get_recording_region_sizes(
+            self.get_buffered_sdram(
+                slices[self.SLICES_POSITIONS.NEURON.value],
+                n_machine_time_steps),
+            self._minimum_buffer_sdram, self._maximum_sdram_for_buffering,
+            self._using_auto_pause_and_resume)
+        resources.extend(recording_utilities.get_recording_resources(
+            recording_sizes, self._receive_buffer_host,
+            self._receive_buffer_port))
+        return resources
 
     def _sdram_usage_for_slices(self, slices, n_cores):
         # build slices accordingly
@@ -776,10 +882,6 @@ class LIFApplicationVertex(
         learnt_encoder_routing_region = helpful_functions.\
             sdram_size_in_bytes_for_routing_region(self._learnt_encoders_n_keys)
 
-        # recording region
-        # TODO tie into buffering
-        recording_region_size = 0
-
         total = (
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
@@ -788,7 +890,7 @@ class LIFApplicationVertex(
             inhib_filter_region + modulatory_filters_region +
             learnt_encoder_filters_region + input_routing_region +
             inhib_routing_region +  modulatory_routing_region +
-            learnt_encoder_routing_region + recording_region_size)
+            learnt_encoder_routing_region)
 
         if len(slices) == 1:
             return SDRAMResource(int(math.ceil(total / n_cores)))
@@ -945,7 +1047,8 @@ class LIFApplicationVertex(
                     transmission_parameter.learning_rule.learning_rule_type.
                     learning_rate / machine_time_step),
                 decoder_start=decoder_start,
-                decoder_stop=decoder_stop)
+                decoder_stop=decoder_stop,
+                error_filter_index=len(self._modulatory_filters))
             self._pes_learning_rules.append(pes_learning_rule)
 
             # Add error connection to lists of modulatory filters and routes
@@ -970,16 +1073,15 @@ class LIFApplicationVertex(
         for (edge, learning_rule) in incoming_learnt_edges_and_learning_rules:
 
             if isinstance(learning_rule.learning_rule_type, NengoVoja):
-                voja_learning_rule = VojaLearningRule(
-                    learning_rule.learning_rule_type.learning_rate,
-                    encoder_offset=self._encoders_with_gain.shape[1])
-                self._voja_learning_rules.append(voja_learning_rule)
 
+                learn_sig_filter_index = -1
                 # If there is a modulatory connection
                 # associated with the learning rule
                 if learning_rule in incoming_modulatory_learning_rules.keys():
                     learning_edge = incoming_modulatory_learning_rules[
                         learning_rule]
+
+                    learn_sig_filter_index = len(self._modulatory_filters)
 
                     # Add learning connection to lists
                     # of modulatory filters and route
@@ -990,6 +1092,8 @@ class LIFApplicationVertex(
                         minimise=False)
                     self._modulatory_n_keys += 1
 
+                decoded_input_filter_index = len(self._learnt_encoder_filters)
+
                 # Add learnt connection to list of filters
                 # and routes with learnt encoders
                 FilterAndRoutingRegionGenerator.add_filters(
@@ -997,6 +1101,13 @@ class LIFApplicationVertex(
                     operator_graph.get_outgoing_partition_for_edge(edge),
                     minimise=False)
                 self._learnt_encoders_n_keys += 1
+
+            voja_learning_rule = VojaLearningRule(
+                learning_rule.learning_rule_type.learning_rate,
+                encoder_offset=self._encoders_with_gain.shape[1],
+                learning_signal_filter_index=learn_sig_filter_index,
+                decoded_input_filter_index=decoded_input_filter_index)
+            self._voja_learning_rules.append(voja_learning_rule)
 
     def _get_decoders_and_n_keys(
             self, standard_outgoing_partitions, minimise=False):
