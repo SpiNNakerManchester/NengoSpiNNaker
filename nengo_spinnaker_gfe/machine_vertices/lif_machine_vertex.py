@@ -13,7 +13,8 @@ from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
 from nengo_spinnaker_gfe.nengo_filters import filter_region_writer
 from pacman.executor.injection_decorator import inject_items
 
-from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
+from spinn_front_end_common.abstract_models import \
+    AbstractHasAssociatedBinary, AbstractRecordable
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.buffer_management import \
@@ -34,7 +35,8 @@ logger = logging.getLogger(__name__)
 class LIFMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
-        AbstractTransmitsMulticastSignals, AbstractReceiveBuffersToHost):
+        AbstractTransmitsMulticastSignals, AbstractReceiveBuffersToHost,
+        AbstractRecordable):
 
     __slots__ = [
         "_resources",
@@ -53,7 +55,13 @@ class LIFMachineVertex(
         "_inhibitory_filters",
         "_modulatory_filters",
         "_local_pes_learning_rules",
-        "_ensemble_radius"
+        "_ensemble_radius",
+        "_is_recording",
+        "_bias_with_di",
+        "_encoders_with_gain_shape",
+        "_gain",
+        "_decoders",
+        "_learnt_decoders"
     ]
 
     DATA_REGIONS = Enum(
@@ -77,8 +85,9 @@ class LIFMachineVertex(
             ('ROUTING', 9),
             ('PES', 10),
             ('VOJA', 11),
+            ('RECORDING_INDEXES', 12),
             # only one for SPike Voltage Encoder (from mundy)
-            ('RECORDING', 12)
+            ('RECORDING', 13)
            ])  # 13 from 26
 
     # SDRAM calculation
@@ -100,8 +109,9 @@ class LIFMachineVertex(
             learnt_slice, resources, encoders_with_gain, tau_rc, tau_refactory,
             ensemble_size_in, label, learnt_encoder_filters, input_filters,
             inhibitory_filters, modulatory_filters, pes_learning_rules,
-            ensemble_radius, minimum_buffer_sdram_usage,
-            buffered_sdram_per_timestep, overflow_sdram):
+            ensemble_radius, minimum_buffer_sdram_usage, bias_with_di,
+            buffered_sdram_per_timestep, overflow_sdram, is_recording,
+            encoders_with_gain_shape, gain, decoders, learnt_decoders):
         AbstractNengoMachineVertex.__init__(self, label=label)
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
@@ -125,11 +135,17 @@ class LIFMachineVertex(
         self._modulatory_filters = modulatory_filters
         self._local_pes_learning_rules = pes_learning_rules
         self._ensemble_radius = ensemble_radius
+        self._bias_with_di = bias_with_di
+        self._encoders_with_gain_shape = encoders_with_gain_shape
+        self._gain = gain
+        self._decoders = decoders
+        self._learnt_decoders = learnt_decoders
 
         # recording params
         self._minimum_buffer_sdram_usage = minimum_buffer_sdram_usage
         self._buffered_sdram_per_timestep = buffered_sdram_per_timestep
         self._overflow_sdram = overflow_sdram
+        self._is_recording = is_recording
 
     @property
     def neuron_slice(self):
@@ -147,6 +163,10 @@ class LIFMachineVertex(
     def learnt_slice(self):
         return self._learnt_slice
 
+    @overrides(AbstractRecordable.is_recording)
+    def is_recording(self):
+        return self._is_recording
+
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
         return True
@@ -155,18 +175,23 @@ class LIFMachineVertex(
     def transmits_multicast_signals(self, transmission_params):
         return True
 
-    @inject_items({"graph_mapper": "NengoGraphMapper",
-                   "machine_time_step_in_seconds": "MachineTimeStepInSeconds",
-                   "n_machine_time_steps": "TotalMachineTimeSteps"})
+    @inject_items(
+        {"graph_mapper": "NengoGraphMapper",
+         "machine_time_step_in_seconds": "MachineTimeStepInSeconds",
+         "n_machine_time_steps": "TotalMachineTimeSteps",
+         "time_between_requests": "TimeBetweenRequests",
+         "buffer_size_before_receive": "BufferSizeBeforeReceive"})
     @overrides(
         MachineDataSpecableVertex.generate_machine_data_specification,
         additional_arguments=[
             "graph_mapper", "machine_time_step_in_seconds",
-            "n_machine_time_steps"])
+            "n_machine_time_steps", "time_between_requests",
+            "buffer_size_before_receive"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
-            graph_mapper, machine_time_step_in_seconds, n_machine_time_steps):
+            graph_mapper, machine_time_step_in_seconds, n_machine_time_steps,
+            time_between_requests, buffer_size_before_receive):
 
         # get the associated app vertex.
         app_vertex = graph_mapper.get_application_vertex(self)
@@ -208,17 +233,77 @@ class LIFMachineVertex(
         # process recording region
         spec.switch_write_focus(self.DATA_REGIONS.RECORDING.value)
         self._write_recording_region(
-            spec, iptags, n_machine_time_steps, app_vertex)
+            spec, iptags, n_machine_time_steps, app_vertex,
+            time_between_requests, buffer_size_before_receive)
+
+        # process recording index region
+        spec.switch_write_focus(self.DATA_REGIONS.RECORDING_INDEXES.value)
+        self._write_recording_region_indexes(spec, app_vertex)
+
+        # process matrix regions
+        self._process_matrix_regions(spec)
 
         spec.end_specification()
 
+    def _process_matrix_regions(self, spec):
+        spec.switch_write_focus(self.DATA_REGIONS.ENCODER.value)
+        spec.write_array(
+            helpful_functions.convert_numpy_array_to_s16_15(
+                self._encoders_with_gain), data_type=DataType.INT32)
+
+        spec.switch_write_focus(self.DATA_REGIONS.BIAS.value)
+        spec.write_array(
+            helpful_functions.convert_numpy_array_to_s16_15(
+                self._bias_with_di), data_type=DataType.INT32)
+
+        spec.switch_write_focus(self.DATA_REGIONS.GAIN.value)
+        spec.write_array(
+            helpful_functions.convert_numpy_array_to_s16_15(
+                self._gain), data_type=DataType.INT32)
+
+        if self._decoders.nbytes != 0:
+            spec.switch_write_focus(self.DATA_REGIONS.DECODER.value)
+            spec.write_array(
+                helpful_functions.convert_numpy_array_to_s16_15(
+                    self._decoders), data_type=DataType.INT32)
+
+        if self._learnt_decoders.nbytes != 0:
+            spec.switch_write_focus(self.DATA_REGIONS.LEARNT_DECODER.value)
+            spec.write_array(
+                helpful_functions.convert_numpy_array_to_s16_15(
+                    self._learnt_decoders), data_type=DataType.INT32)
+
+    def _write_recording_region_indexes(self, spec, app_vertex):
+        recording_regions_indexes = app_vertex.\
+            get_possible_probeable_variables()
+        # store the reocrding field indexes
+        spec.write_value(
+            recording_regions_indexes.index(constants.RECORD_SPIKES_FLAG))
+        spec.write_value(
+            recording_regions_indexes.index(constants.RECORD_VOLTAGE_FLAG))
+        spec.write_value(
+            recording_regions_indexes.index(constants.SCALED_ENCODERS_FLAG))
+        spec.write_value(
+            recording_regions_indexes.index(constants.RECORD_OUTPUT_FLAG))
+
+        # if the decoder output flag is in there, add it.
+        if constants.DECODER_OUTPUT_FLAG in recording_regions_indexes:
+            spec.write_value(
+                recording_regions_indexes.index(constants.DECODER_OUTPUT_FLAG))
+        else:
+            spec.write_value(-1, data_type=DataType.INT32)
+
     def _write_recording_region(
-            self, spec, ip_tags, n_machine_time_steps, app_vertex):
+            self, spec, ip_tags, n_machine_time_steps, app_vertex,
+            time_between_requests, buffer_size_before_receive):
         """
         
         :param spec: 
         :param ip_tags: 
         :param n_machine_time_steps: 
+        :param app_vertex: 
+        :param time_between_requests: 
+        :param buffer_size_before_receive: 
         :return: 
         """
         recorded_region_sizes = recording_utilities.get_recorded_region_sizes(
@@ -226,8 +311,8 @@ class LIFMachineVertex(
                 self._neuron_slice, n_machine_time_steps),
             app_vertex.maximum_sdram_for_buffering)
         spec.write_array(recording_utilities.get_recording_header_array(
-            recorded_region_sizes, app_vertex.time_between_requests,
-            app_vertex.buffer_size_before_receive, ip_tags))
+            recorded_region_sizes, time_between_requests,
+            buffer_size_before_receive, ip_tags))
 
     def _write_pes_region(self, spec, app_vertex):
         """
@@ -325,7 +410,7 @@ class LIFMachineVertex(
 
         spec.write_value(self._neuron_slice.n_atoms)
         spec.write_value(self._ensemble_size_in)
-        spec.write_value(self._encoders_with_gain.shape[1])
+        spec.write_value(self._encoders_with_gain_shape)
         spec.write_value(app_vertex.n_neurons)
         spec.write_value(len(graph_mapper.get_machine_vertices(app_vertex)))
         spec.write_value(self._sub_population_id)
@@ -433,6 +518,33 @@ class LIFMachineVertex(
             constants.BYTE_TO_WORD_MULTIPLIER,
             label="ensemble params")
 
+        # encoder region
+        spec.reserve_memory_region(
+            region=self.DATA_REGIONS.ENCODER.value,
+            size=self._encoders_with_gain.nbytes, label="encoder region")
+
+        # reserve bias region
+        spec.reserve_memory_region(
+            region=self.DATA_REGIONS.BIAS.value,
+            size=self._bias_with_di.nbytes, label="encoder region")
+
+        # reserve gain region
+        spec.reserve_memory_region(
+            region=self.DATA_REGIONS.GAIN.value,
+            size=self._gain.nbytes, label="gain region")
+
+        # reserve decoders region
+        if self._decoders.nbytes != 0:
+            spec.reserve_memory_region(
+                region=self.DATA_REGIONS.DECODER.value,
+                size=self._decoders.nbytes, label="decoder region")
+
+        # reserve learnt decoder region
+        if self._learnt_decoders.nbytes != 0:
+            spec.reserve_memory_region(
+                region=self.DATA_REGIONS.LEARNT_DECODER.value,
+                size=self._learnt_decoders.nbytes, label="learnt decoder region")
+
         # reserve filter region
         spec.reserve_memory_region(
             self.DATA_REGIONS.FILTERS.value,
@@ -478,17 +590,26 @@ class LIFMachineVertex(
 
         # reserve the voja region
         spec.reserve_memory_region(
-            self.DATA_REGIONS.VOJA.value,
-            ((self.VOJA_REGION_N_ELEMENTS +
-              (len(app_vertex.voja_learning_rules) *
-               self.VOJA_REGION_RULE_N_ELEMENT)) *
-             constants.BYTE_TO_WORD_MULTIPLIER))
+            region=self.DATA_REGIONS.VOJA.value,
+            size=((self.VOJA_REGION_N_ELEMENTS +
+                   (len(app_vertex.voja_learning_rules) *
+                    self.VOJA_REGION_RULE_N_ELEMENT)) *
+                  constants.BYTE_TO_WORD_MULTIPLIER),
+            label="voja region")
 
         # reserve recording region
         spec.reserve_memory_region(
             region=self.DATA_REGIONS.RECORDING.value,
             size=recording_utilities.get_recording_header_size(
-                len(app_vertex.get_possible_probeable_variables())))
+                len(app_vertex.get_possible_probeable_variables())),
+            label="recording region")
+
+        # reserve recording_index region
+        spec.reserve_memory_region(
+            region=self.DATA_REGIONS.RECORDING_INDEXES.value,
+            size=(len(app_vertex.get_possible_probeable_variables()) *
+                  constants.BYTE_TO_WORD_MULTIPLIER),
+            label="recording index region")
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):

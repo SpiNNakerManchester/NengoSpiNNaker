@@ -120,42 +120,6 @@
                 <param_name>nengo_ensemble_profiling_n_samples</param_name>
                 <param_type>NengoEnsembleProfileNumSamples</param_type>
             </parameter>
-            <parameter>
-                <param_name>minimum_buffer_sdram</param_name>
-                <param_type>MinBufferSize</param_type>
-            </parameter>
-            <parameter>
-                <param_name>maximum_sdram_for_sink_vertex_buffing</param_name>
-                <param_type>MaxSinkBuffingSize</param_type>
-            </parameter>
-            <parameter>
-                <param_name>using_auto_pause_and_resume</param_name>
-                <param_type>UsingAutoPauseAndResume</param_type>
-            </parameter>
-            <parameter>
-                <param_name>receive_buffer_host</param_name>
-                <param_type>ReceiveBufferHost</param_type>
-            </parameter>
-            <parameter>
-                <param_name>receive_buffer_port</param_name>
-                <param_type>ReceiveBufferPort</param_type>
-            </parameter>
-            <parameter>
-                <param_name>time_between_requests</param_name>
-                <param_type>TimeBetweenRequests</param_type>
-            </parameter>
-            <parameter>
-                <param_name>buffer_size_before_receive</param_name>
-                <param_type>BufferSizeBeforeReceive</param_type>
-            </parameter>
-            <parameter>
-                <param_name>spike_buffer_max_size</param_name>
-                <param_type>SpikeBufferMaxSize</param_type>
-            </parameter>
-            <parameter>
-                <param_name>variable_buffer_max_size</param_name>
-                <param_type>VariableBufferMaxSize</param_type>
-            </parameter>
         </input_definitions>
         <required_inputs>
             <param_name>nengo_network</param_name>
@@ -167,15 +131,6 @@
             <param_name>nengo_nodes_as_function_of_time</param_name>
             <param_name>nengo_ensemble_profiling</param_name>
             <param_name>nengo_ensemble_profiling_n_samples</param_name>
-            <param_name>minimum_buffer_sdram</param_name>
-            <param_name>maximum_sdram_for_sink_vertex_buffing</param_name>
-            <param_name>using_auto_pause_and_resume</param_name>
-            <param_name>receive_buffer_host</param_name>
-            <param_name>receive_buffer_port</param_name>
-            <param_name>time_between_requests</param_name>
-            <param_name>buffer_size_before_receive</param_name>
-            <param_name>spike_buffer_max_size</param_name>
-            <param_name>variable_buffer_max_size</param_name>
         </required_inputs>
         <outputs>
             <param_type>NengoOperatorGraph</param_type>

@@ -34,8 +34,10 @@ typedef struct lif_states{
 //! \brief Prepare neuron state
 //! \param[in] address: SDRAM address of neuron parameters
 //! \param[in] ensemble: Generic ensemble state
+//! \param[out] sdram_words_read: the number of words in sdram read
 //! \return bool stating if the state prepare was successful
-bool lif_prepare_state(ensemble_state_t *ensemble, uint32_t *address);
+bool lif_prepare_state(
+    ensemble_state_t *ensemble, uint32_t *address, uint32_t *sdram_words_read);
 
 //! \brief Get the refractory counter for a given neuron
 //! \param[in] neuron: Index of the neuron to simulate
@@ -65,10 +67,10 @@ static inline void neuron_refractory_decrement(
 //! \param[in] neuron: Index of the neuron to simulate
 //! \param[in] state: Pointer to neuron state(s)
 //! \param[in] input: Input to the neuron
-//! \param[in] rec_voltages: Pointer to voltage recording
+//! //! \param[in/out] recorded_variable_values The values to potentially record
 static inline bool neuron_step(
         const uint32_t neuron, const value_t input,
-        const void *state, recording_buffer_t *rec_voltages) {
+        const void *state, state_t *recorded_variable_values) {
 
     // Cast the state to LIF state type
     lif_states_t *lif_state = (lif_states_t *) state;
@@ -88,6 +90,7 @@ static inline bool neuron_step(
     // to indicate that no spike was produced.
     if (bitsk(voltage) <= bitsk(ONE_ACCUM_CONSTANT)){
         lif_state->voltages[neuron] = voltage;
+
         record_voltage(rec_voltages, neuron, voltage);
         return false;
     }

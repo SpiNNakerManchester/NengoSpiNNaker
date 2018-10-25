@@ -254,6 +254,7 @@ class NengoSimulator(SpiNNaker):
     def _extract_data(self):
         for application_vertex in self._nengo_operator_graph.vertices:
             if isinstance(application_vertex, ValueSinkApplicationVertex):
+
                 app_data = numpy.zeros(
                     (self.get_generated_output("RunTime"),
                      application_vertex.size_in), dtype=numpy.float)

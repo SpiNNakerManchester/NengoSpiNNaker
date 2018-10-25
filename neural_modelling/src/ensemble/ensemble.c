@@ -3,7 +3,7 @@
 #include <data_specification.h>
 #include <debug.h>
 #include <simulation.h>
-#include <common/nengo_typedefs.h>
+#include <recording.h>
 
 // Ensemble includes
 #include <ensemble/ensemble.h>
@@ -15,6 +15,7 @@
 #include <common/packet_queue.h>
 #include <common/fixed_point.h>
 #include <common/input_filtering.h>
+#include <common/nengo_typedefs.h>
 
 //! the initial learnt vector index to set off the state machine.
 #define INITIAL_LEARNT_VECTOR_INDEX 0
@@ -34,18 +35,14 @@
 //! enum mapping region ids to regions from python
 typedef enum regions {
     SYSTEM, ENSEMBLE_PARAMS, NEURON, ENCODER, BIAS, GAIN, DECODER,
-    LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, RECORDING
+    LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, RECORDING_INDEXES,
+    RECORDING
 } regions;
 
 //! enum mapping ensemble params in sdram from python
 typedef enum ensemble_params_region_elements {
     START_ENSEMBLE_PARAMS = 0, START_LEARNT_INPUT_SIGNALS = 16
 } ensemble_params_region_elements;
-
-//! enum mapping ensemble params in sdram from python after learnt encoders
-typedef enum ensemble_params_region_elements_after_learnt_encoders_addresses {
-    exp_dt_over_tau_rc
-}
 
 //! callback priorities
 typedef enum callback_priorities{
@@ -145,6 +142,15 @@ uint spikes_write_size;
 
 //! The recording flags
 static uint32_t recording_flags = 0;
+
+//! the index for voltage recording
+uint voltage_recording_index = 0;
+
+//! the index for scaled encoders recording
+uint scaled_encoders_recording_index = 0;
+
+//! the index for the output recording
+uint output_recording_index = 0;
 
 //! \brief Simulate neurons and slowly dribble a spike vector out into a
 //! given array. This function will also apply any encoder learning rules.
@@ -747,15 +753,15 @@ static bool ensemble_param_read(address_t region_address){
     }
 
     // copy in pointers for learnt input vector sdram (local and global)
-    uint learnt_vector_pointer = START_LEARNT_INPUT_SIGNALS;
+    uint sdram_pointer = START_LEARNT_INPUT_SIGNALS;
     uint learnt_vector_local_pointer = START_LEARNT_INPUT_SIGNALS + 1;
     for (uint32_t learnt_input_signal=0;
             learnt_input_signal < params->n_learnt_input_signals;
             learnt_input_signal ++) {
         sdram_learnt_input_vector_addresses[learnt_input_signal] =
-            region_address[learnt_vector_pointer];
+            region_address[sdram_pointer];
         sdram_learnt_input_vector_local[learnt_vector_local_pointer];
-        learnt_vector_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
+        sdram_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
         learnt_vector_local_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
     }
 
@@ -805,6 +811,24 @@ static bool ensemble_param_read(address_t region_address){
             sdram_learnt_input_vector_addresses[input_signal],
             sdram_learnt_input_vector_local[input_signal]);
     }
+
+    // read in the lif params
+    uint32_t words_read = 0;
+    lif_prepare_state(
+        &ensemble, &region_address[sdram_pointer], &words_read);
+    sdram_pointer += words_read;
+
+    // read in pop length data
+    uint poplength_size = sizeof(uint32_t) * params->n_populations;
+    ensemble.population_lengths = spin1_malloc(poplength_size);
+    if (ensemble.population_lengths == NULL){
+        log_error("cannot allocate dtcm for ensmeble population lengths");
+        return false;
+    }
+    spin1_memcpy(
+        ensemble.population_lengths, &region_address[sdram_pointer],
+        poplength_size);
+
     return true;
 }
 
@@ -961,6 +985,16 @@ bool ensemble_setup_matrix_based_regions(address_t dsg_address){
         data_specification_get_region(LEARNT_DECODER, dsg_address),
         learnt_decoder_words * sizeof(value_t));
     return true;
+}
+
+//! \brief Initialises the recording parts of the model
+//! \param[in] recording_address: the address in SDRAM where to store
+//! recordings
+//! \return True if recording initialisation is successful, false otherwise
+static bool initialise_recording(address_t recording_address){
+    bool success = recording_initialize(recording_address, &recording_flags);
+    log_debug("Recording flags = 0x%08x", recording_flags);
+    return success;
 }
 
 //! Initialises the model by reading in the regions and checking recording

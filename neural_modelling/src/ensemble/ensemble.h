@@ -1,6 +1,8 @@
 #ifndef NEURAL_MODELLING_ENSEMBLE_H
 #define NEURAL_MODELLING_ENSEMBLE_H
 
+#include <common/nengo_typedefs.h>
+
 //! Parameters for the locally represented neurons this is all data stored
 //! within the system region.
 typedef struct ensemble_parameters{

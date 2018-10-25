@@ -28,12 +28,20 @@ class AbstractProbeable(object):
         """
 
     @abstractmethod
-    def get_data_for_variable(self, variable):
+    def get_data_for_variable(
+            self, variable, n_machine_time_steps, placements,
+            graph_mapper, buffer_manager, machine_time_step):
         """
         
         :param variable: 
+        :param n_machine_time_steps: 
+        :param placements: 
+        :param graph_mapper: 
+        :param buffer_manager: 
+        :param machine_time_step: 
         :return: 
         """
+        # pylint: disable=too-many-arguments
 
     @abstractmethod
     def get_possible_probeable_variables(self):

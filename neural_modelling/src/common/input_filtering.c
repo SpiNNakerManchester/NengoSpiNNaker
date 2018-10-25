@@ -1,13 +1,13 @@
 #include <common/nengo_typedefs.h>
 #include <common/input_filtering.h>
 #include <common/fixed_point.h>
+#include <common/constants.h>
 #include <string.h>
 #include <debug.h>
 #include "common-typedefs.h"
 
 // Filter specification flags
 #define LATCHING 1
-#define BYTES_TO_WORD_CONVERSION 4
 #define LATCHING_MASK 0xFFFFFFFF
 #define NOT_LATCHING_MASK 0x00000000
 #define BASIC_FILTER_PARAMETER_SIZE 2

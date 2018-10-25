@@ -9,6 +9,8 @@ from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
     nengo_partitioner import NengoPartitioner
 from pacman.executor.injection_decorator import inject_items
 from pacman.model.graphs.common import Slice
+from spinn_front_end_common.interface.buffer_management.buffer_models import \
+    AbstractReceiveBuffersToHost
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe.abstracts.abstract_nengo_application_vertex import \
     AbstractNengoApplicationVertex
@@ -17,7 +19,8 @@ from nengo_spinnaker_gfe.machine_vertices.value_sink_machine_vertex\
     import ValueSinkMachineVertex
 
 
-class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
+class ValueSinkApplicationVertex(
+        AbstractNengoApplicationVertex, AbstractReceiveBuffersToHost):
 
     __slots__ = [
         # the number of atoms this vertex is processing
@@ -26,9 +29,11 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
 
     MAX_WIDTH = 16
 
-    def __init__(self, label, rng, size_in, seed):
+    def __init__(
+            self, label, rng, size_in, seed):
         AbstractNengoApplicationVertex.__init__(
             self, label=label, rng=rng, seed=seed)
+        AbstractReceiveBuffersToHost.__init__(self)
         self._size_in = size_in
 
     @property
@@ -96,3 +101,15 @@ class ValueSinkApplicationVertex(AbstractNengoApplicationVertex):
             machine_graph.add_vertex(machine_vertex)
             graph_mapper.add_vertex_mapping(
                 machine_vertex=machine_vertex, application_vertex=self)
+
+    def get_minimum_buffer_sdram_usage(self):
+        pass
+
+    def get_recording_region_base_address(self, txrx, placement):
+        pass
+
+    def get_recorded_region_ids(self):
+        pass
+
+    def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
+        pass

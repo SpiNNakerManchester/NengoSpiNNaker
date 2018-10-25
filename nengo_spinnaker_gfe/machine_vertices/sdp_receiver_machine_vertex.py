@@ -12,7 +12,8 @@ from pacman.executor.injection_decorator import inject_items
 from pacman.model.resources import ResourceContainer, SDRAMResource, \
     DTCMResource, CPUCyclesPerTickResource, ReverseIPtagResource
 from spinn_front_end_common.abstract_models import \
-    AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition
+    AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition, \
+    AbstractRecordable
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.simulation import simulation_utilities
@@ -25,7 +26,7 @@ from spinnman.messages.sdp import SDPMessage, SDPHeader
 class SDPReceiverMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition,
-        AbstractTransmitsMulticastSignals):
+        AbstractTransmitsMulticastSignals, AbstractRecordable):
 
     __slots__ = [
         # keys to transmit with i think
@@ -60,6 +61,7 @@ class SDPReceiverMachineVertex(
         AbstractHasAssociatedBinary.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
         AbstractProvidesNKeysForPartition.__init__(self)
+        AbstractRecordable.__init__(self)
 
         # TODO WHY DO WE PARTITION OVER OUTGOING PARTITIONS!!!
         self._managing_app_outgoing_partition = outgoing_partition
@@ -75,6 +77,10 @@ class SDPReceiverMachineVertex(
                 "Connection is too wide to transmit to SpiNNaker. "
                 "Consider breaking the connection up or making the "
                 "originating node a function of time Node.")
+
+    @overrides(AbstractRecordable.is_recording)
+    def is_recording(self):
+        return True
 
     @overrides(AbstractProvidesNKeysForPartition.get_n_keys_for_partition)
     def get_n_keys_for_partition(self, partition, graph_mapper):
@@ -142,7 +148,7 @@ class SDPReceiverMachineVertex(
         self._write_keys_region(spec, routing_info, graph_mapper, machine_graph)
         spec.switch_write_focus(self.DATA_REGIONS.SDP_PORT.value)
         spec.write_value(self.SDP_PORT)
-        spec.switc_write_focus(self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value)
+        spec.switch_write_focus(self.DATA_REGIONS.MC_TRANSMISSION_PARAMS.value)
         self._write_mc_transmission_params(
             spec, graph_mapper, machine_time_step, time_scale_factor)
         spec.end_specification()
@@ -174,8 +180,8 @@ class SDPReceiverMachineVertex(
         partition_routing_info = routing_info.get_routing_info_from_partition(
             machine_outgoing_partition)
         spec.write_value(self._n_keys)
-        for key in partition_routing_info.get_keys(n_keys=self._n_keys):
-            spec.write_value(key)
+        #for key in partition_routing_info.get_keys(n_keys=self._n_keys):
+        #    spec.write_value(key)
 
     def _reserve_memory_regions(self, spec):
         spec.reserve_memory_region(
