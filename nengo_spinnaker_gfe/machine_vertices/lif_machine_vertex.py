@@ -95,6 +95,7 @@ class LIFMachineVertex(
     SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR = 2
     NEURON_PARAMS_ITEMS = 2
     POP_LENGTH_CONSTANT_ITEMS = 1
+    N_RECORDING_VARIABLE_SIZE = 1
     PES_REGION_N_ELEMENTS = 1
     VOJA_REGION_N_ELEMENTS = 2
     VOJA_REGION_RULE_N_ELEMENT = 4
@@ -273,18 +274,17 @@ class LIFMachineVertex(
                 helpful_functions.convert_numpy_array_to_s16_15(
                     self._learnt_decoders), data_type=DataType.INT32)
 
-    def _write_recording_region_indexes(self, spec, app_vertex):
+    @staticmethod
+    def _write_recording_region_indexes(spec, app_vertex):
         recording_regions_indexes = app_vertex.\
             get_possible_probeable_variables()
-        # store the reocrding field indexes
+        # store the recording field indexes
         spec.write_value(
             recording_regions_indexes.index(constants.RECORD_SPIKES_FLAG))
         spec.write_value(
             recording_regions_indexes.index(constants.RECORD_VOLTAGE_FLAG))
         spec.write_value(
             recording_regions_indexes.index(constants.SCALED_ENCODERS_FLAG))
-        spec.write_value(
-            recording_regions_indexes.index(constants.RECORD_OUTPUT_FLAG))
 
         # if the decoder output flag is in there, add it.
         if constants.DECODER_OUTPUT_FLAG in recording_regions_indexes:
@@ -292,6 +292,16 @@ class LIFMachineVertex(
                 recording_regions_indexes.index(constants.DECODER_OUTPUT_FLAG))
         else:
             spec.write_value(-1, data_type=DataType.INT32)
+
+        # figure how many are active that are not the spikes recorder
+        n_active_recording_regions = 0
+        for variable in app_vertex.get_possible_probeable_variables():
+            if variable != constants.RECORD_SPIKES_FLAG:
+                if app_vertex.is_set_probeable_variable(variable):
+                    n_active_recording_regions += 1
+
+        # add how many active there are
+        spec.write_value(n_active_recording_regions)
 
     def _write_recording_region(
             self, spec, ip_tags, n_machine_time_steps, app_vertex,
@@ -543,7 +553,8 @@ class LIFMachineVertex(
         if self._learnt_decoders.nbytes != 0:
             spec.reserve_memory_region(
                 region=self.DATA_REGIONS.LEARNT_DECODER.value,
-                size=self._learnt_decoders.nbytes, label="learnt decoder region")
+                size=self._learnt_decoders.nbytes,
+                label="learnt decoder region")
 
         # reserve filter region
         spec.reserve_memory_region(
@@ -605,10 +616,14 @@ class LIFMachineVertex(
             label="recording region")
 
         # reserve recording_index region
+        possible_recordable = app_vertex.get_possible_probeable_variables()
+        n_elements = self.N_RECORDING_VARIABLE_SIZE + len(possible_recordable)
+        if constants.DECODER_OUTPUT_FLAG not in possible_recordable:
+            n_elements += 1
+
         spec.reserve_memory_region(
             region=self.DATA_REGIONS.RECORDING_INDEXES.value,
-            size=(len(app_vertex.get_possible_probeable_variables()) *
-                  constants.BYTE_TO_WORD_MULTIPLIER),
+            size=n_elements * constants.BYTE_TO_WORD_MULTIPLIER,
             label="recording index region")
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)

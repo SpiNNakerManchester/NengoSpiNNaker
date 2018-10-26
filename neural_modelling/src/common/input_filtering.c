@@ -445,7 +445,7 @@ bool input_filtering_initialise_routes(
                  filters->n_routes * sizeof(if_route_t));
 
     // update n words written
-    sdram_words_read = STARTS_OF_DATA + (
+    *sdram_words_read = STARTS_OF_DATA + (
         (filters->n_routes * sizeof(if_route_t)) / BYTES_TO_WORD_CONVERSION);
 
     // debug print

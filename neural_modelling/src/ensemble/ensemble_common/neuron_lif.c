@@ -1,6 +1,8 @@
 #include "neuron_lif.h"
 #include <debug.h>
 #include <common/constants.h>
+#include "spin1_api.h"
+#include <string.h>
 
 //! initial state for the voltages and refractory states.
 #define INITIAL_STATE 0
@@ -13,6 +15,9 @@
 bool lif_prepare_state(
         ensemble_state_t *ensemble, uint32_t *address,
         uint32_t *sdram_words_read) {
+    // to shut up compiler
+    use(sdram_words_read);
+
     // Get the number of neurons
     uint32_t n_neurons = ensemble->parameters.n_neurons;
 
@@ -42,6 +47,7 @@ bool lif_prepare_state(
 
     // Copy in LIF parameters
     spin1_memcpy(&state->parameters, address, sizeof(lif_parameters_t));
-    sdram_words_read = int(sizeof(lif_parameters_t) / BYTES_TO_WORD_CONVERSION);
+    *sdram_words_read = (int) (
+        sizeof(lif_parameters_t) / BYTES_TO_WORD_CONVERSION);
     return true;
 }

@@ -20,6 +20,15 @@ class AbstractProbeable(object):
         """
 
     @abstractmethod
+    def is_set_probeable_variable(self, variable):
+        """ informs user if the variable is set to be recorded
+        
+        :param variable: the variable to check
+        :return: bool
+        """
+
+
+    @abstractmethod
     def set_probeable_variable(self, variable):
         """
         

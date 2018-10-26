@@ -62,15 +62,28 @@ class ValueSourceApplicationVertex(
             for attribute in self.PROBEABLE_ATTRIBUTES:
                 self._recording_of[attribute] = False
 
+    @overrides(AbstractProbeable.set_probeable_variable)
     def set_probeable_variable(self, variable):
         if self.can_probe_variable(variable):
             self._recording_of[variable] = not self._recording_of[variable]
 
+    @overrides(AbstractProbeable.can_probe_variable)
     def can_probe_variable(self, variable):
         return variable in self._recording_of
 
-    def get_data_for_variable(self, variable):
+    @overrides(AbstractProbeable.get_data_for_variable)
+    def get_data_for_variable(
+            self,  variable, n_machine_time_steps, placements,
+            graph_mapper, buffer_manager, machine_time_step):
         pass
+
+    @overrides(AbstractProbeable.get_possible_probeable_variables)
+    def get_possible_probeable_variables(self):
+        return self.PROBEABLE_ATTRIBUTES
+
+    @overrides(AbstractProbeable.is_set_probeable_variable)
+    def is_set_probeable_variable(self, variable):
+        return self._recording_of[variable]
 
     @property
     def nengo_output_function(self):
@@ -83,10 +96,6 @@ class ValueSourceApplicationVertex(
     @property
     def update_period(self):
         return self._update_period
-
-    @property
-    def recording_of(self):
-        return self._recording_of
 
     @inject_items({
         "operator_graph": "NengoOperatorGraph",
@@ -144,7 +153,7 @@ class ValueSourceApplicationVertex(
                 recording_output, this_cores_matrix,
                 label="{} for {}".format(vertex_partition_slice, self._label))
 
-            # tracker for rnadom back off
+            # tracker for random back off
             ValueSourceApplicationVertex.n_value_source_machine_vertices += 1
 
             resource_tracker.allocate_resources(

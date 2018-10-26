@@ -3,6 +3,7 @@
 
 #include "spin1_api.h"
 #include "common-typedefs.h"
+#include <nengo_typedefs.h>
 
 //! An input accumulator.
 typedef struct _if_accumulator_t

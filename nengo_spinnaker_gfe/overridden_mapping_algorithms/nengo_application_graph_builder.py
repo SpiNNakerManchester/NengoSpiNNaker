@@ -313,8 +313,8 @@ class NengoApplicationGraphBuilder(object):
                 new_app_vertex = ValueSinkApplicationVertex(
                     rng=random_number_generator,
                     label="Sink vertex for neurons {} for probeable "
-                          "attribute {}".format(nengo_probe.label,
-                                                nengo_probe.attr),
+                          "attribute {}".format(
+                               nengo_probe.label, nengo_probe.attr),
                     size_in=int(nengo_probe.size_in),
                     seed=helpful_functions.get_seed(nengo_probe))
 

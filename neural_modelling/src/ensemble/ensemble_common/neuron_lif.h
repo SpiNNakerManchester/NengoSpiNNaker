@@ -67,50 +67,49 @@ static inline void neuron_refractory_decrement(
 //! \param[in] neuron: Index of the neuron to simulate
 //! \param[in] state: Pointer to neuron state(s)
 //! \param[in] input: Input to the neuron
-//! //! \param[in/out] recorded_variable_values The values to potentially record
+//! \param[in/out] voltage The voltage to potentially record
+//! \return bool saying if the neuron spiked
 static inline bool neuron_step(
         const uint32_t neuron, const value_t input,
-        const void *state, state_t *recorded_variable_values) {
+        const void *state, value_t *voltage) {
 
     // Cast the state to LIF state type
     lif_states_t *lif_state = (lif_states_t *) state;
 
     // Compute the change in voltage
-    value_t voltage = lif_state->voltages[neuron];
+    *voltage = lif_state->voltages[neuron];
     value_t delta_v =
-        (input - voltage) * lif_state->parameters.exp_dt_over_tau_rc;
+        (input - *voltage) * lif_state->parameters.exp_dt_over_tau_rc;
 
     // Update the voltage, but clip it to 0.0
-    voltage += delta_v;
-    if (bitsk(voltage) < bitsk(ZERO_ACCUM_CONSTANT)){
-        voltage = ZERO_ACCUM_CONSTANT;
+    *voltage += delta_v;
+    if (bitsk(*voltage) < bitsk(ZERO_ACCUM_CONSTANT)){
+        *voltage = ZERO_ACCUM_CONSTANT;
     }
 
     // If the neuron hasn't fired then simply store the voltage and return false
     // to indicate that no spike was produced.
-    if (bitsk(voltage) <= bitsk(ONE_ACCUM_CONSTANT)){
-        lif_state->voltages[neuron] = voltage;
-
-        record_voltage(rec_voltages, neuron, voltage);
+    if (bitsk(*voltage) <= bitsk(ONE_ACCUM_CONSTANT)){
+        lif_state->voltages[neuron] = *voltage;
         return false;
     }
 
     // The neuron has spiked, so we prepare to set the voltage and refractory
     // period for the next simulation period.
     uint8_t tau_ref = (uint8_t) lif_state->parameters.tau_ref;
-    voltage -= ONE_ACCUM_CONSTANT;
+    *voltage -= ONE_ACCUM_CONSTANT;
 
     // If the overshoot was particularly big further decrease the neuron voltage
     // and refractory period.
-    if (bitsk(voltage) > bitsk(TWO_ACCUM_CONSTANT)){
+    if (bitsk(*voltage) > bitsk(TWO_ACCUM_CONSTANT)){
         tau_ref--;
-        voltage -= delta_v;
+        *voltage -= delta_v;
     }
 
     // Store the refractory period and voltage, return true to indicate that a
     // spike occurred.
     lif_state->refractory[neuron] = tau_ref;
-    lif_state->voltages[neuron] = voltage;
+    lif_state->voltages[neuron] = *voltage;
     return true;
 }
 

@@ -1,11 +1,20 @@
 #include "voja.h"
-#include "stdfix_full-iso.h"
+#include <stdfix-full-iso.h>
 #include <debug.h>
 
 //! enum mapping region ids to regions in python
 typedef enum voja_initialize {
     N_LEARNING_RULES, ONE_OVER_RADIUS, START_OF_VOJA_RULES
 } voja_initialize;
+
+//! number of voja learning rules
+uint32_t g_num_voja_learning_rules = 0;
+
+//! param 1/radius
+value_t g_voja_one_over_radius = CONSTANT_ERROR_RATE;
+
+//! set of voja learning rules parameters
+voja_parameters_t *g_voja_learning_rules = NULL;
 
 
 //! \brief Copy in data controlling the Voja learning
@@ -31,7 +40,7 @@ bool voja_initialise(address_t address){
         }
 
         // Copy learning rules from region into new array
-        memcpy(g_voja_learning_rules,
+        spin1_memcpy(g_voja_learning_rules,
             &address[START_OF_VOJA_RULES],
             g_num_voja_learning_rules * sizeof(voja_parameters_t));
 

@@ -1,5 +1,6 @@
 #include "pes.h"
 #include <debug.h>
+#include <spin1_api.h>
 
 //! Structure containing parameters and state required for PES learning
 typedef struct pes_parameters_t
@@ -154,7 +155,8 @@ bool pes_initialise(address_t address){
         }
 
         // Copy learning rules from region into new array
-        memcpy(g_pes_learning_rules, &address[START_LEARNING_RULES],
+        spin1_memcpy(
+            g_pes_learning_rules, &address[START_LEARNING_RULES],
             g_num_pes_learning_rules * sizeof(pes_parameters_t));
 
         // Display debug

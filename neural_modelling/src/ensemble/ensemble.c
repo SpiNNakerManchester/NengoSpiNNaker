@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <simulation.h>
 #include <recording.h>
+#include <bit_field.h>
+#include <out_spikes.h>
 
 // Ensemble includes
 #include <ensemble/ensemble.h>
@@ -16,6 +18,9 @@
 #include <common/fixed_point.h>
 #include <common/input_filtering.h>
 #include <common/nengo_typedefs.h>
+
+// declare spin1_wfi
+void spin1_wfi();
 
 //! the initial learnt vector index to set off the state machine.
 #define INITIAL_LEARNT_VECTOR_INDEX 0
@@ -43,6 +48,13 @@ typedef enum regions {
 typedef enum ensemble_params_region_elements {
     START_ENSEMBLE_PARAMS = 0, START_LEARNT_INPUT_SIGNALS = 16
 } ensemble_params_region_elements;
+
+//! enum mapping recording index points in sdram from python
+typedef enum recording_region_index_positions {
+    RECORD_SPIKES_INDEX = 0, RECORD_VOLTAGE_INDEX = 1,
+    RECORD_ENCODERS_INDEX = 2, RECORD_OUTPUT_INDEX = 3,
+    RECORD_DECODERS_INDEX = 4, N_RECORDING_VARIABLES = 5
+} recording_region_index_positions;
 
 //! callback priorities
 typedef enum callback_priorities{
@@ -144,13 +156,38 @@ uint spikes_write_size;
 static uint32_t recording_flags = 0;
 
 //! the index for voltage recording
-uint voltage_recording_index = 0;
+int voltage_recording_index = -1;
 
 //! the index for scaled encoders recording
-uint scaled_encoders_recording_index = 0;
+int scaled_encoders_recording_index = -1;
 
 //! the index for the output recording
-uint output_recording_index = 0;
+int output_recording_index = -1;
+
+//! the index for the spike recording
+int spikes_recording_index = -1;
+
+//! the index for the decoders recording
+int decoder_recording_index = -1;
+
+//! number of possible recording variables
+uint n_recording_variables = 0;
+
+//! flag to ensure out spikes finished dma before restarting
+static uint32_t n_recordings_outstanding = 0;
+
+//! The values of the recorded variables
+static uint16_t * voltage_recording_values;
+
+//! \brief callback when recording dma for variables finished
+void recording_done_callback() {
+    n_recordings_outstanding -= 1;
+}
+
+//! \brief resume callback to set recording stuff back
+void resume_callback(){
+    recording_reset();
+}
 
 //! \brief Simulate neurons and slowly dribble a spike vector out into a
 //! given array. This function will also apply any encoder learning rules.
@@ -169,6 +206,15 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
 
     // Cache for local spike vector
     uint32_t local_spikes = 0x0;
+
+    // Set up an array for storing the recorded variable values
+    value_t *voltage = 0;
+
+    // Wait until recordings have completed, to ensure the recording space
+    // can be re-written
+    while (n_recordings_outstanding > 0) {
+        spin1_wfi();
+    }
 
     // Update each neuron in turn
     for (uint32_t n = 0; n < ensemble->parameters.n_neurons; n++) {
@@ -192,8 +238,9 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // **NOTE** idea here is that by interspersing these between
             // encoding operations, write buffer should have time to be
             // written out
-            record_learnt_encoders(
-                &record_encoders, n_dims, learnt_encoder_vector);
+            recording_record(
+                scaled_encoders_recording_index, &learnt_encoder_vector,
+                sizeof(value_t) * n_dims);
 
             // If neuron's not in refractory period,
             // apply input encoded by learnt encoders
@@ -224,20 +271,20 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             }
 
             // Perform the neuron update
-            if (neuron_step(
-                    n, neuron_input, ensemble->state, &record_voltages)) {
+            if (neuron_step(n, neuron_input, ensemble->state, voltage)) {
                 // The neuron fired, record the fact in the spike vector that
                 // we're constructing.
                 local_spikes |= bit;
-                record_spike(&record_spikes, n);
+                out_spikes_set_spike(n);
 
                 // Apply effect of neuron spiking to filtered activities
                 //filtered_activity_neuron_spiked(n);
 
                 // Update non-filtered Voja learning
+                value_t** const_learnt_input = ensemble->learnt_input;
                 voja_neuron_spiked(
                     encoder_vector, ensemble->gain[n], n_dims,
-                    &modulatory_filters, ensemble->learnt_input);
+                    &modulatory_filters, (const value_t**) const_learnt_input);
             }
         }
 
@@ -257,6 +304,8 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // Reset the local spike vector
             local_spikes = 0x0;
         }
+
+        voltage_recording_values[n] = *voltage;
     }
 
     // Copy any remaining spikes into the specified spike vector
@@ -267,8 +316,16 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
     }
 
     // Finish up the recording
-    record_buffer_flush(&record_voltages);
-    record_buffer_flush(&record_spikes);
+    n_recordings_outstanding += 1;
+    out_spikes_record(
+        spikes_recording_index, time,
+        get_bit_field_size(ensemble->parameters.n_neurons),
+        recording_done_callback);
+    n_recordings_outstanding += 1;
+    recording_record_and_notify(
+        voltage_recording_index, voltage_recording_values,
+        sizeof(uint16_t) * ensemble->parameters.n_neurons,
+        recording_done_callback);
 }
 
 
@@ -408,7 +465,7 @@ static inline void decode_output_and_transmit(
 //!        sets off user event.
 //! \param[in] key: the mc key
 //! \param[in] payload: the mc payload
-void mcpl_received(uint key, uint payload) {
+void multicast_payload_callback(uint key, uint payload) {
     // Queue the packet for later processing, if no processing is scheduled then
     // trigger the queue processor.
     if (packet_queue_push(&packets, key, payload)) {
@@ -427,8 +484,8 @@ void mcpl_received(uint key, uint payload) {
 //! \brief extracts packets from queue and applies input filters
 void process_queue() {
 
-    uint32_t offset = ensemble.parameters.input_subspace.offset;
-    uint32_t max_dim_sub_one = ensemble.parameters.input_subspace.n_dims - 1;
+    uint32_t offset = ensemble.parameters.input_subspace_offset;
+    uint32_t max_dim_sub_one = ensemble.parameters.input_subspace_n_dims - 1;
 
     // Continuously remove packets from the queue and include them in filters
     while (packet_queue_not_empty(&packets))
@@ -482,10 +539,10 @@ void user_event(uint arg0, uint arg1) {
 //!        output to SDRAM
 static inline void write_filtered_vector() {
     // Compute the size of the transfer
-    uint size = sizeof(value_t) * ensemble.parameters.input_subspace.n_dims;
+    uint size = sizeof(value_t) * ensemble.parameters.input_subspace_n_dims;
 
     spin1_dma_transfer(
-        WRITE_FILTERED_VECTOR, sdram_input_vector_local,
+        WRITE_FILTERED_VECTOR, ensemble.parameters.sdram_input_vector_local,
         ensemble.input_local, DMA_WRITE, size);
 }
 
@@ -497,7 +554,7 @@ static inline void write_filtered_learnt_vector(uint32_t signal) {
     dma_learnt_vector = signal;
 
     // Compute the size of the transfer
-    uint size = sizeof(value_t) * ensemble.parameters.input_subspace.n_dims;
+    uint size = sizeof(value_t) * ensemble.parameters.input_subspace_n_dims;
 
     spin1_dma_transfer(
         WRITE_FILTERED_LEARNT_VECTOR, sdram_learnt_input_vector_local[signal],
@@ -593,7 +650,7 @@ void dma_complete_read_whole_vector(uint transfer_id, uint tag){
     // Schedule writing out the spike vector
     spin1_dma_transfer(
         WRITE_SPIKE_VECTOR,         // Tag
-        sdram_spikes_vector_local,  // SDRAM address
+        ensemble.parameters.sdram_spikes_vector_local,  // SDRAM address
         ensemble.spikes,            // DTCM addess
         DMA_WRITE,                  // Direction
         spikes_write_size);
@@ -648,7 +705,7 @@ void dma_complete_write_filtered_vector(uint transfer_id, uint tag){
 //! \param[in] unused: nah
 //! \param[in] timer_count: not useful tracker for how many times the timer tick
 //!                         inturrupt has been called
-void timer_tick(uint timer_count, uint unused) {
+void timer_callback(uint timer_count, uint unused) {
     use(timer_count);
     use(unused);
     time++;
@@ -727,12 +784,15 @@ static bool ensemble_param_read(address_t region_address){
     ensemble_parameters_t *params = &ensemble.parameters;
 
     // read in the params from sdram
-    spin1_memcpy(params, &region_address[START_ENSEMBLE_PARAMS], address),
-                 sizeof(ensemble_parameters_t));
+    spin1_memcpy(
+        params,
+        &region_address[START_ENSEMBLE_PARAMS],
+        sizeof(ensemble_parameters_t));
 
     // update the semaphore sdram addresses
-    sema_input = params->semaphore_base_address;
-    sema_spikes = params->semaphore_base_address + SEMAPHORE_SPIKE_OFFSET;
+    uint8_t *sem_base = (uint8_t *) params->semaphore_base_address;
+    sema_input = sem_base;
+    sema_spikes = sem_base + SEMAPHORE_SPIKE_OFFSET;
 
 
     // Allocate array to hold pointers to SDRAM learnt input vectors
@@ -759,8 +819,9 @@ static bool ensemble_param_read(address_t region_address){
             learnt_input_signal < params->n_learnt_input_signals;
             learnt_input_signal ++) {
         sdram_learnt_input_vector_addresses[learnt_input_signal] =
-            region_address[sdram_pointer];
-        sdram_learnt_input_vector_local[learnt_vector_local_pointer];
+            (value_t*) &region_address[sdram_pointer];
+        sdram_learnt_input_vector_local[learnt_input_signal] =
+            (value_t*) &region_address[learnt_vector_local_pointer];
         sdram_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
         learnt_vector_local_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
     }
@@ -790,17 +851,17 @@ static bool ensemble_param_read(address_t region_address){
     // Loop through learnt input signals and read in as needed
     for(uint32_t input_signal = 0;
             input_signal < params->n_learnt_input_signals; input_signal++) {
-        ensemble.learnt_input[i] =
-            spin1_malloc(sizeof(value_t) * params->n_dims);
-        if (ensemble.learnt_input[i] == NULL){
+        ensemble.learnt_input[input_signal] = spin1_malloc(
+            sizeof(value_t) * params->n_dims);
+        if (ensemble.learnt_input[input_signal] == NULL){
             log_error(
                 "failed to allocate dtcm for learnt input %d", input_signal);
-            retrun false;
+            return false;
         }
 
         // Store local offset
         ensemble.learnt_input_local[input_signal] =
-            &ensemble.learnt_input[input_signal][params->input_subspace.offset];
+            &ensemble.learnt_input[input_signal][params->input_subspace_offset];
 
         log_debug(
             "Learnt input signal %u: learnt_input:%08x, "
@@ -834,9 +895,10 @@ static bool ensemble_param_read(address_t region_address){
 
 //! \brief sets up the spike write size
 void set_spike_write_size() {
+    spikes_write_size = get_bit_field_size(ensemble.parameters.n_neurons);
     // Compute the spike size for writing into SDRAM
-    spikes_write_size = params->n_neurons / BITS_IN_WORD;
-    if (params->n_neurons % BITS_IN_WORD) {
+    spikes_write_size = ensemble.parameters.n_neurons / BITS_IN_WORD;
+    if (ensemble.parameters.n_neurons % BITS_IN_WORD) {
         spikes_write_size++;
     }
     spikes_write_size *= sizeof(uint32_t);
@@ -896,7 +958,7 @@ bool ensemble_setup_routes(address_t address){
 
     // process input filters
     if(!input_filtering_initialise_routes(
-        &input_filters, address, NULL, &words_read)){
+            &input_filters, address, &words_read)){
         return false;
     }
     total_words_read += words_read;
@@ -932,7 +994,8 @@ bool ensemble_setup_routes(address_t address){
 bool ensemble_setup_matrix_based_regions(address_t dsg_address){
     // Copy in encoders
     uint encoder_size =
-        sizeof(value_t) * params->n_neurons * params->encoder_width;
+        sizeof(value_t) * ensemble.parameters.n_neurons *
+        ensemble.parameters.encoder_width;
     ensemble.encoders = spin1_malloc(encoder_size);
     if (ensemble.encoders == NULL){
         log_error("failed to allocate DTCM for ensemble encoders");
@@ -943,7 +1006,7 @@ bool ensemble_setup_matrix_based_regions(address_t dsg_address){
         encoder_size);
 
     // copy in bias
-    uint bias_size = sizeof(value_t) * params->n_neurons;
+    uint bias_size = sizeof(value_t) * ensemble.parameters.n_neurons;
     ensemble.bias = spin1_malloc(bias_size);
     if (ensemble.bias == NULL){
         log_error("failed to allocate DTCM for ensemble bias");
@@ -954,7 +1017,7 @@ bool ensemble_setup_matrix_based_regions(address_t dsg_address){
         bias_size);
 
     // copy in gain
-    uint gain_size = sizeof(value_t) * params->n_neurons;
+    uint gain_size = sizeof(value_t) * ensemble.parameters.n_neurons;
     ensemble.gain = spin1_malloc(gain_size);
     if (ensemble.gain == NULL){
         log_error("failed to allocate DTCM for ensemble gain");
@@ -966,9 +1029,11 @@ bool ensemble_setup_matrix_based_regions(address_t dsg_address){
 
     // copy in decoders and learnt decoders
     const uint32_t decoder_words =
-        params->n_neurons_total * params->n_decoder_rows;
+        ensemble.parameters.n_neurons_total *
+        ensemble.parameters.n_decoder_rows;
     const uint32_t learnt_decoder_words =
-        params->n_neurons_total * params->n_learnt_decoder_rows;
+        ensemble.parameters.n_neurons_total *
+        ensemble.parameters.n_learnt_decoder_rows;
 
     ensemble.decoders = spin1_malloc(
         (decoder_words + learnt_decoder_words) * sizeof(value_t));
@@ -995,6 +1060,43 @@ static bool initialise_recording(address_t recording_address){
     bool success = recording_initialize(recording_address, &recording_flags);
     log_debug("Recording flags = 0x%08x", recording_flags);
     return success;
+}
+
+//! \brief reads in the recording index for the model
+//! \param[in] recording_index_address: the address in SDRAM where to store
+//! recording indexes
+//! \return True if recording initialisation is successful, false otherwise
+static bool read_in_recording_indexs(address_t recording_index_address){
+    // read indexes from sdram
+    voltage_recording_index = recording_index_address[RECORD_VOLTAGE_INDEX];
+    scaled_encoders_recording_index =
+        recording_index_address[RECORD_ENCODERS_INDEX];
+    output_recording_index = recording_index_address[RECORD_OUTPUT_INDEX];
+    spikes_recording_index = recording_index_address[RECORD_SPIKES_INDEX];
+    decoder_recording_index = recording_index_address[RECORD_DECODERS_INDEX];
+
+    // read how many variables are being recorded
+    n_recording_variables = recording_index_address[N_RECORDING_VARIABLES];
+
+    // instantiate the recording stores
+    voltage_recording_values = (uint16_t *) spin1_malloc(
+        sizeof(uint16_t) * ensemble.parameters.n_neurons);
+    if (voltage_recording_values == NULL){
+        log_error("could not allocate dtcm for voltage recording");
+        return false;
+    }
+
+    // set up recording for decoders
+    //TODO THIS NEEDS DOING IF WE DECIDE TO REMOVE PROBES
+
+    // Set up the out spikes array - this is always n_neurons in size to ensure
+    // it continues to work if changed between runs, but less might be used in
+    // any individual run
+    if (!out_spikes_initialize(ensemble.parameters.n_neurons)) {
+        return false;
+    }
+
+    return true;
 }
 
 //! Initialises the model by reading in the regions and checking recording
@@ -1064,6 +1166,12 @@ static bool initialize(uint32_t *timer_period){
         return false;
     }
 
+    // sort out recording index's
+    if (!read_in_recording_indexs(
+            data_specification_get_region(RECORDING_INDEXES, address))) {
+        return false;
+    }
+
     return true;
 }
 
@@ -1084,7 +1192,7 @@ void c_main(void){
 
     // Register callback
     spin1_callback_on(TIMER_TICK, timer_callback, TIMER);
-    spin1_callback_on(MCPL_PACKET_RECEIVED, multicast_packet_payload, MCPL);
+    spin1_callback_on(MCPL_PACKET_RECEIVED, multicast_payload_callback, MCPL);
     spin1_callback_on(USER_EVENT, user_event, USER);
 
     // register all the dma complete callbacks (creates state machine)

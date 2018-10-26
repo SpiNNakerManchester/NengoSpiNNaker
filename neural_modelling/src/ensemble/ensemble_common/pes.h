@@ -3,6 +3,7 @@
 
 // Common includes
 #include "input_filtering.h"
+#include <ensemble/ensemble.h>
 
 //! \brief When using non-filtered activity, applies PES to a spike vector
 //! \param[in] ensemble

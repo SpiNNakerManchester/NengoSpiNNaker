@@ -224,7 +224,7 @@ class LIFApplicationVertex(
         # the variables probeable
         self._probeable_variables = [
             constants.RECORD_SPIKES_FLAG, constants.RECORD_VOLTAGE_FLAG,
-            constants.SCALED_ENCODERS_FLAG, constants.RECORD_OUTPUT_FLAG]
+            constants.SCALED_ENCODERS_FLAG]
 
         # update all recordings to false
         self._is_recording_probeable_variable = dict()
@@ -325,7 +325,15 @@ class LIFApplicationVertex(
 
     @overrides(AbstractProbeable.set_probeable_variable)
     def set_probeable_variable(self, variable):
+        if variable == constants.RECORD_OUTPUT_FLAG:
+            variable = constants.RECORD_SPIKES_FLAG
         self._is_recording_probeable_variable[variable] = True
+
+    @overrides(AbstractProbeable.is_set_probeable_variable)
+    def is_set_probeable_variable(self, variable):
+        if variable == constants.RECORD_OUTPUT_FLAG:
+            variable = constants.RECORD_SPIKES_FLAG
+        return self._is_recording_probeable_variable[variable]
 
     @overrides(AbstractProbeable.get_possible_probeable_variables)
     def get_possible_probeable_variables(self):
@@ -335,16 +343,21 @@ class LIFApplicationVertex(
     def get_data_for_variable(
             self, variable, n_machine_time_steps, placements, graph_mapper,
             buffer_manager, machine_time_step):
+        if variable == constants.RECORD_OUTPUT_FLAG:
+            variable = constants.RECORD_SPIKES_FLAG
         return self._neuron_recorder.get_matrix_data(
             self.label, buffer_manager, self._probeable_variables[variable],
             placements, graph_mapper, self, variable, n_machine_time_steps)
 
     @overrides(AbstractProbeable.can_probe_variable)
     def can_probe_variable(self, variable):
-            if variable in self._probeable_variables:
-                return True
-            else:
-                return False
+        if variable == constants.RECORD_OUTPUT_FLAG:
+            variable = constants.RECORD_SPIKES_FLAG
+
+        if variable in self._probeable_variables:
+            return True
+        else:
+            return False
 
     def _create_internal_data_maps(
             self, outgoing_partitions, incoming_edges, operator_graph,
@@ -923,6 +936,12 @@ class LIFApplicationVertex(
         learnt_encoder_routing_region = helpful_functions.\
             sdram_size_in_bytes_for_routing_region(self._learnt_encoders_n_keys)
 
+        # recording index region
+        recording_index_region = (
+            (LIFMachineVertex.N_RECORDING_VARIABLE_SIZE +
+             len(self._probeable_variables)) *
+            constants.BYTE_TO_WORD_MULTIPLIER)
+
         total = (
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
@@ -931,7 +950,7 @@ class LIFApplicationVertex(
             inhib_filter_region + modulatory_filters_region +
             learnt_encoder_filters_region + input_routing_region +
             inhib_routing_region + modulatory_routing_region +
-            learnt_encoder_routing_region)
+            learnt_encoder_routing_region + recording_index_region)
 
         if len(slices) == 1:
             return SDRAMResource(int(math.ceil(total / n_cores)))

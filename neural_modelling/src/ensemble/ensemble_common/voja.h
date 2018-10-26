@@ -4,6 +4,8 @@
 #include <common/input_filtering.h>
 #include "common-typedefs.h"
 
+#define NOT_EFFECTED_BY_ERROR_RATE -1
+
 // Structure containing parameters and state required for Voja learning
 typedef struct voja_parameters_t
 {
@@ -49,7 +51,7 @@ static inline value_t voja_get_learning_rate(
         const if_collection_t *modulatory_filters){
     // If a learning signal filter index is specified, read the value
     // from it's first dimension and multiply by the constant error rate
-    if(parameters->learning_signal_filter_index != ERROR_RATE_INDEX){
+    if(parameters->learning_signal_filter_index != NOT_EFFECTED_BY_ERROR_RATE){
         const if_filter_t *decoded_learning_input =
             &modulatory_filters->filters[
                 parameters->learning_signal_filter_index];
