@@ -32,8 +32,4 @@ class AbstractNengoMachineVertex(
                     tags=[constants.ROUTING_TAG, constants.FILTER_ROUTING_TAG]),
                 NengoKeyConstraint(
                     field_id=constants.CLUSTER_FIELD_ID, field_value=None,
-                    tags=[constants.ROUTING_TAG], start_at=None, length=None),
-                NengoKeyConstraint(
-                    field_id=constants.INDEX_FIELD_ID, field_value=None,
-                    tags=None, start_at=constants.INDEX_FIELD_START_POINT,
-                    length=None)])]
+                    tags=[constants.ROUTING_TAG], start_at=None, length=None)])]

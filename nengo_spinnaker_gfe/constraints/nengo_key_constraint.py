@@ -43,3 +43,8 @@ class NengoKeyConstraint(AbstractKeyAllocatorConstraint):
     @field_value.setter
     def field_value(self, new_value):
         self._field_value = new_value
+
+    def __repr__(self):
+        return "{}:{}:{}:{}:{}".format(
+            self._field_id, self._field_value, self._start_at, self._length,
+            self._tags)

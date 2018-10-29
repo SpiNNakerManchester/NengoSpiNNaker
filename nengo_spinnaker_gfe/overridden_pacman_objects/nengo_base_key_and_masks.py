@@ -75,19 +75,11 @@ class NengoBaseKeysAndMasks(BaseKeyAndMask):
             keys = list()
             for index in range(0, n_keys):
                 args = {constants.INDEX_FIELD_ID: index}
-                keys.append(self._key_space(**args))
+                keys.append(self._key_space(**args).get_value())
 
             # for each key, create its key with the idea of a neuron ID being
             # continuous and live at an offset position from the bottom of
             # the key
-            for key, index in enumerate(keys):
-                key = numpy.unpackbits(numpy.asarray([key], dtype=">u4").view(
-                    dtype="uint8"))
-                key = numpy.copy(key)
-                unwrapped_value = numpy.unpackbits(
-                    numpy.asarray([index], dtype=">u4")
-                         .view(dtype="uint8"))[-len(zeros):]
-                key[zeros] = unwrapped_value
-                key_array[index + offset] = \
-                    numpy.packbits(key).view(dtype=">u4")[0].item()
+            for index, key in enumerate(keys):
+                key_array[index + offset] = key
             return key_array, n_keys
