@@ -17,7 +17,7 @@ class FilterAndRoutingRegionGenerator(object):
     def add_filters(filters, edge, outgoing_partition, minimise=False,
                     width=None):
         """Add signals and connections to existing lists
-        of nengo_filters and keyspace routes
+        of nengo_filters and key space routes
 
         :param filters: 
         :param edge: 

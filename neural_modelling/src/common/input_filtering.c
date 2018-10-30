@@ -468,27 +468,31 @@ bool input_filtering_initialise_routes(
     log_info("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
-    filters->routes = spin1_malloc(filters->n_routes * sizeof(if_route_t));
-    if (filters->routes == NULL){
-        log_error("failed to malloc filter routes");
-        return false;
-    }
+    if (filters->n_routes != 0){
+        filters->routes = spin1_malloc(filters->n_routes * sizeof(if_route_t));
 
-    // Copy the entries across
-    spin1_memcpy(filters->routes, &address[STARTS_OF_DATA],
-                 filters->n_routes * sizeof(if_route_t));
+        if (filters->routes == NULL){
+            log_error("failed to malloc filter routes");
+            return false;
+        }
 
-    // update n words written
-    *sdram_words_read = STARTS_OF_DATA + (
-        (filters->n_routes * sizeof(if_route_t)) / BYTES_TO_WORD_CONVERSION);
+        // Copy the entries across
+        spin1_memcpy(filters->routes, &address[STARTS_OF_DATA],
+                     filters->n_routes * sizeof(if_route_t));
 
-    // debug print
-    for (uint32_t n = 0; n < filters->n_routes; n++)
-    {
-        log_debug("\tRoute[%d] = (0x%08x, 0x%08x) dmask=0x%08x => %d\n",
-              n, filters->routes[n].key, filters->routes[n].mask,
-              filters->routes[n].dimension_mask,
-              filters->routes[n].input_index);
+        // update n words written
+        *sdram_words_read = STARTS_OF_DATA + (
+            (filters->n_routes *
+             sizeof(if_route_t)) / BYTES_TO_WORD_CONVERSION);
+
+        // debug print
+        for (uint32_t n = 0; n < filters->n_routes; n++)
+        {
+            log_debug("\tRoute[%d] = (0x%08x, 0x%08x) dmask=0x%08x => %d\n",
+                  n, filters->routes[n].key, filters->routes[n].mask,
+                  filters->routes[n].dimension_mask,
+                  filters->routes[n].input_index);
+        }
     }
 
     return true;

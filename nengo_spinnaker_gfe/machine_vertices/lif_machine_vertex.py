@@ -2,7 +2,10 @@ from enum import Enum
 import numpy
 import logging
 
+from nengo.learning_rules import Voja as NengoVoja
+
 from data_specification.enums import DataType
+
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
@@ -10,7 +13,13 @@ from nengo_spinnaker_gfe.abstracts.abstract_nengo_machine_vertex import \
     AbstractNengoMachineVertex
 from nengo_spinnaker_gfe.abstracts.abstract_transmits_multicast_signals import \
     AbstractTransmitsMulticastSignals
+from nengo_spinnaker_gfe.graph_components.connection_machine_edge import \
+    ConnectionMachineEdge
+from nengo_spinnaker_gfe.graph_components.\
+    connection_machine_outgoing_partition import \
+    ConnectionMachineOutgoingPartition
 from nengo_spinnaker_gfe.nengo_filters import filter_region_writer
+
 from pacman.executor.injection_decorator import inject_items
 
 from spinn_front_end_common.abstract_models import \
@@ -181,18 +190,19 @@ class LIFMachineVertex(
          "machine_time_step_in_seconds": "MachineTimeStepInSeconds",
          "n_machine_time_steps": "TotalMachineTimeSteps",
          "time_between_requests": "TimeBetweenRequests",
-         "buffer_size_before_receive": "BufferSizeBeforeReceive"})
+         "buffer_size_before_receive": "BufferSizeBeforeReceive",
+         "nengo_graph": "NengoOperatorGraph"})
     @overrides(
         MachineDataSpecableVertex.generate_machine_data_specification,
         additional_arguments=[
             "graph_mapper", "machine_time_step_in_seconds",
             "n_machine_time_steps", "time_between_requests",
-            "buffer_size_before_receive"])
+            "buffer_size_before_receive", "nengo_graph"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
             graph_mapper, machine_time_step_in_seconds, n_machine_time_steps,
-            time_between_requests, buffer_size_before_receive):
+            time_between_requests, buffer_size_before_receive, nengo_graph):
 
         # get the associated app vertex.
         app_vertex = graph_mapper.get_application_vertex(self)
@@ -213,15 +223,20 @@ class LIFMachineVertex(
 
         # process the filters region
         spec.switch_write_focus(self.DATA_REGIONS.FILTERS.value)
-        self._write_filters_region(spec, machine_time_step_in_seconds)
+        (input_filter_to_index_map, inhib_filter_to_index_map,
+         modulatory_filter_to_index_map, learnt_encoder_filter_to_index_map) =\
+            self._write_filters_region(spec, machine_time_step_in_seconds)
 
         # process the routes region
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
-        self._write_routes_region(spec)
+        self._write_routes_region(
+            spec, input_filter_to_index_map, inhib_filter_to_index_map,
+            modulatory_filter_to_index_map, learnt_encoder_filter_to_index_map,
+            machine_graph, routing_info, graph_mapper, nengo_graph, app_vertex)
 
         # process the keys region
         spec.switch_write_focus(self.DATA_REGIONS.KEYS.value)
-        self._write_keys_region(spec)
+        self._write_keys_region(spec, machine_graph, routing_info, app_vertex)
 
         # process the pes region
         spec.switch_write_focus(self.DATA_REGIONS.PES.value)
@@ -379,11 +394,106 @@ class LIFMachineVertex(
             spec.write_value(learning_rule.encoder_offset)
             spec.write_value(learning_rule.decoded_input_filter_index)
 
-    def _write_keys_region(self, spec):
-        pass
+    def _write_keys_region(
+            self, spec, machine_graph, routing_info, app_vertex):
+        """
+        
+        :param spec: 
+        :param machine_graph: 
+        :param routing_info: 
+        :param app_vertex: 
+        :return: 
+        """
 
-    def _write_routes_region(self, spec):
-        pass
+        outgoing_partitions = \
+            machine_graph.get_outgoing_edge_partitions_starting_at_vertex(self)
+
+        # neuron before learnt keys
+        for outgoing_partition in outgoing_partitions:
+            if isinstance(
+                    outgoing_partition, ConnectionMachineOutgoingPartition):
+                if (outgoing_partition.identifier.source_port ==
+                        constants.ENSEMBLE_OUTPUT_PORT.NEURONS):
+                    self._write_keys_to_spec(
+                        spec, outgoing_partition, routing_info,
+                        app_vertex.output_n_keys)
+
+        # learnt output
+        for outgoing_partition in outgoing_partitions:
+            if isinstance(
+                    outgoing_partition, ConnectionMachineOutgoingPartition):
+                if (outgoing_partition.identifier.source_port ==
+                        constants.ENSEMBLE_OUTPUT_PORT.LEARNT):
+                    self._write_keys_to_spec(
+                        spec, outgoing_partition, routing_info,
+                        app_vertex.learnt_output_n_keys)
+
+    @staticmethod
+    def _write_keys_to_spec(spec, outgoing_partition, routing_info, n_keys):
+        this_partitions_info = routing_info.get_routing_info_from_partition(
+            outgoing_partition)
+        spec.write_value(n_keys)
+        for key in this_partitions_info.get_keys(n_keys):
+            spec.write_value(key)
+
+    def _write_routes_region(
+            self, spec, input_filter_to_index_map, inhib_filter_to_index_map,
+            modulatory_filter_to_index_map, learnt_encoder_filter_to_index_map,
+            machine_graph, routing_infos, graph_mapper, nengo_graph,
+            app_vertex):
+
+        standard_edges = list()
+        inhib_edges = list()
+        mod_edges = list()
+        learnt_encoder_edges = list()
+        learnt_encoder_edges_and_learning_rules = list()
+
+        # group edges into correct routing group
+        for incoming_edge in machine_graph.get_edges_ending_at_vertex(self):
+            if isinstance(incoming_edge, ConnectionMachineEdge):
+                if incoming_edge.input_port.destination_input_port == \
+                        constants.OUTPUT_PORT.STANDARD:
+                    standard_edges.append(incoming_edge)
+                elif (incoming_edge.input_port.destination_input_port ==
+                          constants.ENSEMBLE_INPUT_PORT.GLOBAL_INHIBITION):
+                    inhib_edges.append(incoming_edge)
+                elif (
+                        (incoming_edge.input_port.destination_input_port ==
+                         constants.ENSEMBLE_INPUT_PORT.LEARNT)):
+                    learnt_encoder_edges.append(incoming_edge)
+                    if (incoming_edge.reception_parameters.learning_rule is
+                            not None):
+                        learnt_encoder_edges_and_learning_rules.append(
+                            (incoming_edge,
+                             incoming_edge.reception_parameters.learning_rule))
+                    else:
+                        learnt_encoder_edges_and_learning_rules.append(
+                            (incoming_edge,
+                             incoming_edge.input_port.learning_rule))
+
+        # sort out modulatory edges
+        incoming_modulatory_learning_rules = app_vertex. \
+            locate_all_modulatory_learning_rules(machine_graph, self)
+        for (edge, learning_rule) in learnt_encoder_edges_and_learning_rules:
+            if isinstance(learning_rule.learning_rule_type, NengoVoja):
+                if learning_rule in incoming_modulatory_learning_rules.keys():
+                    mod_edges.append(
+                        incoming_modulatory_learning_rules[learning_rule])
+
+        # write group of edges into region accordingly
+        helpful_functions.write_routing_region(
+            spec, routing_infos, standard_edges, input_filter_to_index_map,
+            self._input_filters, graph_mapper, nengo_graph)
+        helpful_functions.write_routing_region(
+            spec, routing_infos, inhib_edges, inhib_filter_to_index_map,
+            self._inhibitory_filters, graph_mapper, nengo_graph)
+        helpful_functions.write_routing_region(
+            spec, routing_infos, mod_edges, modulatory_filter_to_index_map,
+            self._modulatory_filters, graph_mapper, nengo_graph)
+        helpful_functions.write_routing_region(
+            spec, routing_infos, learnt_encoder_edges,
+            learnt_encoder_filter_to_index_map,
+            self._learnt_encoder_filters, graph_mapper, nengo_graph)
 
     def _write_filters_region(self, spec, machine_time_step_in_seconds):
         """
@@ -392,18 +502,23 @@ class LIFMachineVertex(
         :param machine_time_step_in_seconds: 
         :return: 
         """
-        filter_to_index_map = filter_region_writer.write_filter_region(
+        input_filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
-        filter_region_writer.write_filter_region(
+        inhib_filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._inhibitory_filters)
-        filter_region_writer.write_filter_region(
-            spec, machine_time_step_in_seconds, self._input_slice,
-            self._modulatory_filters)
-        filter_region_writer.write_filter_region(
-            spec, machine_time_step_in_seconds, self._input_slice,
-            self._learnt_encoder_filters)
+        modulatory_filter_to_index_map = \
+            filter_region_writer.write_filter_region(
+                spec, machine_time_step_in_seconds, self._input_slice,
+                self._modulatory_filters)
+        learnt_encoder_filter_to_index_map = \
+            filter_region_writer.write_filter_region(
+                spec, machine_time_step_in_seconds, self._input_slice,
+                self._learnt_encoder_filters)
+        return (
+            input_filter_to_index_map, inhib_filter_to_index_map,
+            modulatory_filter_to_index_map, learnt_encoder_filter_to_index_map)
 
     def _write_ensemble_neuron_pop_length_params(
             self, spec, graph_mapper, machine_graph,

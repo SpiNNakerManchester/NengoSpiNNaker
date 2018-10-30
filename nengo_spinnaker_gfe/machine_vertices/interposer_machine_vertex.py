@@ -114,8 +114,8 @@ class InterposerMachineVertex(
             self._input_filters)
         spec.switch_write_focus(self.DATA_REGIONS.INPUT_ROUTING.value)
         helpful_functions.write_routing_region(
-            spec, routing_info, machine_graph, self, filter_to_index_map,
-            self._input_filters, graph_mapper, nengo_graph)
+            spec, routing_info, machine_graph.get_edges_ending_at_vertex(self),
+            filter_to_index_map, self._input_filters, graph_mapper, nengo_graph)
         spec.switch_write_focus(self.DATA_REGIONS.TRANSFORM.value)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(
             self._transform_data))

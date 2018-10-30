@@ -39,9 +39,9 @@ void spin1_wfi();
 
 //! enum mapping region ids to regions from python
 typedef enum regions {
-    SYSTEM, ENSEMBLE_PARAMS, NEURON, ENCODER, BIAS, GAIN, DECODER,
-    LEARNT_DECODER, KEYS, FILTERS, ROUTING, PES, VOJA, RECORDING_INDEXES,
-    RECORDING
+    SYSTEM = 0, ENSEMBLE_PARAMS = 1, ENCODER = 2, BIAS = 3, GAIN = 4,
+    DECODER = 5, LEARNT_DECODER = 6, KEYS = 7, FILTERS = 8, ROUTING = 9,
+    PES = 10, VOJA = 11, RECORDING_INDEXES = 12, RECORDING = 13
 } regions;
 
 //! enum mapping ensemble params in sdram from python
@@ -794,40 +794,6 @@ static bool ensemble_param_read(address_t region_address){
     sema_input = sem_base;
     sema_spikes = sem_base + SEMAPHORE_SPIKE_OFFSET;
 
-
-    // Allocate array to hold pointers to SDRAM learnt input vectors
-    log_info("allocating for %d learnt input signals",
-             params->n_learnt_input_signals);
-    sdram_learnt_input_vector_addresses = spin1_malloc(
-        sizeof(value_t*) * params->n_learnt_input_signals);
-    if(sdram_learnt_input_vector_addresses == NULL){
-        log_error("Cannot allocate dtcm for the learnt input signals");
-        return false;
-    }
-
-    // Allocate an array of local, global and shared pointers for each
-    // learnt input signals
-    sdram_learnt_input_vector_local = spin1_malloc(
-        sizeof(value_t*) * params->n_learnt_input_signals);
-    if(sdram_learnt_input_vector_local == NULL){
-        log_error("cannot allocate dtcm for the local learnt input signals");
-        return false;
-    }
-
-    // copy in pointers for learnt input vector sdram (local and global)
-    uint sdram_pointer = START_LEARNT_INPUT_SIGNALS;
-    uint learnt_vector_local_pointer = START_LEARNT_INPUT_SIGNALS + 1;
-    for (uint32_t learnt_input_signal=0;
-            learnt_input_signal < params->n_learnt_input_signals;
-            learnt_input_signal ++) {
-        sdram_learnt_input_vector_addresses[learnt_input_signal] =
-            (value_t*) &region_address[sdram_pointer];
-        sdram_learnt_input_vector_local[learnt_input_signal] =
-            (value_t*) &region_address[learnt_vector_local_pointer];
-        sdram_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
-        learnt_vector_local_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
-    }
-
     // process ensemble input
     ensemble.input = spin1_malloc(sizeof(value_t) * params->n_dims);
     if (ensemble.input == NULL){
@@ -835,44 +801,84 @@ static bool ensemble_param_read(address_t region_address){
         return false;
     }
 
-    // allocate learnt input space
-    ensemble.learnt_input = spin1_malloc(
-        sizeof(value_t*) * params->n_learnt_input_signals);
-    if (ensemble.learnt_input == NULL){
-        log_error("Cannot allocate dtcm for the ensemble learnt input");
-        return false;
-    }
-
-    ensemble.learnt_input_local = spin1_malloc(
-        sizeof(value_t*) * params->n_learnt_input_signals);
-    if (ensemble.learnt_input_local == NULL){
-        log_error("cannot allocate dtcm for the ensemble learnt input local");
-        return false;
-    }
-
-    // Loop through learnt input signals and read in as needed
-    for(uint32_t input_signal = 0;
-            input_signal < params->n_learnt_input_signals; input_signal++) {
-        ensemble.learnt_input[input_signal] = spin1_malloc(
-            sizeof(value_t) * params->n_dims);
-        if (ensemble.learnt_input[input_signal] == NULL){
-            log_error(
-                "failed to allocate dtcm for learnt input %d", input_signal);
+    // Allocate array to hold pointers to SDRAM learnt input vectors
+    log_info("allocating for %d learnt input signals",
+             params->n_learnt_input_signals);
+     uint sdram_pointer = START_LEARNT_INPUT_SIGNALS;
+     if (params->n_learnt_input_signals != 0){
+        sdram_learnt_input_vector_addresses = spin1_malloc(
+            sizeof(value_t*) * params->n_learnt_input_signals);
+        if(sdram_learnt_input_vector_addresses == NULL){
+            log_error("Cannot allocate dtcm for the learnt input signals");
             return false;
         }
 
-        // Store local offset
-        ensemble.learnt_input_local[input_signal] =
-            &ensemble.learnt_input[input_signal][params->input_subspace_offset];
+        // Allocate an array of local, global and shared pointers for each
+        // learnt input signals
+        sdram_learnt_input_vector_local = spin1_malloc(
+            sizeof(value_t*) * params->n_learnt_input_signals);
+        if(sdram_learnt_input_vector_local == NULL){
+            log_error(
+                "cannot allocate dtcm for the local learnt input signals");
+            return false;
+        }
 
-        log_debug(
-            "Learnt input signal %u: learnt_input:%08x, "
-            "learnt_input_local:%08x, sdram_learnt_input:%08x, "
-            "sdram_learnt_input_local:%08x\n", input_signal,
-            ensemble.learnt_input[input_signal],
-            ensemble.learnt_input_local[input_signal],
-            sdram_learnt_input_vector_addresses[input_signal],
-            sdram_learnt_input_vector_local[input_signal]);
+        // copy in pointers for learnt input vector sdram (local and global)
+        uint learnt_vector_local_pointer = START_LEARNT_INPUT_SIGNALS + 1;
+        for (uint32_t learnt_input_signal=0;
+                learnt_input_signal < params->n_learnt_input_signals;
+                learnt_input_signal ++) {
+            sdram_learnt_input_vector_addresses[learnt_input_signal] =
+                (value_t*) &region_address[sdram_pointer];
+            sdram_learnt_input_vector_local[learnt_input_signal] =
+                (value_t*) &region_address[learnt_vector_local_pointer];
+            sdram_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
+            learnt_vector_local_pointer += SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR;
+        }
+
+
+        // allocate learnt input space
+        ensemble.learnt_input = spin1_malloc(
+            sizeof(value_t*) * params->n_learnt_input_signals);
+        if (ensemble.learnt_input == NULL){
+            log_error("Cannot allocate dtcm for the ensemble learnt input");
+            return false;
+        }
+
+        ensemble.learnt_input_local = spin1_malloc(
+            sizeof(value_t*) * params->n_learnt_input_signals);
+        if (ensemble.learnt_input_local == NULL){
+            log_error(
+                "cannot allocate dtcm for the ensemble learnt input local");
+            return false;
+        }
+
+        // Loop through learnt input signals and read in as needed
+        for(uint32_t input_signal = 0;
+                input_signal < params->n_learnt_input_signals; input_signal++) {
+            ensemble.learnt_input[input_signal] = spin1_malloc(
+                sizeof(value_t) * params->n_dims);
+            if (ensemble.learnt_input[input_signal] == NULL){
+                log_error(
+                    "failed to allocate dtcm for learnt input %d",
+                    input_signal);
+                return false;
+            }
+
+            // Store local offset
+            ensemble.learnt_input_local[input_signal] =
+                &ensemble.learnt_input[input_signal][
+                    params->input_subspace_offset];
+
+            log_debug(
+                "Learnt input signal %u: learnt_input:%08x, "
+                "learnt_input_local:%08x, sdram_learnt_input:%08x, "
+                "sdram_learnt_input_local:%08x\n", input_signal,
+                ensemble.learnt_input[input_signal],
+                ensemble.learnt_input_local[input_signal],
+                sdram_learnt_input_vector_addresses[input_signal],
+                sdram_learnt_input_vector_local[input_signal]);
+        }
     }
 
     // read in the lif params

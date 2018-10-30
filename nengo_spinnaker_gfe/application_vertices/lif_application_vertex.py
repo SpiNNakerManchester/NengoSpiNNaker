@@ -11,6 +11,10 @@ from nengo.learning_rules import Voja as NengoVoja
 from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
 from nengo_spinnaker_gfe.abstracts.abstract_supports_nengo_partitioner import \
     AbstractSupportNengoPartitioner
+from nengo_spinnaker_gfe.graph_components.connection_application_edge import \
+    ConnectionApplicationEdge
+from nengo_spinnaker_gfe.graph_components.connection_machine_edge import \
+    ConnectionMachineEdge
 from nengo_spinnaker_gfe.graph_components.\
     constant_sdram_machine_partition import \
     ConstantSDRAMMachinePartition
@@ -359,16 +363,21 @@ class LIFApplicationVertex(
         else:
             return False
 
-    def _create_internal_data_maps(
-            self, outgoing_partitions, incoming_edges, operator_graph,
-            machine_time_step):
+    def _create_internal_data_maps(self, operator_graph, machine_time_step):
 
         standard_outgoing_partitions = list()
         outgoing_learnt_partitions = list()
         incoming_learnt_edges = list()
-        incoming_modulatory_learning_rules = dict()
         incoming_standard_edges = list()
         incoming_global_inhibition_edges = list()
+
+        outgoing_partitions = operator_graph.\
+            get_outgoing_edge_partitions_starting_at_vertex(self)
+        incoming_edges = operator_graph.get_edges_ending_at_vertex(self)
+
+        # locate modulatory learning rules
+        incoming_modulatory_learning_rules = \
+            self.locate_all_modulatory_learning_rules(operator_graph, self)
 
         # filter incoming partitions
         for in_edge in incoming_edges:
@@ -376,18 +385,6 @@ class LIFApplicationVertex(
             if in_edge.input_port.destination_input_port == \
                     constants.ENSEMBLE_INPUT_PORT.NEURONS:
                 raise Exception("not suppose to have neurons incoming")
-
-            # locate all modulating incoming partitions learning rules
-            if (in_edge.input_port.destination_input_port ==
-                    constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
-                    in_edge.input_port.destination_input_port ==
-                    constants.ENSEMBLE_INPUT_PORT.LEARNT):
-                if in_edge.reception_parameters.learning_rule is not None:
-                    incoming_modulatory_learning_rules[
-                        in_edge.reception_parameters.learning_rule] = in_edge
-                else:
-                    incoming_modulatory_learning_rules[
-                        in_edge.input_port.learning_rule] = in_edge
 
             # build map of edges and learning rule
             if (in_edge.input_port.destination_input_port ==
@@ -448,6 +445,27 @@ class LIFApplicationVertex(
                     global_inhibition_edge), minimise=True)
             self._inhibition_n_keys += 1
 
+    @staticmethod
+    def locate_all_modulatory_learning_rules(graph, vertex):
+        incoming_modulatory_learning_rules = dict()
+        for incoming_edge in graph.get_edges_ending_at_vertex(vertex):
+            if (isinstance(incoming_edge, ConnectionMachineEdge) or
+                    isinstance(incoming_edge, ConnectionApplicationEdge)):
+                if (incoming_edge.input_port.destination_input_port ==
+                        constants.ENSEMBLE_INPUT_PORT.LEARNING_RULE or
+                        incoming_edge.input_port.destination_input_port ==
+                        constants.ENSEMBLE_INPUT_PORT.LEARNT):
+                    if (incoming_edge.reception_parameters.learning_rule is
+                            not None):
+                        incoming_modulatory_learning_rules[
+                            incoming_edge.reception_parameters.
+                            learning_rule] = incoming_edge
+                    else:
+                        incoming_modulatory_learning_rules[
+                            incoming_edge.input_port.learning_rule] = \
+                            incoming_edge
+        return incoming_modulatory_learning_rules
+
     @overrides(AbstractSupportNengoPartitioner.get_shared_resources_for_slices)
     def get_shared_resources_for_slices(self, slices):
 
@@ -501,14 +519,8 @@ class LIFApplicationVertex(
 
         machine_vertices = list()
 
-        outgoing_partitions = operator_graph.\
-            get_outgoing_edge_partitions_starting_at_vertex(self)
-        incoming_edges = operator_graph.get_edges_ending_at_vertex(self)
-
         # build a bunch of maps and data objects used during partitioning
-        self._create_internal_data_maps(
-            outgoing_partitions, incoming_edges, operator_graph,
-            machine_time_step)
+        self._create_internal_data_maps(operator_graph, machine_time_step)
 
         # start the partitioning process, now that all the data required to
         # do so has been deduced

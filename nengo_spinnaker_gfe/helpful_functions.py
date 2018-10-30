@@ -93,15 +93,26 @@ def sdram_size_in_bytes_for_filter_region(filters):
 
 
 def write_routing_region(
-        spec, routing_infos, machine_graph, vertex, filter_to_index_map,
+        spec, routing_infos, incoming_edges, filter_to_index_map,
         outgoing_partition_to_filter_map, graph_mapper, nengo_graph):
+    """ writes the routing region for a given set of incoming edges
+    
+    :param spec: dsg spec file
+    :param routing_infos: the pacman routing info objects
+    :param incoming_edges: the iterable of edges to add to this region
+    :param filter_to_index_map: the filter to index map for these edges
+    :param outgoing_partition_to_filter_map: outgoing partition to filter map
+    :param graph_mapper: the nengo graph mapper
+    :param nengo_graph: the nengo app graph
+    :rtype: None
+    """
 
     # record n key mask combos
-    spec.write_value(len(machine_graph.get_edges_ending_at_vertex(vertex)))
+    spec.write_value(len(incoming_edges))
     seen_outgoing_partitions = list()
 
     # write for each outgoing partition
-    for incoming_edge in machine_graph.get_edges_ending_at_vertex(vertex):
+    for incoming_edge in incoming_edges:
 
         routing_info = routing_infos.get_routing_info_for_edge(incoming_edge)
         nengo_base_key_and_mask = routing_info.first_key_and_mask
@@ -110,7 +121,7 @@ def write_routing_region(
         spec.write_value(nengo_base_key_and_mask.mask)
         spec.write_value(nengo_base_key_and_mask.neuron_mask)
 
-        # get the app graph outoging partition, as thats what the filters are
+        # get the app graph outgoing partition, as that's what the filters are
         #  mapped by
         app_graph_outgoing_partition = \
             nengo_graph.get_outgoing_partition_for_edge(

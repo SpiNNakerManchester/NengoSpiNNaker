@@ -154,7 +154,7 @@ class SDPTransmitterMachineVertex(
         # fill in routing region
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
         helpful_functions.write_routing_region(
-            spec, routing_info, machine_graph, self,
+            spec, routing_info, machine_graph.get_edges_ending_at_vertex(self),
             filter_to_index_map, self._input_filters, graph_mapper,
             nengo_graph)
 
