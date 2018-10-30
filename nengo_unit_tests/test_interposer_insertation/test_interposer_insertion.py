@@ -4,10 +4,10 @@ import nengo_spinnaker
 from nengo.cache import NoDecoderCache
 from nengo_spinnaker.builder import Model
 from nengo_spinnaker.node_io import Ethernet
-from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_utilise_interposers import \
-    NengoUtiliseInterposers
 from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
     nengo_application_graph_builder import NengoApplicationGraphBuilder
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_utilise_interposers import NengoUtiliseInterposers
 from nengo_unit_tests.examples.basic import create_model as basic_create_model
 from nengo_unit_tests.examples.learn_associates import create_model as \
     la_create_model

@@ -15,12 +15,12 @@ from examples.two_d import create_model as two_d_create_model
 from nengo.cache import NoDecoderCache
 from nengo_spinnaker.builder import Model
 from nengo_spinnaker.node_io import Ethernet
-from nengo_spinnaker_gfe.extra_mapping_algorithms.nengo_utilise_interposers import \
-    NengoUtiliseInterposers
 from nengo_spinnaker_gfe.overridden_mapping_algorithms. \
     nengo_application_graph_builder import NengoApplicationGraphBuilder
 from nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_partitioner \
     import NengoPartitioner
+from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
+    nengo_utilise_interposers import NengoUtiliseInterposers
 from nengo_unit_tests.test_app_graph_utilities import \
     compare_against_the_nengo_spinnaker_and_gfe_impls
 

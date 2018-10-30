@@ -17,8 +17,8 @@ class ParameterExtractionFromNengoEnsemble(object):
         "_bias"]
 
     def __init__(self, nengo_ensemble, random_number_generator):
-        """ goes through the nengo_spinnaker_gfe ensemble object and extracts the 
-        connection_parameters for the lif neurons
+        """ goes through the nengo_spinnaker_gfe ensemble object and extracts 
+        the connection_parameters for the lif neurons
 
         :param nengo_ensemble: the ensemble handed down by nengo_spinnaker_gfe
         :param random_number_generator: the random number generator 
