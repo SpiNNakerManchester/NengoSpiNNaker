@@ -10,7 +10,6 @@
 #define LATCHING 1
 #define LATCHING_MASK 0xFFFFFFFF
 #define NOT_LATCHING_MASK 0x00000000
-#define BASIC_FILTER_PARAMETER_SIZE 2
 
 //! enum mapping region ids to regions in python
 typedef enum filter_region_counter_positions {
@@ -18,17 +17,22 @@ typedef enum filter_region_counter_positions {
     START_OF_LOW_PASS_FILTERS
 } filter_region_counter_positions;
 
+//! enum mapping the params n the basic filter params
+typedef enum filter_region_basic_elements {
+    // "Width" of the filter (number of dimensions)
+    SIZE = 0,
+    // Flags applied to the filter
+    FLAGS = 1,
+    // size read
+    BASIC_FILTER_PARAMETER_SIZE = 2
+} filter_region_basic_elements;
+
+#define N_FILTER_TYPES 3
+
 //! enum mapping params in region
 typedef enum routing_region_paramter_positions{
     N_ROUTES, STARTS_OF_DATA
 } routing_region_paramter_positions;
-
-// Generic filter parameters
-typedef struct _filter_parameters_t
-{
-    uint32_t size;         // "Width" of the filter (number of dimensions)
-    uint32_t flags;        // Flags applied to the filter
-} filter_parameters_t;
 
 /* 1st Order Low-Pass ********************************************************/
 
@@ -301,7 +305,7 @@ bool _lti_filter_initialise(
 //! \param[out] sdram_words_read: the number of words read during this init
 //! \return bool stating if the initialisation was successful
 bool input_filtering_initialise_filters(
-        if_collection_t *filters, uint32_t *sdram_data,
+        if_collection_t *filters, address_t sdram_data,
         value_t **filter_output_array, uint32_t *sdram_words_read) {
     // Get the number of filters and malloc sufficient space for the filter
     // parameters.
@@ -311,20 +315,25 @@ bool input_filtering_initialise_filters(
         sdram_data[N_LOW_PASS_FILTERS] + sdram_data[N_NONE_PASS_FILTERS] +
         sdram_data[N_LINEAR_FILTERS]);
 
+    log_info("going to try to allocate dtcm for %d filters each with size %d "
+             "bytes", filters->n_filters, sizeof(if_filter_t));
+    log_info("got %d bytes left in heap", sark_heap_max(sark.heap, 0));
+
     filters->filters = spin1_malloc(filters->n_filters * sizeof(if_filter_t));
     if (filters->filters == NULL){
-        log_error("Cannot allocate the filters DTCM");
+        log_error("Cannot allocate the filters DTCM of %d bytes for %d "
+        "filters", filters->n_filters * sizeof(if_filter_t),
+                   filters->n_filters);
         return false;
     }
 
-    log_debug(
+    log_info(
         "Loading %d low pass filters, %d none pass filters and %d linear "
         "filters\n",
         sdram_data[N_LOW_PASS_FILTERS], sdram_data[N_NONE_PASS_FILTERS],
         sdram_data[N_LINEAR_FILTERS]);
 
-    // Allow casting filters pointer to a _filter_parameters pointer
-    filter_parameters_t *filter_params;
+    log_info("god damn you chimp");
 
     // Map of filter indices to filter initialisation methods
     FilterInit filter_types_init[] = {
@@ -333,6 +342,8 @@ bool input_filtering_initialise_filters(
         _lti_filter_initialise,
     };
 
+    log_info("damn you mundy");
+
     // map of filter types to n filters
     uint32_t n_filters[] = {
         sdram_data[N_LOW_PASS_FILTERS],
@@ -340,25 +351,32 @@ bool input_filtering_initialise_filters(
         sdram_data[N_LINEAR_FILTERS],
     };
 
-    uint32_t n_filter_types = sizeof(n_filters) / sizeof(*n_filters);
+    log_info("damn you mundy again");
+
+    log_info("damn you mundy yet again");
 
     // process low pass filters
     uint32_t data_index = START_OF_LOW_PASS_FILTERS;
-    for (uint32_t filter_type_index=0; filter_type_index<n_filter_types;
-            filter_type_index++){
+    for (uint32_t filter_type_index=0; filter_type_index<N_FILTER_TYPES;
+         filter_type_index++){
+
+        log_info("processing filter in type index %d", filter_type_index);
+
         for (uint32_t filter_index = 0;
-                filter_index < n_filters[filter_type_index];
-                filter_index++) {
-            // Get the parameters
-            filter_params = (filter_parameters_t *) sdram_data[data_index];
+             filter_index < n_filters[filter_type_index];
+             filter_index++) {
+
+            log_info("im a pirate for filter index %d", filter_index);
 
             // Get the size of the filter, store it
-            filters->filters[filter_index].size = filter_params->size;
+            filters->filters[filter_index].size = sdram_data[data_index + SIZE];
 
-            log_debug(
-                "> Filter [%d] size = %d\n", filter_index, filter_params->size);
+            log_info(
+                "> Filter [%d] size = %d\n",
+                filter_index, sdram_data[data_index + SIZE]);
 
             // Initialise the input accumulator
+            log_info("trying to allocate filter dtcm");
             filters->filters[filter_index].input = spin1_malloc(
                 sizeof(if_accumulator_t));
             if (filters->filters[filter_index].input == NULL) {
@@ -367,47 +385,63 @@ bool input_filtering_initialise_filters(
             }
 
             // Initialise the input accumulator value
+            log_info("trying input value");
             filters->filters[filter_index].input->value = spin1_malloc(
-                sizeof(value_t) * filter_params->size);
+                sizeof(value_t) * sdram_data[data_index + SIZE]);
             if (filters->filters[filter_index].input->value == NULL) {
-                log_error("Failed to allocate filters input values");
+                log_error(
+                    "Failed to allocate dtcm for filters input values. "
+                    "wanted to allocate %d bytes for size %d",
+                    sizeof(value_t) * sdram_data[data_index + SIZE],
+                    sdram_data[data_index + SIZE]);
                 return false;
             }
 
+            log_info("you smell");
+
             // process latching
-            if (filter_params->flags == LATCHING) {
+            if (sdram_data[data_index + FLAGS] == LATCHING) {
                 filters->filters[filter_index].input->mask = LATCHING_MASK;
             } else {
                 filters->filters[filter_index].input->mask = NOT_LATCHING_MASK;
             }
 
+            log_info("you smell worse");
+
             // process output
             if (filter_output_array == NULL) {
+                log_info("you smell as bad as sergio");
                 filters->filters[filter_index].output = spin1_malloc(
-                    sizeof(value_t) * filter_params->size);
+                    sizeof(value_t) * sdram_data[data_index + SIZE]);
                 if (filters->filters[filter_index].output == NULL) {
                     log_error(
                         "Failed to allocate filter %d output", filter_index);
                     return false;
                 }
             } else { // Otherwise, copy output pointer into filter
+                log_info("you smell asa chimpy");
                 filters->filters[filter_index].output =
                     filter_output_array[filter_index];
+
             }
+
+            log_info("you smell as andy");
 
             // Zero the input and the output
             memset(filters->filters[filter_index].input->value, 0,
-                   sizeof(value_t) * filter_params->size);
+                   sizeof(value_t) * sdram_data[data_index + SIZE]);
+            log_info("you just smell overall");
             memset(filters->filters[filter_index].output, 0,
-                   sizeof(value_t) * filter_params->size);
+                   sizeof(value_t) * sdram_data[data_index + SIZE]);
+            log_info("god damn you smell");
 
             // pointer for tracking number of words a filter reads
             uint32_t size_of_words_read = 0;
 
             if(!filter_types_init[filter_type_index](
-                    sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
-                    &size_of_words_read, &filters->filters[filter_index],
-                    filter_params->size)){
+                sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
+                &size_of_words_read, &filters->filters[filter_index],
+                sdram_data[data_index + SIZE])){
                 log_error("failed to instantiate filter");
                 return false;
             }
@@ -431,7 +465,7 @@ bool input_filtering_initialise_routes(
 
     // Copy in the number of routing entries
     filters->n_routes = address[N_ROUTES];
-    log_debug("Loading %d filter routes\n", filters->n_routes);
+    log_info("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
     filters->routes = spin1_malloc(filters->n_routes * sizeof(if_route_t));

@@ -93,26 +93,38 @@ def sdram_size_in_bytes_for_filter_region(filters):
 
 
 def write_routing_region(
-        spec, routing_info, machine_graph, vertex, filter_to_index_map,
-        outgoing_partition_to_filter_map):
+        spec, routing_infos, machine_graph, vertex, filter_to_index_map,
+        outgoing_partition_to_filter_map, graph_mapper, nengo_graph):
 
     # record n key mask combos
-    spec.write_value(
-        len(machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
-            vertex)))
+    spec.write_value(len(machine_graph.get_edges_ending_at_vertex(vertex)))
+    seen_outgoing_partitions = list()
 
     # write for each outgoing partition
-    for outgoing_partition in (
-            machine_graph.get_outgoing_edge_partitions_starting_at_vertex(
-                vertex)):
-        nengo_base_key_and_mask = routing_info.first_key_and_mask()
+    for incoming_edge in machine_graph.get_edges_ending_at_vertex(vertex):
+
+        routing_info = routing_infos.get_routing_info_for_edge(incoming_edge)
+        nengo_base_key_and_mask = routing_info.first_key_and_mask
 
         spec.write_value(nengo_base_key_and_mask.key)
         spec.write_value(nengo_base_key_and_mask.mask)
         spec.write_value(nengo_base_key_and_mask.neuron_mask)
+
+        # get the app graph outoging partition, as thats what the filters are
+        #  mapped by
+        app_graph_outgoing_partition = \
+            nengo_graph.get_outgoing_partition_for_edge(
+                graph_mapper.get_application_edge(incoming_edge))
+
+        # verify only one edge fro each outgoing partition
+        if app_graph_outgoing_partition in seen_outgoing_partitions:
+            raise Exception("Dont know what to do in this situation")
+        seen_outgoing_partitions.append(app_graph_outgoing_partition)
+
         spec.write_value(
             filter_to_index_map[
-                outgoing_partition_to_filter_map[outgoing_partition]])
+                outgoing_partition_to_filter_map[
+                    app_graph_outgoing_partition][0]])
 
 
 def sdram_size_in_bytes_for_routing_region(n_keys):

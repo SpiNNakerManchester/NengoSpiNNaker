@@ -1,4 +1,4 @@
-APP = ensemble
+APP = lif
 SOURCES = ensemble/ensemble.c \
           ensemble/ensemble_common/pes.c  \
           ensemble/ensemble_common/voja.c \

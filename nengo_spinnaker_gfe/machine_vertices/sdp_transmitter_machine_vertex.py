@@ -125,13 +125,18 @@ class SDPTransmitterMachineVertex(
     def accepts_multicast_signals(self, transmission_params):
         return True
 
-    @inject_items({"machine_time_step_in_seconds": "MachineTimeStepInSeconds"})
-    @overrides(MachineDataSpecableVertex.generate_machine_data_specification,
-               additional_arguments=["machine_time_step_in_seconds"])
+    @inject_items({
+        "machine_time_step_in_seconds": "MachineTimeStepInSeconds",
+        "graph_mapper": "NengoGraphMapper",
+        "nengo_graph": "NengoOperatorGraph"})
+    @overrides(
+        MachineDataSpecableVertex.generate_machine_data_specification,
+        additional_arguments=[
+            "machine_time_step_in_seconds", "graph_mapper", "nengo_graph"])
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
-            machine_time_step_in_seconds):
+            machine_time_step_in_seconds, graph_mapper, nengo_graph):
         self._reserve_memory_regions(spec)
 
         # create system region
@@ -150,7 +155,8 @@ class SDPTransmitterMachineVertex(
         spec.switch_write_focus(self.DATA_REGIONS.ROUTING.value)
         helpful_functions.write_routing_region(
             spec, routing_info, machine_graph, self,
-            filter_to_index_map, self._input_filters)
+            filter_to_index_map, self._input_filters, graph_mapper,
+            nengo_graph)
 
         # fill in transmitter region
         spec.switch_write_focus(self.DATA_REGIONS.TRANSMITTER.value)

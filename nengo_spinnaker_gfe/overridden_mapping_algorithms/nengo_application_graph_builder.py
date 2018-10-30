@@ -593,7 +593,6 @@ class NengoApplicationGraphBuilder(object):
 
             #  reception connection_parameters for the connection.
             reception_params = self._get_reception_parameters(nengo_connection)
-
             application_edge = ConnectionApplicationEdge(
                 pre_vertex=source_vertex, post_vertex=destination_vertex,
                 input_port=destination_input_port,

@@ -30,7 +30,7 @@ static inline bool initialise_slots(slots_t* slots, uint size, uint dma_port) {
     for (uint i = 0; i < 2; i++) {
         slots->slots[i].data = (uint*) spin1_malloc(size);
         if (slots->slots[i].data == NULL){
-            log_error("Failed to malloc " #VAR " (%d bytes of DTCM)\n", size);
+            log_error("Failed to malloc (%d bytes of DTCM)\n", size);
         }
         slots->slots[i].current_pos = 0;
         slots->slots[i].length = 0;

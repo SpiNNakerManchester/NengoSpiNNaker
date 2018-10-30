@@ -30,3 +30,12 @@ class ConnectionApplicationEdge(ApplicationEdge):
 
     def __str__(self):
         return self.__repr__()
+
+    def __eq__(self, other):
+        if (self._input_port == other.input_port and
+                self._reception_parameters == other.reception_parameters):
+            return True
+        return False
+
+    def __hash__(self):
+        return hash((self._input_port, self._reception_parameters))

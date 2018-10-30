@@ -3,7 +3,7 @@ from nengo_spinnaker_gfe.abstracts.abstract_filter import AbstractFilter
 
 class BasicFilterImpl(AbstractFilter):
 
-    BASIC_FILTER_N_WORDS = 3
+    BASIC_FILTER_N_WORDS = 2
 
     def __init__(self, width, latching):
         AbstractFilter.__init__(self, width, latching)

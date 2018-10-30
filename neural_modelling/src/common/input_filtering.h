@@ -209,7 +209,7 @@ bool input_filtering_initialise_routes(
 //! \param[out] sdram_words_read: the number of words read during this init
 //! \return bool stating if successfully initialised filters
 bool input_filtering_initialise_filters(
-    if_collection_t *filters, uint32_t *data, value_t **filter_output_array,
+    if_collection_t *filters, address_t data, value_t **filter_output_array,
     uint32_t *sdram_words_read);
 
 //! \brief Initialise a filter collection with an output accumulator.

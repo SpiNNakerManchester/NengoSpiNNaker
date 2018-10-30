@@ -38,6 +38,13 @@ class ReceptionParameters(object):
     def learning_rule(self):
         return self._learning_rule
 
+    def __eq__(self, other):
+        if (self._parameter_filter == other.parameter_filter and
+                self._width == other.width and
+                self._learning_rule == other.learning_rule):
+            return True
+        return False
+
     def concat(self, other):
         """Create new reception connection_parameters by combining this set 
         of reception connection_parameters with another.

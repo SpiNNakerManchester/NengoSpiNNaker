@@ -796,6 +796,8 @@ static bool ensemble_param_read(address_t region_address){
 
 
     // Allocate array to hold pointers to SDRAM learnt input vectors
+    log_info("allocating for %d learnt input signals",
+             params->n_learnt_input_signals);
     sdram_learnt_input_vector_addresses = spin1_malloc(
         sizeof(value_t*) * params->n_learnt_input_signals);
     if(sdram_learnt_input_vector_addresses == NULL){
@@ -1117,6 +1119,7 @@ static bool initialize(uint32_t *timer_period){
     }
 
     // Get the timing details and set up the simulation interface
+    log_info("sorting out simulation init");
     if (!simulation_initialise(
         data_specification_get_region(SYSTEM, address),
         APPLICATION_NAME_HASH, timer_period, &simulation_ticks,
@@ -1125,48 +1128,57 @@ static bool initialize(uint32_t *timer_period){
     }
 
     // get the ensemble params from sdram
+    log_info("sorting out ensemble param init");
     if (!ensemble_param_read(
             data_specification_get_region(ENSEMBLE_PARAMS, address))){
         return false;
     }
 
     // set up the spikes write size
+    log_info("sorting out spike write size");
     set_spike_write_size();
 
     // set up filters for the different filter types
-    if (!ensemble_setup_filters(
-            data_specification_get_region(FILTERS, address))) {
-        return false;
-    }
+    log_info("sorting out filters");
+    //if (!ensemble_setup_filters(
+    //        data_specification_get_region(FILTERS, address))) {
+    //    return false;
+    //}
 
     // set up routes for the different filters/routes types
+    log_info("sorting out routes");
     if (!ensemble_setup_routes(
             data_specification_get_region(ROUTING, address))){
         return false;
     }
 
     // sort out matrix reads for encoder, bias, gain, decoders
+    log_info("sorting out setup matrix");
     if (!ensemble_setup_matrix_based_regions(address)){
         return false;
     }
 
     // sort out pes learning rules
+    log_info("sorting out pes");
     if (!pes_initialise(data_specification_get_region(PES, address))){
         return false;
     }
 
     // sort out voja learning rules
+    log_info("sorting out voja");
     if (!voja_initialise(data_specification_get_region(VOJA, address))){
         return false;
     }
 
     // sort out recording region
+    log_info("sorting out recording");
     if (!initialise_recording(
             data_specification_get_region(RECORDING, address))){
         return false;
     }
 
     // sort out recording index's
+    log_info("sorting out reocridng index");
     if (!read_in_recording_indexs(
             data_specification_get_region(RECORDING_INDEXES, address))) {
         return false;

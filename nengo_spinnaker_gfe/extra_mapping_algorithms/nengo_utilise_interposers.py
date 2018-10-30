@@ -377,6 +377,7 @@ class NengoUtiliseInterposers(object):
             # If the sink is not a pass through node then just add the
             # connection to the new connection map.
             # locate outgoing partition
+
             partition_identifier = PartitionIdentifier(
                 source_port=source_port,
                 latching_required=original_required_latching,
@@ -387,22 +388,34 @@ class NengoUtiliseInterposers(object):
                     source_vertex, partition_identifier)
 
             # if dont exist, build and add
+            add_edge = False
+
+            # build the edge for ease of comparisons
+            new_edge = ConnectionApplicationEdge(
+                pre_vertex=source_vertex,
+                input_port=original_edge.input_port,
+                post_vertex=destination_vertex,
+                reception_parameters=(
+                    original_edge.reception_parameters))
+
+            # if no new outgoing partition, no way its got a edge.
             if new_outgoing_edge_partition is None:
                 new_outgoing_edge_partition = ConnectionOutgoingPartition(
                     rng=random_number_generator, seed=seed,
                     identifier=partition_identifier, pre_vertex=source_vertex)
                 interposer_application_graph.add_outgoing_edge_partition(
                     new_outgoing_edge_partition)
+                add_edge = True
+            else:  # if a outgoing partition exists, check the edge doesnt exist
+                edges = interposer_application_graph.\
+                    get_edges_starting_at_vertex(source_vertex)
+                if new_edge not in edges:
+                    add_edge = True
 
-            # add edge as required
-            interposer_application_graph.add_edge(
-                ConnectionApplicationEdge(
-                    pre_vertex=source_vertex,
-                    input_port=original_edge.input_port,
-                    post_vertex=destination_vertex,
-                    reception_parameters=(
-                        original_edge.reception_parameters)),
-                new_outgoing_edge_partition.identifier)
+            # add edge only if its not going to create a clone
+            if add_edge:
+                interposer_application_graph.add_edge(
+                    new_edge, new_outgoing_edge_partition.identifier)
         else:
             # If the sink is a pass through node then we consider each outgoing
             # connection in turn. If the connection is to be replaced by an
