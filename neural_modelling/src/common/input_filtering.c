@@ -319,12 +319,15 @@ bool input_filtering_initialise_filters(
              "bytes", filters->n_filters, sizeof(if_filter_t));
     log_info("got %d bytes left in heap", sark_heap_max(sark.heap, 0));
 
-    filters->filters = spin1_malloc(filters->n_filters * sizeof(if_filter_t));
-    if (filters->filters == NULL){
-        log_error("Cannot allocate the filters DTCM of %d bytes for %d "
-        "filters", filters->n_filters * sizeof(if_filter_t),
-                   filters->n_filters);
-        return false;
+    if (filters->n_filters != 0){
+        filters->filters = spin1_malloc(
+            filters->n_filters * sizeof(if_filter_t));
+        if (filters->filters == NULL){
+            log_error("Cannot allocate the filters DTCM of %d bytes for %d "
+            "filters", filters->n_filters * sizeof(if_filter_t),
+                       filters->n_filters);
+            return false;
+        }
     }
 
     log_info(
@@ -465,6 +468,7 @@ bool input_filtering_initialise_routes(
 
     // Copy in the number of routing entries
     filters->n_routes = address[N_ROUTES];
+    *sdram_words_read += STARTS_OF_DATA;
     log_info("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
@@ -481,9 +485,9 @@ bool input_filtering_initialise_routes(
                      filters->n_routes * sizeof(if_route_t));
 
         // update n words written
-        *sdram_words_read = STARTS_OF_DATA + (
-            (filters->n_routes *
-             sizeof(if_route_t)) / BYTES_TO_WORD_CONVERSION);
+        *sdram_words_read += (
+            (filters->n_routes * sizeof(if_route_t)) /
+            BYTES_TO_WORD_CONVERSION);
 
         // debug print
         for (uint32_t n = 0; n < filters->n_routes; n++)
@@ -494,7 +498,6 @@ bool input_filtering_initialise_routes(
                   filters->routes[n].input_index);
         }
     }
-
     return true;
 }
 

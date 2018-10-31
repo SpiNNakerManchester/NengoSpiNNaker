@@ -50,13 +50,13 @@ class FilterAndRoutingRegionGenerator(object):
                     reception_params.parameter_filter)))
 
         # Store the filter
-        if not FilterAndRoutingRegionGenerator.locate_filter(
-                filters[outgoing_partition], new_parameter_filter, minimise):
-            filters[outgoing_partition].append(new_parameter_filter)
+        new_parameter_filter = FilterAndRoutingRegionGenerator.locate_filter(
+                filters[outgoing_partition], new_parameter_filter, minimise)
+        filters[outgoing_partition].append(new_parameter_filter)
 
     @staticmethod
     def locate_filter(filters, new_filter, minimise):
         for already_built_param_filter in filters:
             if (new_filter == already_built_param_filter) and minimise:
-                return True
-        return False
+                return already_built_param_filter
+        return new_filter

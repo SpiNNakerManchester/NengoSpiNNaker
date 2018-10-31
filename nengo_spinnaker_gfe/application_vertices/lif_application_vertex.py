@@ -363,11 +363,12 @@ class LIFApplicationVertex(
         else:
             return False
 
-    def _create_internal_data_maps(self, operator_graph, machine_time_step):
+    def _create_internal_data_maps(
+            self, operator_graph, machine_time_step):
 
         standard_outgoing_partitions = list()
         outgoing_learnt_partitions = list()
-        incoming_learnt_edges = list()
+        incoming_learnt_edges_and_learning_rule = list()
         incoming_standard_edges = list()
         incoming_global_inhibition_edges = list()
 
@@ -389,7 +390,7 @@ class LIFApplicationVertex(
             # build map of edges and learning rule
             if (in_edge.input_port.destination_input_port ==
                     constants.ENSEMBLE_INPUT_PORT.LEARNT):
-                incoming_learnt_edges.append(
+                incoming_learnt_edges_and_learning_rule.append(
                     (in_edge, in_edge.reception_parameters.learning_rule))
 
             if (in_edge.input_port.destination_input_port ==
@@ -422,12 +423,12 @@ class LIFApplicationVertex(
         self._cluster_size_in = self._scaled_encoders.shape[1]
         self._cluster_learnt_size_out = self._determine_cluster_learnt_size_out(
             outgoing_learnt_partitions, incoming_modulatory_learning_rules,
-            machine_time_step)
+            machine_time_step, operator_graph)
 
         # locate incoming voja learning rules
         self._determine_voja_learning_rules_and_modulatory_filters(
-            incoming_learnt_edges, incoming_modulatory_learning_rules,
-            operator_graph)
+            incoming_learnt_edges_and_learning_rule,
+            incoming_modulatory_learning_rules, operator_graph)
 
         # create input filters
         for input_edge in incoming_standard_edges:
@@ -725,8 +726,8 @@ class LIFApplicationVertex(
                         slices[self.SLICES_POSITIONS.LEARNT_OUTPUT.value])),
                 ensemble_radius=self._radius,
                 label=(
-                    "LIF_machine_vertex_covering_slices{} for lif "
-                    "app vertex {}.".format(slices, self.label)),
+                    "LIF_machine_vertex_covering_slices for lif "
+                    "app vertex {}.".format(self.label)),
                 overflow_sdram=overflow_sdram,
                 buffered_sdram_per_timestep=buffered_sdram_per_timestep,
                 minimum_buffer_sdram_usage=this_verts_minimum_buffer_sdram,
@@ -1064,7 +1065,8 @@ class LIFApplicationVertex(
 
     def _determine_cluster_learnt_size_out(
             self, outgoing_learnt_partitions,
-            incoming_modulatory_learning_rules, machine_time_step):
+            incoming_modulatory_learning_rules, machine_time_step,
+            operator_graph):
         self._learnt_decoders = numpy.array([])
         self._pes_learning_rules = list()
 
@@ -1128,7 +1130,8 @@ class LIFApplicationVertex(
                 transmission_parameter.learning_rule]
             FilterAndRoutingRegionGenerator.add_filters(
                 self._modulatory_filters, modulatory_edge,
-                learnt_outgoing_partition, minimise=False)
+                operator_graph.get_outgoing_partition_for_edge(modulatory_edge),
+                minimise=False)
             self._modulatory_n_keys += 1
 
             # Create a duplicate copy of the original size_in columns of

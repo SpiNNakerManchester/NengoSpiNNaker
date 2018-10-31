@@ -922,6 +922,7 @@ bool ensemble_setup_filters(address_t address){
     uint32_t total_words_read = 0;
 
     // process input filters
+    log_info("sorting out input filters");
     if(!input_filtering_initialise_filters(
             &input_filters, address, NULL, &words_read)){
         return false;
@@ -929,6 +930,7 @@ bool ensemble_setup_filters(address_t address){
     total_words_read += words_read;
 
     // process inhib filters
+    log_info("sorting out inhib filters");
     if(!input_filtering_initialise_filters(
             &inhibition_filters, &address[total_words_read], NULL,
             &words_read)){
@@ -937,6 +939,7 @@ bool ensemble_setup_filters(address_t address){
     total_words_read += words_read;
 
     // process modulatory filters
+    log_info("sorting out modulatory filters");
     if(!input_filtering_initialise_filters(
             &modulatory_filters, &address[total_words_read], NULL,
             &words_read)){
@@ -945,6 +948,7 @@ bool ensemble_setup_filters(address_t address){
     total_words_read += words_read;
 
     // process learnt encoder filters
+    log_info("sorting out learnt encoders filters");
     if(!input_filtering_initialise_filters(
             &learnt_encoder_filters, &address[total_words_read],
             ensemble.learnt_input_local, &words_read)){
@@ -969,27 +973,34 @@ bool ensemble_setup_routes(address_t address){
             &input_filters, address, &words_read)){
         return false;
     }
+    log_info("read %d words", words_read);
     total_words_read += words_read;
+    words_read = 0;
 
     // process inhib filters
     if(!input_filtering_initialise_routes(
         &inhibition_filters, &address[total_words_read], &words_read)){
         return false;
     }
+    log_info("read %d words", words_read);
     total_words_read += words_read;
+    words_read = 0;
 
     // process modulatory filters
     if(!input_filtering_initialise_routes(
         &modulatory_filters, &address[total_words_read], &words_read)){
         return false;
     }
+    log_info("read %d words", words_read);
     total_words_read += words_read;
+    words_read = 0;
 
     // process learnt encoder filters
     if(!input_filtering_initialise_routes(
         &learnt_encoder_filters, &address[total_words_read], &words_read)){
         return false;
     }
+    log_info("read %d words", words_read);
 
     // report success
     return true;
@@ -1146,10 +1157,10 @@ static bool initialize(uint32_t *timer_period){
 
     // set up filters for the different filter types
     log_info("sorting out filters");
-    //if (!ensemble_setup_filters(
-    //        data_specification_get_region(FILTERS, address))) {
-    //    return false;
-    //}
+    if (!ensemble_setup_filters(
+            data_specification_get_region(FILTERS, address))) {
+        return false;
+    }
 
     // set up routes for the different filters/routes types
     log_info("sorting out routes");

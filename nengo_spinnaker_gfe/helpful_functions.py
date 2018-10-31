@@ -130,7 +130,13 @@ def write_routing_region(
         # verify only one edge fro each outgoing partition
         if app_graph_outgoing_partition in seen_outgoing_partitions:
             raise Exception("Dont know what to do in this situation")
+
         seen_outgoing_partitions.append(app_graph_outgoing_partition)
+
+        if (app_graph_outgoing_partition not in
+                outgoing_partition_to_filter_map):
+            raise Exception(
+                "this out going partition does not exist in the filter map")
 
         spec.write_value(
             filter_to_index_map[

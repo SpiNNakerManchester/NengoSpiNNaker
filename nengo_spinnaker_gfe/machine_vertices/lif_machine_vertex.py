@@ -3,6 +3,7 @@ import numpy
 import logging
 
 from nengo.learning_rules import Voja as NengoVoja
+from nengo.learning_rules import PES as NengoPES
 
 from data_specification.enums import DataType
 
@@ -447,29 +448,31 @@ class LIFMachineVertex(
         mod_edges = list()
         learnt_encoder_edges = list()
         learnt_encoder_edges_and_learning_rules = list()
+        outgoing_learnt_partitions = list()
 
         # group edges into correct routing group
         for incoming_edge in machine_graph.get_edges_ending_at_vertex(self):
             if isinstance(incoming_edge, ConnectionMachineEdge):
                 if incoming_edge.input_port.destination_input_port == \
-                        constants.OUTPUT_PORT.STANDARD:
+                        constants.INPUT_PORT.STANDARD:
                     standard_edges.append(incoming_edge)
                 elif (incoming_edge.input_port.destination_input_port ==
-                          constants.ENSEMBLE_INPUT_PORT.GLOBAL_INHIBITION):
+                        constants.ENSEMBLE_INPUT_PORT.GLOBAL_INHIBITION):
                     inhib_edges.append(incoming_edge)
-                elif (
-                        (incoming_edge.input_port.destination_input_port ==
-                         constants.ENSEMBLE_INPUT_PORT.LEARNT)):
-                    learnt_encoder_edges.append(incoming_edge)
-                    if (incoming_edge.reception_parameters.learning_rule is
-                            not None):
-                        learnt_encoder_edges_and_learning_rules.append(
-                            (incoming_edge,
-                             incoming_edge.reception_parameters.learning_rule))
-                    else:
-                        learnt_encoder_edges_and_learning_rules.append(
-                            (incoming_edge,
-                             incoming_edge.input_port.learning_rule))
+                elif ((incoming_edge.input_port.destination_input_port ==
+                        constants.ENSEMBLE_INPUT_PORT.LEARNT)):
+                    self._locate_learning_rule(
+                        incoming_edge, learnt_encoder_edges_and_learning_rules)
+
+        # locate learnt partitions
+        for outgoing_partition in machine_graph.\
+                get_outgoing_edge_partitions_starting_at_vertex(self):
+            if isinstance(outgoing_partition,
+                          ConnectionMachineOutgoingPartition):
+                # locate all learnt partitions
+                if outgoing_partition.identifier.source_port == \
+                        constants.ENSEMBLE_OUTPUT_PORT.LEARNT:
+                    outgoing_learnt_partitions.append(outgoing_partition)
 
         # sort out modulatory edges
         incoming_modulatory_learning_rules = app_vertex. \
@@ -477,23 +480,57 @@ class LIFMachineVertex(
         for (edge, learning_rule) in learnt_encoder_edges_and_learning_rules:
             if isinstance(learning_rule.learning_rule_type, NengoVoja):
                 if learning_rule in incoming_modulatory_learning_rules.keys():
+                    if (incoming_modulatory_learning_rules[learning_rule] not
+                            in mod_edges):
+                        mod_edges.append(
+                            incoming_modulatory_learning_rules[learning_rule])
+                learnt_encoder_edges.append(edge)
+
+        # process the outgoing partitions for mod edges
+        for learnt_outgoing_partition in outgoing_learnt_partitions:
+            partition_identifier = learnt_outgoing_partition.identifier
+            transmission_parameter = partition_identifier.transmission_parameter
+            learning_rule_type = \
+                transmission_parameter.learning_rule.learning_rule_type
+            if isinstance(learning_rule_type, NengoPES):
+                if (incoming_modulatory_learning_rules[
+                        transmission_parameter.learning_rule] not
+                        in mod_edges):
                     mod_edges.append(
-                        incoming_modulatory_learning_rules[learning_rule])
+                        incoming_modulatory_learning_rules[
+                            transmission_parameter.learning_rule])
 
         # write group of edges into region accordingly
         helpful_functions.write_routing_region(
             spec, routing_infos, standard_edges, input_filter_to_index_map,
             self._input_filters, graph_mapper, nengo_graph)
+
         helpful_functions.write_routing_region(
             spec, routing_infos, inhib_edges, inhib_filter_to_index_map,
             self._inhibitory_filters, graph_mapper, nengo_graph)
+
         helpful_functions.write_routing_region(
             spec, routing_infos, mod_edges, modulatory_filter_to_index_map,
             self._modulatory_filters, graph_mapper, nengo_graph)
+
         helpful_functions.write_routing_region(
             spec, routing_infos, learnt_encoder_edges,
             learnt_encoder_filter_to_index_map,
             self._learnt_encoder_filters, graph_mapper, nengo_graph)
+
+    @staticmethod
+    def _locate_learning_rule(
+            incoming_edge, learnt_encoder_edges_and_learning_rules):
+
+        # locate learning rule
+        if incoming_edge.reception_parameters.learning_rule is not None:
+            learning_rule = incoming_edge.reception_parameters.learning_rule
+        else:
+            learning_rule = incoming_edge.input_port.learning_rule
+
+        # add to list used for mod filters
+        learnt_encoder_edges_and_learning_rules.append(
+            (incoming_edge, learning_rule))
 
     def _write_filters_region(self, spec, machine_time_step_in_seconds):
         """
