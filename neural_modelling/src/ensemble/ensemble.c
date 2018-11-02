@@ -797,7 +797,8 @@ void timer_callback(uint timer_count, uint unused) {
     // processing the neurons.
     log_info("possibley process write filtered!");
     if (ensemble.parameters.n_populations > 1) {
-        // If there are any learnt input signals to transfer, start transfer of 1st signal
+        // If there are any learnt input signals to transfer, start transfer
+        // of 1st signal
         log_info("process write filtered!");
         if(ensemble.parameters.n_learnt_input_signals > 0) {
             write_filtered_learnt_vector(INITIAL_LEARNT_VECTOR_INDEX);
@@ -820,7 +821,7 @@ void timer_callback(uint timer_count, uint unused) {
         //log_info("decode and trasnmit");
         //decode_output_and_transmit(&ensemble);
     }
-    log_info("doen timer");
+    log_info("done timer");
 
 }
 
