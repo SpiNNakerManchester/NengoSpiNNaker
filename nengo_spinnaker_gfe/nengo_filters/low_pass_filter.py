@@ -57,5 +57,7 @@ class LowPassFilter(BasicFilterImpl):
 
         b = self.SECOND_CO_EFFICIENT - a
 
+        print "low pass a {}".format(a)
         spec.write_value(helpful_functions.convert_numpy_array_to_s16_15(a))
+        print "low pass b {}".format(b)
         spec.write_value(helpful_functions.convert_numpy_array_to_s16_15(b))

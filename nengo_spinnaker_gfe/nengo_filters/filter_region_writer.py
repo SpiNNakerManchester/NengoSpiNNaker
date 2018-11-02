@@ -14,6 +14,7 @@ def write_filter_region(
     filter_to_index_map = dict()
 
     # write sizes
+    print "{}:{}:{}".format(len(low_pass_filters), len(none_type_filters), len(linear_filters))
     spec.write_value(len(low_pass_filters))
     spec.write_value(len(none_type_filters))
     spec.write_value(len(linear_filters))

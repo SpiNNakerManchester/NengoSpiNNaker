@@ -82,10 +82,8 @@ struct _lti_filter_init_params {
 void _none_filter_step(uint32_t n_dims, value_t *input,
                        value_t *output, void *params){
     use(params);
-
     // The None filter just copies its input to the output
-    for (uint32_t d = 0; d < n_dims; d++)
-    {
+    for (uint32_t d = 0; d < n_dims; d++){
         output[d] = input[d];
     }
 }
@@ -105,18 +103,15 @@ bool _none_filter_initialise(
     use(size);
     use(size_of_words_read);
 
-    log_debug(">> None filter\n");
-
     // We just need to set the function pointer for the step function.
-    filter->step = _none_filter_step;
-    size_of_words_read = 0;
+    filter->step = &_none_filter_step;
+    *size_of_words_read += 0;
     return true;
 }
 
 
 void _lowpass_filter_step(
-      uint32_t n_dims, value_t *input, value_t *output, void *pars)
-{
+      uint32_t n_dims, value_t *input, value_t *output, void *pars){
     // Cast the params
     value_t_pair_t *params = (value_t_pair_t *) pars;
     register int32_t a = bitsk(params->a);
@@ -124,8 +119,7 @@ void _lowpass_filter_step(
 
     // Apply the filter to every dimension (realised as a Direct Form I digital
     // filter).
-    for (uint32_t d = 0; d < n_dims; d++)
-    {
+    for (uint32_t d = 0; d < n_dims; d++){
         // The following is equivalent to:
         //
         //    output[d] *= params->a;
@@ -168,12 +162,12 @@ bool _lowpass_filter_initialise(
     spin1_memcpy(filter->state, (void*) data_address[offset],
                  sizeof(value_t_pair_t));
 
-    log_debug(">> Lowpass filter (%k, %k)\n",
+    log_info("Lowpass filter (%k, %k)\n",
               ((value_t_pair_t *)filter->state)->a,
               ((value_t_pair_t *)filter->state)->b);
 
     // Store a reference to the step function
-    filter->step = _lowpass_filter_step;
+    filter->step = &_lowpass_filter_step;
     *size_of_words_read =
         (int) (sizeof(value_t_pair_t) / BYTES_TO_WORD_CONVERSION);
     return true;
@@ -183,12 +177,13 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
                       value_t *output, void *s)
 {
     // Cast the state
+    log_info("linear step");
     lti_state_t *state = (lti_state_t *) s;
 
     // Apply the filter to every dimension (realised as a Direct Form I digital
     // filter).
-    for (uint32_t d = n_dims, dd = n_dims - 1; d > 0; d--, dd--)
-    {
+    log_info("loop1");
+    for (uint32_t d = n_dims, dd = n_dims - 1; d > 0; d--, dd--){
         // Point to the correct previous x and y values.
         value_t_pair_t *xy = &state->xyz[dd * state->order];
 
@@ -198,12 +193,11 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
         // Direct Form I filter
         // `m` acts as an index into the ring buffer of historic input and
         // output.
-        for (uint32_t k=0, m = state->n; k < state->order; k++)
-        {
+        log_info("loop2");
+        for (uint32_t k=0, m = state->n; k < state->order; k++){
             // Update the index into the ring buffer, if this would go
             // negative it wraps to the top of the buffer.
-            if (m == 0)
-            {
+            if (m == 0){
               m += state->order;
             }
             m--;
@@ -226,12 +220,13 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
         xy[state->n].a = output[dd];
     }
 
+    log_info("final if");
     // Rotate the ring buffer by moving the starting pointer, if the starting
     // pointer would go beyond the end of the buffer it is returned to the start.
-    if (++state->n == state->order)
-    {
+    if (++state->n == state->order){
         state->n = 0;
     }
+    log_info("finished linear");
 }
 
 //! \brief creates a linear filter
@@ -284,7 +279,7 @@ bool _lti_filter_initialise(
     // If debugging then print out all filter parameters
     for (uint32_t k = 0; k < state->order; k++)
     {
-      log_debug("a[%d] = %k, b[%d] = %k\n", state->abs[k].a, state->abs[k].b);
+      log_info("a[%d] = %k, b[%d] = %k\n", state->abs[k].a, state->abs[k].b);
     }
 
     // Zero all the state holding variables
@@ -293,7 +288,7 @@ bool _lti_filter_initialise(
 
     // Store a reference to the correct step function for the filter.
     // Insert any specially optimised filters here.
-    filter->step = _lti_filter_step;
+    filter->step = &_lti_filter_step;
     return true;
 }
 
@@ -305,27 +300,30 @@ bool _lti_filter_initialise(
 //! \param[out] sdram_words_read: the number of words read during this init
 //! \return bool stating if the initialisation was successful
 bool input_filtering_initialise_filters(
-        if_collection_t *filters, address_t sdram_data,
+        if_collection_t *filter_collection, address_t sdram_data,
         value_t **filter_output_array, uint32_t *sdram_words_read) {
     // Get the number of filters and malloc sufficient space for the filter
     // parameters.
     use(*sdram_words_read);
 
-    filters->n_filters = (
+    // figure how many filters to read in
+    filter_collection->n_filters = (
         sdram_data[N_LOW_PASS_FILTERS] + sdram_data[N_NONE_PASS_FILTERS] +
         sdram_data[N_LINEAR_FILTERS]);
 
     log_info("going to try to allocate dtcm for %d filters each with size %d "
-             "bytes", filters->n_filters, sizeof(if_filter_t));
+             "bytes", filter_collection->n_filters, sizeof(if_filter_t));
     log_info("got %d bytes left in heap", sark_heap_max(sark.heap, 0));
 
-    if (filters->n_filters != 0){
-        filters->filters = spin1_malloc(
-            filters->n_filters * sizeof(if_filter_t));
-        if (filters->filters == NULL){
-            log_error("Cannot allocate the filters DTCM of %d bytes for %d "
-            "filters", filters->n_filters * sizeof(if_filter_t),
-                       filters->n_filters);
+    // malloc enough dtcm for the filters
+    if (filter_collection->n_filters != 0){
+        filter_collection->filters = spin1_malloc(
+            filter_collection->n_filters * sizeof(if_filter_t));
+        if (filter_collection->filters == NULL){
+            log_error(
+                "Cannot allocate the filters DTCM of %d bytes for %d "
+                "filters", filter_collection->n_filters * sizeof(if_filter_t),
+                           filter_collection->n_filters);
             return false;
         }
     }
@@ -336,16 +334,12 @@ bool input_filtering_initialise_filters(
         sdram_data[N_LOW_PASS_FILTERS], sdram_data[N_NONE_PASS_FILTERS],
         sdram_data[N_LINEAR_FILTERS]);
 
-    log_info("god damn you chimp");
-
     // Map of filter indices to filter initialisation methods
     FilterInit filter_types_init[] = {
-        _lowpass_filter_initialise,
-        _none_filter_initialise,
-        _lti_filter_initialise,
+        &_lowpass_filter_initialise,
+        &_none_filter_initialise,
+        &_lti_filter_initialise,
     };
-
-    log_info("damn you mundy");
 
     // map of filter types to n filters
     uint32_t n_filters[] = {
@@ -354,101 +348,98 @@ bool input_filtering_initialise_filters(
         sdram_data[N_LINEAR_FILTERS],
     };
 
-    log_info("damn you mundy again");
-
-    log_info("damn you mundy yet again");
-
     // process low pass filters
+    uint32_t filter_index = 0;
     uint32_t data_index = START_OF_LOW_PASS_FILTERS;
     for (uint32_t filter_type_index=0; filter_type_index<N_FILTER_TYPES;
-         filter_type_index++){
+            filter_type_index++){
 
         log_info("processing filter in type index %d", filter_type_index);
 
-        for (uint32_t filter_index = 0;
-             filter_index < n_filters[filter_type_index];
-             filter_index++) {
+        for (uint32_t filter_type_number = 0;
+                filter_type_number < n_filters[filter_type_index];
+                filter_type_number++) {
 
-            log_info("im a pirate for filter index %d", filter_index);
+            if_filter_t *the_filter = &filter_collection->filters[filter_index];
+            log_info("operating on filter index %d", filter_index);
+            log_info("filter address is %x", (uint32_t)the_filter);
 
             // Get the size of the filter, store it
-            filters->filters[filter_index].size = sdram_data[data_index + SIZE];
+            uint32_t filter_size = sdram_data[data_index + SIZE];
+            the_filter->size = filter_size;
 
-            log_info(
-                "> Filter [%d] size = %d\n",
-                filter_index, sdram_data[data_index + SIZE]);
+            log_info("Filter [%d] size = %d\n", filter_index, filter_size);
 
             // Initialise the input accumulator
             log_info("trying to allocate filter dtcm");
-            filters->filters[filter_index].input = spin1_malloc(
+            the_filter->input = spin1_malloc(
                 sizeof(if_accumulator_t));
-            if (filters->filters[filter_index].input == NULL) {
+            if (the_filter->input == NULL) {
                 log_error("Failed to allocate filter DTCM memory");
                 return false;
             }
 
             // Initialise the input accumulator value
             log_info("trying input value");
-            filters->filters[filter_index].input->value = spin1_malloc(
-                sizeof(value_t) * sdram_data[data_index + SIZE]);
-            if (filters->filters[filter_index].input->value == NULL) {
+            the_filter->input->value =
+                spin1_malloc(sizeof(value_t) * filter_size);
+            if (the_filter->input->value == NULL) {
                 log_error(
                     "Failed to allocate dtcm for filters input values. "
                     "wanted to allocate %d bytes for size %d",
-                    sizeof(value_t) * sdram_data[data_index + SIZE],
-                    sdram_data[data_index + SIZE]);
+                    sizeof(value_t) * filter_size, filter_size);
                 return false;
             }
 
-            log_info("you smell");
+            memset(the_filter->input->value, 0, sizeof(value_t) * filter_size);
+
+            /*for (uint32_t index = 0; index < filter_size; index++){
+                log_info("input value at index %d is %d", index,
+                the_filter->input->value[index]);
+            }*/
 
             // process latching
+            log_info("latching = %d", sdram_data[data_index + FLAGS]);
             if (sdram_data[data_index + FLAGS] == LATCHING) {
-                filters->filters[filter_index].input->mask = LATCHING_MASK;
+                the_filter->input->mask = LATCHING_MASK;
             } else {
-                filters->filters[filter_index].input->mask = NOT_LATCHING_MASK;
+                the_filter->input->mask = NOT_LATCHING_MASK;
             }
 
-            log_info("you smell worse");
-
+            log_info("input mask = %d", the_filter->input->mask);
             // process output
             if (filter_output_array == NULL) {
-                log_info("you smell as bad as sergio");
-                filters->filters[filter_index].output = spin1_malloc(
-                    sizeof(value_t) * sdram_data[data_index + SIZE]);
-                if (filters->filters[filter_index].output == NULL) {
+                the_filter->output = spin1_malloc(sizeof(value_t) *
+                filter_size);
+                if (the_filter->output == NULL) {
                     log_error(
                         "Failed to allocate filter %d output", filter_index);
                     return false;
                 }
             } else { // Otherwise, copy output pointer into filter
-                log_info("you smell asa chimpy");
-                filters->filters[filter_index].output =
-                    filter_output_array[filter_index];
-
+                the_filter->output = filter_output_array[filter_index];
             }
 
-            log_info("you smell as andy");
-
             // Zero the input and the output
-            memset(filters->filters[filter_index].input->value, 0,
-                   sizeof(value_t) * sdram_data[data_index + SIZE]);
-            log_info("you just smell overall");
-            memset(filters->filters[filter_index].output, 0,
-                   sizeof(value_t) * sdram_data[data_index + SIZE]);
-            log_info("god damn you smell");
+            memset(the_filter->output, 0, sizeof(value_t) * filter_size);
+
+            /*for (uint32_t index = 0; index < filter_size; index++){
+                log_info(
+                    "filter output at index %d is %d",
+                     index, the_filter->output[index]);
+            }*/
 
             // pointer for tracking number of words a filter reads
             uint32_t size_of_words_read = 0;
 
             if(!filter_types_init[filter_type_index](
-                sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
-                &size_of_words_read, &filters->filters[filter_index],
-                sdram_data[data_index + SIZE])){
+                    sdram_data, data_index + BASIC_FILTER_PARAMETER_SIZE,
+                    &size_of_words_read, the_filter, filter_size)){
                 log_error("failed to instantiate filter");
                 return false;
             }
             data_index += BASIC_FILTER_PARAMETER_SIZE + size_of_words_read;
+            filter_index += 1;
         }
     }
     *sdram_words_read = data_index;

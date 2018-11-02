@@ -2,6 +2,7 @@
 #define NEURAL_MODELLING_NEURON_LIF_H
 
 #include "stdfix-full-iso.h"
+#include "debug.h"
 #include <ensemble/ensemble.h>
 
 //! accum set to 0.0
@@ -110,6 +111,7 @@ static inline bool neuron_step(
     // spike occurred.
     lif_state->refractory[neuron] = tau_ref;
     lif_state->voltages[neuron] = *voltage;
+
     return true;
 }
 

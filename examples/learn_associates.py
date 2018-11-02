@@ -99,4 +99,4 @@ if __name__ == '__main__':
         sim = gfe_nengo.NengoSimulator(network)
     else:
         sim = mundy_nengo.Simulator(network)
-    sim.run(100)
+    sim.run(10)

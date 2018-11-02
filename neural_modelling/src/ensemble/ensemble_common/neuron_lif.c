@@ -20,6 +20,7 @@ bool lif_prepare_state(
 
     // Get the number of neurons
     uint32_t n_neurons = ensemble->parameters.n_neurons;
+    log_info("n neurons = %d", n_neurons);
 
     // Prepare space for neuron parameters
     ensemble->state = spin1_malloc(sizeof(lif_states_t));
@@ -36,6 +37,9 @@ bool lif_prepare_state(
         return false;
     }
     memset(state->voltages, INITIAL_STATE, sizeof(value_t) * n_neurons);
+    /*for (uint32_t index=0; index < n_neurons; index++){
+        log_info("voltage for neuron %d is %d", index, state->voltages[index]);
+    }*/
 
     // Allocate space for refractory counters
     state->refractory = spin1_malloc(sizeof(uint32_t) * n_neurons);

@@ -111,6 +111,7 @@ class LIFMachineVertex(
     VOJA_REGION_RULE_N_ELEMENT = 4
     PES_REGION_SLICED_RULE_N_ELEMENTS = 5
     SHARED_SDRAM_FOR_SEMAPHORES_IN_BYTES = 4
+    NOT_RECORDING_REGION_ID = 255
 
     FUNCTION_OF_NEURON_TIME_CONSTANT = (1.0 - 2**-11)
     ONE = 1.0
@@ -206,6 +207,9 @@ class LIFMachineVertex(
             time_between_requests, buffer_size_before_receive, nengo_graph):
 
         # get the associated app vertex.
+        print self._label
+        print placement
+
         app_vertex = graph_mapper.get_application_vertex(self)
 
         # allocate the memory regions
@@ -290,34 +294,18 @@ class LIFMachineVertex(
                 helpful_functions.convert_numpy_array_to_s16_15(
                     self._learnt_decoders), data_type=DataType.INT32)
 
-    @staticmethod
-    def _write_recording_region_indexes(spec, app_vertex):
-        recording_regions_indexes = app_vertex.\
-            get_possible_probeable_variables()
+    def _write_recording_region_indexes(self, spec, app_vertex):
+        recording_regions = app_vertex.get_possible_probeable_variables()
+
         # store the recording field indexes
-        spec.write_value(
-            recording_regions_indexes.index(constants.RECORD_SPIKES_FLAG))
-        spec.write_value(
-            recording_regions_indexes.index(constants.RECORD_VOLTAGE_FLAG))
-        spec.write_value(
-            recording_regions_indexes.index(constants.SCALED_ENCODERS_FLAG))
-
-        # if the decoder output flag is in there, add it.
-        if constants.DECODER_OUTPUT_FLAG in recording_regions_indexes:
-            spec.write_value(
-                recording_regions_indexes.index(constants.DECODER_OUTPUT_FLAG))
-        else:
-            spec.write_value(-1, data_type=DataType.INT32)
-
-        # figure how many are active that are not the spikes recorder
-        n_active_recording_regions = 0
-        for variable in app_vertex.get_possible_probeable_variables():
-            if variable != constants.RECORD_SPIKES_FLAG:
-                if app_vertex.is_set_probeable_variable(variable):
-                    n_active_recording_regions += 1
-
-        # add how many active there are
-        spec.write_value(n_active_recording_regions)
+        spec.write_value(len(recording_regions))
+        recording_index = 0
+        for recording_param in recording_regions:
+            if app_vertex.is_set_probeable_variable(recording_param):
+                spec.write_value(recording_index)
+                recording_index += 1
+            else:
+                spec.write_value(self.NOT_RECORDING_REGION_ID)
 
     def _write_recording_region(
             self, spec, ip_tags, n_machine_time_steps, app_vertex,
@@ -539,16 +527,20 @@ class LIFMachineVertex(
         :param machine_time_step_in_seconds: 
         :return: 
         """
+        print "input filters"
         input_filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._input_filters)
+        print "inhib filters"
         inhib_filter_to_index_map = filter_region_writer.write_filter_region(
             spec, machine_time_step_in_seconds, self._input_slice,
             self._inhibitory_filters)
+        print "mod filters"
         modulatory_filter_to_index_map = \
             filter_region_writer.write_filter_region(
                 spec, machine_time_step_in_seconds, self._input_slice,
                 self._modulatory_filters)
+        print "encoder filters"
         learnt_encoder_filter_to_index_map = \
             filter_region_writer.write_filter_region(
                 spec, machine_time_step_in_seconds, self._input_slice,

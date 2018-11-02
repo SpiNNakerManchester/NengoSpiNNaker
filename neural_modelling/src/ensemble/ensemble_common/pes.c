@@ -164,7 +164,7 @@ bool pes_initialise(address_t address){
                 learning_rule < g_num_pes_learning_rules; learning_rule++){
             const pes_parameters_t *parameters =
                 &g_pes_learning_rules[learning_rule];
-            log_debug(
+            log_info(
                 "\tRule %u, Learning rate:%k, Error signal index:%u, "
                 "Error signal start dimension:%u, Error signal end "
                 "dimensions:%u, Decoder row:%u\n",

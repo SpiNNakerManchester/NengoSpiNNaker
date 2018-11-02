@@ -22,6 +22,12 @@
 // declare spin1_wfi
 void spin1_wfi();
 
+//! invalud recording region idex
+#define INVALID_RECORDING_INDEX 255
+
+//! number opf recording regions when using decoders as well
+#define N_RECORDINGS_WITH_DECODERS 4
+
 //! the initial learnt vector index to set off the state machine.
 #define INITIAL_LEARNT_VECTOR_INDEX 0
 
@@ -51,9 +57,8 @@ typedef enum ensemble_params_region_elements {
 
 //! enum mapping recording index points in sdram from python
 typedef enum recording_region_index_positions {
-    RECORD_SPIKES_INDEX = 0, RECORD_VOLTAGE_INDEX = 1,
-    RECORD_ENCODERS_INDEX = 2, RECORD_OUTPUT_INDEX = 3,
-    RECORD_DECODERS_INDEX = 4, N_RECORDING_VARIABLES = 5
+    N_RECORDING_VARIABLES = 0, RECORD_SPIKES_INDEX = 1, RECORD_VOLTAGE_INDEX
+    = 2, RECORD_ENCODERS_INDEX = 3, RECORD_DECODERS_INDEX = 4
 } recording_region_index_positions;
 
 //! callback priorities
@@ -156,19 +161,19 @@ uint spikes_write_size;
 static uint32_t recording_flags = 0;
 
 //! the index for voltage recording
-int voltage_recording_index = -1;
+uint8_t voltage_recording_index = INVALID_RECORDING_INDEX;
 
 //! the index for scaled encoders recording
-int scaled_encoders_recording_index = -1;
+uint8_t scaled_encoders_recording_index = INVALID_RECORDING_INDEX;
 
 //! the index for the output recording
-int output_recording_index = -1;
+uint8_t output_recording_index = INVALID_RECORDING_INDEX;
 
 //! the index for the spike recording
-int spikes_recording_index = -1;
+uint8_t spikes_recording_index = INVALID_RECORDING_INDEX;
 
 //! the index for the decoders recording
-int decoder_recording_index = -1;
+uint8_t decoder_recording_index = INVALID_RECORDING_INDEX;
 
 //! number of possible recording variables
 uint n_recording_variables = 0;
@@ -176,8 +181,8 @@ uint n_recording_variables = 0;
 //! flag to ensure out spikes finished dma before restarting
 static uint32_t n_recordings_outstanding = 0;
 
-//! The values of the recorded variables
-static uint16_t * voltage_recording_values;
+//! The values of the recorded voltages
+static uint16_t *voltage_recording_values;
 
 //! \brief callback when recording dma for variables finished
 void recording_done_callback() {
@@ -208,10 +213,11 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
     uint32_t local_spikes = 0x0;
 
     // Set up an array for storing the recorded variable values
-    value_t *voltage = 0;
+    value_t voltage = 0;
 
     // Wait until recordings have completed, to ensure the recording space
     // can be re-written
+    log_info("n outstanding recordings = %d", n_recordings_outstanding);
     while (n_recordings_outstanding > 0) {
         spin1_wfi();
     }
@@ -238,9 +244,9 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // **NOTE** idea here is that by interspersing these between
             // encoding operations, write buffer should have time to be
             // written out
-            recording_record(
-                scaled_encoders_recording_index, &learnt_encoder_vector,
-                sizeof(value_t) * n_dims);
+            //recording_record(
+            //    scaled_encoders_recording_index, &learnt_encoder_vector,
+            //    sizeof(value_t) * n_dims);
 
             // If neuron's not in refractory period,
             // apply input encoded by learnt encoders
@@ -252,6 +258,7 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
 
         // If the neuron's in its refractory period, decrement the refractory
         // counter
+        /*
         if (in_refractory_period){
             neuron_refractory_decrement(n, ensemble->state);
         }
@@ -271,14 +278,11 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             }
 
             // Perform the neuron update
-            if (neuron_step(n, neuron_input, ensemble->state, voltage)) {
+            if (neuron_step(n, neuron_input, ensemble->state, &voltage)) {
                 // The neuron fired, record the fact in the spike vector that
                 // we're constructing.
                 local_spikes |= bit;
                 out_spikes_set_spike(n);
-
-                // Apply effect of neuron spiking to filtered activities
-                //filtered_activity_neuron_spiked(n);
 
                 // Update non-filtered Voja learning
                 value_t** const_learnt_input = ensemble->learnt_input;
@@ -286,46 +290,50 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
                     encoder_vector, ensemble->gain[n], n_dims,
                     &modulatory_filters, (const value_t**) const_learnt_input);
             }
-        }
+        }*/
 
         // Rotate the neuron firing bit and progress the spike vector
         // if necessary.
-        bit >>= 1;
+        /*bit >>= 1;
         if (bit == 0) {
             // Bit is out of range so reset it
             bit = (1 << 31);
 
-            // Copy spikes into the spike vector
+            // Copy spikes into the spike vector#
             *spikes = local_spikes;
 
             // Point at the next word in the spike vector
             spikes++;
 
             // Reset the local spike vector
+            // Reset the local spike vector
             local_spikes = 0x0;
         }
-
-        voltage_recording_values[n] = *voltage;
+        voltage_recording_values[n] = voltage;*/
     }
-
+/*
     // Copy any remaining spikes into the specified spike vector
     if (ensemble->parameters.n_neurons % BITS_IN_WORD) {
 
         // Copy spikes into the spike vector
         *spikes = local_spikes;
-    }
+    }*/
 
     // Finish up the recording
-    n_recordings_outstanding += 1;
+    /*n_recordings_outstanding += 1;
+
+    uint32_t size_in_bytes = get_bit_field_size(ensemble->parameters.n_neurons);
     out_spikes_record(
         spikes_recording_index, time,
         get_bit_field_size(ensemble->parameters.n_neurons),
         recording_done_callback);
     n_recordings_outstanding += 1;
-    recording_record_and_notify(
-        voltage_recording_index, voltage_recording_values,
-        sizeof(uint16_t) * ensemble->parameters.n_neurons,
-        recording_done_callback);
+    if (voltage_recording_index != INVALID_RECORDING_INDEX){
+        recording_record_and_notify(
+            voltage_recording_index, voltage_recording_values,
+            sizeof(uint16_t) * ensemble->parameters.n_neurons,
+            recording_done_callback);
+    }*/
 }
 
 
@@ -338,7 +346,7 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
 static value_t decode_spike_train(
     const uint32_t n_populations, const uint32_t *population_lengths,
     const value_t *decoder, const uint32_t *spikes) {
-
+    log_info("decode spike train");
     // Resultant decoded value
     value_t output = ZERO_ACCUM_CONSTANT;
 
@@ -423,42 +431,60 @@ static inline void decode_output_and_transmit(
     // Sleep for a random time so that packet transmission occurs some time
     // after the timer tick.  For shorter simulations this will hide the effect
     // of clock drift for a short period.
+    log_info("a");
     spin1_delay_us(random_backoff_us);
 
     // Extract parameters
+    log_info("b");
     const ensemble_parameters_t *params = &ensemble->parameters;
+    log_info("c");
     uint32_t n_neurons_total = params->n_neurons_total;
+    log_info("d");
     uint32_t n_populations = params->n_populations;
+    log_info("e");
     uint32_t n_decoder_rows =
         params->n_decoder_rows + params->n_learnt_decoder_rows;
 
+    log_info("f");
     uint32_t *pop_lengths = ensemble->population_lengths;
+    log_info("g");
     value_t *decoder = ensemble->decoders;
+    log_info("h");
     uint32_t *keys = ensemble->keys;
+    log_info("i");
     uint32_t *spike_vector = ensemble->spikes;
+    log_info("j");
 
     // Apply the decoder and transmit multicast packets.
     // Each decoder row is applied in turn to get the output value, which is then
     // transmitted.
+    log_info("loop");
     for (uint32_t d = 0; d < n_decoder_rows; d++) {
+
+        log_info("k");
         // Get the row of the decoder
         value_t *row = &decoder[d * n_neurons_total];
 
         // Compute the decoded value
+        log_info("l");
         value_t output = decode_spike_train(n_populations, pop_lengths,
                                             row, spike_vector);
 
         // Wait until the expected time to send
+        log_info("m");
         while (tc[T1_COUNT] > expected_time) {
             // Do Nothing
         }
         expected_time -= time_between_spikes;
 
         // Transmit this value (keep trying until it sends)
+        log_info("n");
         while(!spin1_send_mc_packet(keys[d], bitsk(output), WITH_PAYLOAD)){
             spin1_delay_us(1);
         }
+        log_info("o");
     }
+    log_info("p");
 }
 
 //! \brief Multicast packet with payload received. Puts packet into queue and
@@ -466,6 +492,7 @@ static inline void decode_output_and_transmit(
 //! \param[in] key: the mc key
 //! \param[in] payload: the mc payload
 void multicast_payload_callback(uint key, uint payload) {
+    log_info("packet!");
     // Queue the packet for later processing, if no processing is scheduled then
     // trigger the queue processor.
     if (packet_queue_push(&packets, key, payload)) {
@@ -479,11 +506,12 @@ void multicast_payload_callback(uint key, uint payload) {
         // dropped.
         queue_overflows++;
     }
+    log_info("packet Done !");
 }
 
 //! \brief extracts packets from queue and applies input filters
 void process_queue() {
-
+    log_info("process queue !");
     uint32_t offset = ensemble.parameters.input_subspace_offset;
     uint32_t max_dim_sub_one = ensemble.parameters.input_subspace_n_dims - 1;
 
@@ -530,6 +558,7 @@ void process_queue() {
 //! \param[in] arg1: meh
 //! \param[in] arg0: meh
 void user_event(uint arg0, uint arg1) {
+    log_info("user");
     use(arg0);
     use(arg1);
     process_queue();
@@ -538,6 +567,7 @@ void user_event(uint arg0, uint arg1) {
 //! \brief Writes the accumulated local section of the standard filter's
 //!        output to SDRAM
 static inline void write_filtered_vector() {
+    log_info("write filtered vector");
     // Compute the size of the transfer
     uint size = sizeof(value_t) * ensemble.parameters.input_subspace_n_dims;
 
@@ -550,6 +580,7 @@ static inline void write_filtered_vector() {
 //!        output to SDRAM
 //! \param[in] signal: the index for the next learnt vector to process
 static inline void write_filtered_learnt_vector(uint32_t signal) {
+    log_info("write filtered learnt vector");
     // Cache index
     dma_learnt_vector = signal;
 
@@ -563,6 +594,7 @@ static inline void write_filtered_learnt_vector(uint32_t signal) {
 
 //! \brief Reads whole input vector from SDRAM
 static inline void read_whole_vector() {
+    log_info("read whole vector");
     // Schedule reading in the whole input vector from SDRAM
     value_t *sdram_input_vector = ensemble.parameters.sdram_input_vector;
     spin1_dma_transfer(
@@ -573,6 +605,7 @@ static inline void read_whole_vector() {
 //! \brief Reads whole input vector from SDRAM
 //! \param[in] signal: the index for the next learnt vector to read in
 static inline void read_whole_learned_vector(uint32_t signal) {
+    log_info("read whole learned vector");
     // Cache index
     dma_learnt_vector = signal;
 
@@ -586,6 +619,7 @@ static inline void read_whole_learned_vector(uint32_t signal) {
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_read_spike_vector(uint transfer_id, uint tag){
+    log_info("read spike vector");
     use(transfer_id);
     use(tag);
 
@@ -601,6 +635,7 @@ void dma_complete_read_spike_vector(uint transfer_id, uint tag){
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_write_spike_vector(uint transfer_id, uint tag){
+    log_info("write spike vector");
     use(transfer_id);
     use(tag);
 
@@ -613,7 +648,7 @@ void dma_complete_write_spike_vector(uint transfer_id, uint tag){
     // Schedule reading back the whole spike vector from SDRAM
     uint32_t *sdram_spike_vector = ensemble.parameters.sdram_spike_vector;
     spin1_dma_transfer(
-        READ_SPIKE_VECTOR, sdram_spike_vector, ensemble.spikes, DMA_READ,                                  // Direction
+        READ_SPIKE_VECTOR, sdram_spike_vector, ensemble.spikes, DMA_READ,
         sizeof(uint32_t) * ensemble.sdram_spikes_length);
 }
 
@@ -621,6 +656,7 @@ void dma_complete_write_spike_vector(uint transfer_id, uint tag){
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_read_whole_learnt_vector(uint transfer_id, uint tag){
+    log_info("read whole learnt vector");
     use(transfer_id);
     use(tag);
 
@@ -641,6 +677,7 @@ void dma_complete_read_whole_learnt_vector(uint transfer_id, uint tag){
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_read_whole_vector(uint transfer_id, uint tag){
+    log_info("read whole vector");
     use(transfer_id);
     use(tag);
 
@@ -660,6 +697,7 @@ void dma_complete_read_whole_vector(uint transfer_id, uint tag){
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_write_filtered_learnt_vector(uint transfer_id, uint tag){
+    log_info("write filtered learnt vector");
     use(transfer_id);
     use(tag);
 
@@ -680,6 +718,7 @@ void dma_complete_write_filtered_learnt_vector(uint transfer_id, uint tag){
 //! \param[in] tag: the tag for the dma
 //! \param[in] transfer_id: ??????
 void dma_complete_write_filtered_vector(uint transfer_id, uint tag){
+    log_info("write filtered vector");
     use(transfer_id);
     use(tag);
 
@@ -710,7 +749,7 @@ void timer_callback(uint timer_count, uint unused) {
     use(unused);
     time++;
 
-    log_debug("Timer tick %u", time);
+    log_info("Timer tick %u", time);
 
     // If a fixed number of simulation ticks are specified and these have
     // passed
@@ -744,16 +783,22 @@ void timer_callback(uint timer_count, uint unused) {
     process_queue();
 
     // process input filters
+    log_info("process input filters!");
     input_filtering_step(&input_filters);
+    log_info("process inhib filters!");
     input_filtering_step(&inhibition_filters);
+    log_info("process mod filters!");
     input_filtering_step_no_accumulate(&modulatory_filters);
+    log_info("process learnt filters!");
     input_filtering_step_no_accumulate(&learnt_encoder_filters);
 
     // If there are multiple cores for this ensemble then schedule copying the
     // input vector into SDRAM.  Otherwise if this is address is NULL start
     // processing the neurons.
+    log_info("possibley process write filtered!");
     if (ensemble.parameters.n_populations > 1) {
         // If there are any learnt input signals to transfer, start transfer of 1st signal
+        log_info("process write filtered!");
         if(ensemble.parameters.n_learnt_input_signals > 0) {
             write_filtered_learnt_vector(INITIAL_LEARNT_VECTOR_INDEX);
         }
@@ -762,16 +807,21 @@ void timer_callback(uint timer_count, uint unused) {
         }
     }
     else {
+        log_info("start sim neurons!");
         // Process the neurons, writing the spikes out into DTCM rather than a
         // shared SDRAM vector.
         simulate_neurons(&ensemble, ensemble.spikes);
 
         // Apply PES learning to spike vector
-        pes_apply(&ensemble, &modulatory_filters);
+        //log_info("start pes apply");
+        //pes_apply(&ensemble, &modulatory_filters);
 
         // Decode and transmit output
-        decode_output_and_transmit(&ensemble);
+        //log_info("decode and trasnmit");
+        //decode_output_and_transmit(&ensemble);
     }
+    log_info("doen timer");
+
 }
 
 //! \brief initialises the ensemble_parameters_t struct, and the learnt input
@@ -929,6 +979,10 @@ bool ensemble_setup_filters(address_t address){
     }
     total_words_read += words_read;
 
+    // final input filter updating
+    input_filters.output_size = ensemble.parameters.input_subspace_n_dims;
+    input_filters.output = ensemble.input_local;
+
     // process inhib filters
     log_info("sorting out inhib filters");
     if(!input_filtering_initialise_filters(
@@ -938,6 +992,11 @@ bool ensemble_setup_filters(address_t address){
     }
     total_words_read += words_read;
 
+    // final inhib filter updating
+    inhibition_filters.output_size = 1;
+    inhibition_filters.output = &ensemble.inhibitory_input;
+
+
     // process modulatory filters
     log_info("sorting out modulatory filters");
     if(!input_filtering_initialise_filters(
@@ -946,6 +1005,7 @@ bool ensemble_setup_filters(address_t address){
         return false;
     }
     total_words_read += words_read;
+
 
     // process learnt encoder filters
     log_info("sorting out learnt encoders filters");
@@ -1086,18 +1146,33 @@ static bool initialise_recording(address_t recording_address){
 //! recording indexes
 //! \return True if recording initialisation is successful, false otherwise
 static bool read_in_recording_indexs(address_t recording_index_address){
+    uint32_t n_recording_regions =
+        recording_index_address[N_RECORDING_VARIABLES];
+
+
     // read indexes from sdram
-    voltage_recording_index = recording_index_address[RECORD_VOLTAGE_INDEX];
+    voltage_recording_index =
+        (uint8_t) recording_index_address[RECORD_VOLTAGE_INDEX];
     scaled_encoders_recording_index =
-        recording_index_address[RECORD_ENCODERS_INDEX];
-    output_recording_index = recording_index_address[RECORD_OUTPUT_INDEX];
-    spikes_recording_index = recording_index_address[RECORD_SPIKES_INDEX];
-    decoder_recording_index = recording_index_address[RECORD_DECODERS_INDEX];
+        (uint8_t) recording_index_address[RECORD_ENCODERS_INDEX];
+    spikes_recording_index =
+        (uint8_t) recording_index_address[RECORD_SPIKES_INDEX];
 
-    // read how many variables are being recorded
-    n_recording_variables = recording_index_address[N_RECORDING_VARIABLES];
+    if (n_recording_regions == N_RECORDINGS_WITH_DECODERS){
+        decoder_recording_index =
+            (uint8_t) recording_index_address[RECORD_DECODERS_INDEX];
+    }
+    else{
+        decoder_recording_index = INVALID_RECORDING_INDEX;
+    }
 
-    // instantiate the recording stores
+    log_info(
+        "volt record id %d scaled encoder record id %d spikes recording id %d "
+        "decoder recording id %d",
+         voltage_recording_index, scaled_encoders_recording_index,
+         spikes_recording_index, decoder_recording_index);
+
+    // instantiate the recording stores for voltages
     voltage_recording_values = (uint16_t *) spin1_malloc(
         sizeof(uint16_t) * ensemble.parameters.n_neurons);
     if (voltage_recording_values == NULL){
@@ -1114,7 +1189,6 @@ static bool read_in_recording_indexs(address_t recording_index_address){
     if (!out_spikes_initialize(ensemble.parameters.n_neurons)) {
         return false;
     }
-
     return true;
 }
 
@@ -1195,7 +1269,7 @@ static bool initialize(uint32_t *timer_period){
     }
 
     // sort out recording index's
-    log_info("sorting out reocridng index");
+    log_info("sorting out recording index");
     if (!read_in_recording_indexs(
             data_specification_get_region(RECORDING_INDEXES, address))) {
         return false;

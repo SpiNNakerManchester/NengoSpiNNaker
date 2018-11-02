@@ -107,6 +107,8 @@ class ValueSinkMachineVertex(
             n_machine_time_steps, machine_time_step_in_seconds, graph_mapper,
             nengo_graph):
 
+        print "sink at {}".format(placement)
+
         # reserve the memory region blocks
         self._reserve_memory_regions(spec)
 

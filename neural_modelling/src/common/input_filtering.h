@@ -3,6 +3,7 @@
 
 #include "spin1_api.h"
 #include "common-typedefs.h"
+#include "debug.h"
 #include <nengo_typedefs.h>
 
 //! An input accumulator.
@@ -74,17 +75,31 @@ static inline void _if_filter_input(
 
 //! \brief Simulate one step of a filter and reset its accumulator if necessary
 //! \param[in] filter: the filters to work with
-static inline void _if_filter_step(if_filter_t* filter)
-{
+static inline void _if_filter_step(if_filter_t* filter){
+    log_info("in private filter step");
+    log_info("filter is %x", (uint32_t)filter);
     // Disable interrupts to avoid a race condition
     uint32_t cpsr = spin1_fiq_disable();
 
     // Apply the simulation step
+    log_info( "size=%d", filter->size);
+    /*log_info(
+    "size=%d"
+    //",value = %d"
+    //",output = %d"
+    //",state = %d",
+    ,filter->size
+    //,filter->input->value
+    //,filter->output
+    //,filter->state
+    );*/
+    log_info("in step");
     filter->step(filter->size, filter->input->value,
                  filter->output, filter->state);
 
     // Apply the input accumulator step.  The mask will either set the
     // accumulator to zero or will leave it at its current value.
+    log_info("loop");
     for (uint32_t n = 0; n < filter->size; n++)
     {
         filter->input->value[n] =
@@ -93,6 +108,7 @@ static inline void _if_filter_step(if_filter_t* filter)
 
     // Re-enable interrupts
     spin1_mode_restore(cpsr);
+    log_info("freedon!");
 }
 
 //! \brief Returns true if the packet matched any routing entries, otherwise
@@ -165,8 +181,7 @@ static inline void input_filtering_step_no_accumulate(
 
 //! \brief Apply all filter steps and accumulate their outputs.
 //! \param[in] filters: the filters to update
-static inline void input_filtering_step(
-    if_collection_t *filters)
+static inline void input_filtering_step(if_collection_t *filters)
 {
     // Zero the accumulator, not using memset as this would entail a further
     // function call.
@@ -177,21 +192,29 @@ static inline void input_filtering_step(
 
     // Apply all of the filter step functions and accumulate the outputs of the
     // filters.
+    log_info("before 2 loop");
     for (uint32_t n = filters->n_filters; n > 0; n--)
     {
         // Get the filter and apply the step function
+        log_info("n - 1 = %d", n-1);
         if_filter_t *filter = &filters->filters[n - 1];
+
+
         _if_filter_step(filter);
+        log_info("baconed");
 
         // Get the filter output
         value_t *output = filters->filters[n - 1].output;
 
         // Include each dimension in turn
+        log_info("srtart loop 3");
         for (uint32_t d = filters->output_size; d > 0; d--)
         {
             filters->output[d - 1] += output[d - 1];
         }
+        log_info("end of loop 3");
     }
+    log_info("saved!");
 }
 
 //! \brief Copy in a set of routing entries.

@@ -98,7 +98,7 @@ class InterposerMachineVertex(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor,
             machine_time_step_in_seconds, graph_mapper, nengo_graph):
-
+        print "interposer at {}".format(placement)
         self._allocate_memory_regions(spec)
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(

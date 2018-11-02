@@ -49,7 +49,7 @@ bool voja_initialise(address_t address){
                 learning_rule < g_num_voja_learning_rules; learning_rule++){
             const voja_parameters_t *parameters =
                 &g_voja_learning_rules[learning_rule];
-            log_debug(
+            log_info(
                 "\tRule %u, Learning rate:%k, Learning signal filter "
                 "index:%d, Encoder output offset:%u, Decoded input filter "
                 "index:%u\n",

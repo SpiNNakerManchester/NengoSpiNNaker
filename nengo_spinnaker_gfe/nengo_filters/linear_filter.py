@@ -70,5 +70,7 @@ class LinearFilter(BasicFilterImpl):
         ab = numpy.vstack((-a[1:], b[1:])).T.flatten()
 
         # Convert the values to fixpoint and write into a data buffer
+        print "other {}".format(self._other)
         spec.write_value(self._order)
+        print "ab {}".format(ab)
         spec.write_array(helpful_functions.convert_numpy_array_to_s16_15(ab))
