@@ -31,8 +31,11 @@ from spinn_front_end_common.interface.buffer_management import \
     recording_utilities
 from spinn_front_end_common.interface.buffer_management.buffer_models import \
     AbstractReceiveBuffersToHost
+from spinn_front_end_common.interface.provenance import \
+    ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
+from spinn_front_end_common.utilities.utility_objs import ExecutableType, \
+    ProvenanceDataItem
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities import helpful_functions as \
     fec_helpful_functions
@@ -46,7 +49,7 @@ class LIFMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
         AbstractTransmitsMulticastSignals, AbstractReceiveBuffersToHost,
-        AbstractRecordable):
+        AbstractRecordable, ProvidesProvenanceDataFromMachineImpl):
 
     __slots__ = [
         "_resources",
@@ -97,8 +100,15 @@ class LIFMachineVertex(
             ('VOJA', 11),
             ('RECORDING_INDEXES', 12),
             # only one for SPike Voltage Encoder (from mundy)
-            ('RECORDING', 13)
+            ('RECORDING', 13),
+            # provenance data region
+            ('PROVENANCE_DATA', 14),
            ])  # 13 from 26
+
+    EXTRA_PROVENANCE_DATA_ENTRIES = Enum(
+        value="EXTRA_PROVENANCE_DATA_ENTRIES",
+        names=[('QUEUE_OVERFLOWS', 0),
+               ('N_LOCAL_PROVENANCE_ITEMS', 1)])
 
     # SDRAM calculation
     ENSEMBLE_PARAMS_ITEMS = 17
@@ -130,6 +140,7 @@ class LIFMachineVertex(
         AbstractAcceptsMulticastSignals.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
         AbstractReceiveBuffersToHost.__init__(self)
+        ProvidesProvenanceDataFromMachineImpl.__init__(self)
 
         self._resources = resources
         self._neuron_slice = neuron_slice
@@ -263,6 +274,9 @@ class LIFMachineVertex(
 
         # process matrix regions
         self._process_matrix_regions(spec)
+
+        # provenance data items
+        self.reserve_provenance_data_region(spec)
 
         spec.end_specification()
 
@@ -802,3 +816,40 @@ class LIFMachineVertex(
     @overrides(AbstractReceiveBuffersToHost.get_minimum_buffer_sdram_usage)
     def get_minimum_buffer_sdram_usage(self):
         return sum(self._minimum_buffer_sdram_usage)
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
+    def _n_additional_data_items(self):
+        return self.EXTRA_PROVENANCE_DATA_ENTRIES.N_LOCAL_PROVENANCE_ITEMS.value
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
+    def _provenance_region_id(self):
+        return self.DATA_REGIONS.PROVENANCE_DATA.value
+
+    @overrides(ProvidesProvenanceDataFromMachineImpl.
+               get_provenance_data_from_machine)
+    def get_provenance_data_from_machine(self, transceiver, placement):
+        # get data from basic prov
+        provenance_data = self._read_provenance_data(transceiver, placement)
+        provenance_items = self._read_basic_provenance_items(
+            provenance_data, placement)
+        provenance_data = self._get_remaining_provenance_data_items(
+            provenance_data)
+
+        # get item in data
+        queue_overflows = provenance_data[
+            self.EXTRA_PROVENANCE_DATA_ENTRIES.QUEUE_OVERFLOWS.value]
+        label, x, y, p, names = self._get_placement_details(placement)
+
+        # translate into provenance data items
+        provenance_items.append(ProvenanceDataItem(
+            self._add_name(names, "Time_queue_overflows"),
+            queue_overflows,
+            report=queue_overflows > 0,
+            message=(
+                "The packets acquired by core {}:{}:{} running model {} "
+                "failed to keep {} items in its buffer. Unknown how to "
+                "rectify".format(x, y, p, self.get_binary_file_name(),
+                                 queue_overflows))))
+        return provenance_items

@@ -16,6 +16,8 @@ from spinn_front_end_common.abstract_models import \
     AbstractRecordable
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
+from spinn_front_end_common.interface.provenance import \
+    ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
@@ -26,7 +28,8 @@ from spinnman.messages.sdp import SDPMessage, SDPHeader
 class SDPReceiverMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractProvidesNKeysForPartition,
-        AbstractTransmitsMulticastSignals, AbstractRecordable):
+        AbstractTransmitsMulticastSignals, AbstractRecordable,
+        ProvidesProvenanceDataFromMachineImpl):
 
     __slots__ = [
         # keys to transmit with i think
@@ -41,13 +44,15 @@ class SDPReceiverMachineVertex(
         names=[('SYSTEM', 0),
                ('SDP_PORT', 1),
                ('KEYS', 2),
-               ('MC_TRANSMISSION_PARAMS', 3)])
+               ('MC_TRANSMISSION_PARAMS', 3),
+               ('PROVENANCE_DATA', 4)])
 
     BYTES_PER_FIELD = 4
     SDP_PORT_SIZE = 1
     USE_REVERSE_IPTAGS = False
     SDP_PORT = 6
     MC_TRANSMISSION_REGION_ITEMS = 2
+    N_LOCAL_PROVENANCE_ITEMS = 0
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
     # the next timer ticks worth of changes. future could be modded to remove
@@ -62,6 +67,7 @@ class SDPReceiverMachineVertex(
         AbstractTransmitsMulticastSignals.__init__(self)
         AbstractProvidesNKeysForPartition.__init__(self)
         AbstractRecordable.__init__(self)
+        ProvidesProvenanceDataFromMachineImpl.__init__(self)
 
         # TODO WHY DO WE PARTITION OVER OUTGOING PARTITIONS!!!
         self._managing_app_outgoing_partition = outgoing_partition
@@ -93,10 +99,11 @@ class SDPReceiverMachineVertex(
     @property
     @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
-        return self.get_static_resources(self._n_keys)
+        return self.get_static_resources(
+            self._n_keys, self.N_LOCAL_PROVENANCE_ITEMS)
 
     @staticmethod
-    def get_static_resources(keys):
+    def get_static_resources(keys, local_provenance_items):
         if SDPReceiverMachineVertex.USE_REVERSE_IPTAGS:
             reverse_ip_tags = [ReverseIPtagResource()]
         else:
@@ -108,6 +115,8 @@ class SDPReceiverMachineVertex(
                  constants.BYTE_TO_WORD_MULTIPLIER) +
                 (SDPReceiverMachineVertex.MC_TRANSMISSION_REGION_ITEMS *
                  constants.BYTE_TO_WORD_MULTIPLIER) +
+                ProvidesProvenanceDataFromMachineImpl.get_provenance_data_size(
+                    local_provenance_items) +
                 SDPReceiverMachineVertex._calculate_sdram_for_keys(keys)),
             dtcm=DTCMResource(0),
             cpu_cycles=CPUCyclesPerTickResource(0),
@@ -200,6 +209,7 @@ class SDPReceiverMachineVertex(
             (self.MC_TRANSMISSION_REGION_ITEMS *
              constants.BYTE_TO_WORD_MULTIPLIER),
             label="mc_transmission data")
+        self.reserve_provenance_data_region(spec)
 
     def send_output_to_spinnaker(self, value, placement, transceiver):
         # Apply the pre-slice, the connection function and the transform.
@@ -230,3 +240,13 @@ class SDPReceiverMachineVertex(
                 destination_chip_y=placement.y),
             data=data)
         transceiver.send_sdp_message(packet)
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
+    def _n_additional_data_items(self):
+        return self.N_LOCAL_PROVENANCE_ITEMS
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
+    def _provenance_region_id(self):
+        return self.DATA_REGIONS.PROVENANCE_DATA.value

@@ -14,6 +14,8 @@ from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
 from spinn_front_end_common.interface.buffer_management import \
     recording_utilities
+from spinn_front_end_common.interface.provenance import \
+    ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
@@ -22,7 +24,8 @@ from spinn_utilities.overrides import overrides
 
 class ValueSourceMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
-        AbstractHasAssociatedBinary, AbstractTransmitsMulticastSignals):
+        AbstractHasAssociatedBinary, AbstractTransmitsMulticastSignals,
+        ProvidesProvenanceDataFromMachineImpl):
 
     __slots__ = [
         #
@@ -51,7 +54,10 @@ class ValueSourceMachineVertex(
                ('OUTPUT_REGION', 1),
                ('KEY_REGION', 2),
                ('NEURON_REGION', 3),
-               ('RECORDING', 4)])
+               ('RECORDING', 4),
+               ('PROVENANCE', 5)])
+
+    N_LOCAL_PROVENANCE_ITEMS = 0
 
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
     N_RECORDING_REGIONS = 1
@@ -69,6 +75,8 @@ class ValueSourceMachineVertex(
         MachineDataSpecableVertex.__init__(self)
         AbstractHasAssociatedBinary.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
+        ProvidesProvenanceDataFromMachineImpl.__init__(self)
+
         self._outgoing_partition_slice = outgoing_partition_slice
         self._minimum_buffer_sdram = minimum_buffer_sdram
         self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
@@ -201,7 +209,7 @@ class ValueSourceMachineVertex(
     def resources_required(self, n_machine_time_steps):
         return self.generate_static_resources(
             self._outgoing_partition_slice, n_machine_time_steps,
-            self._is_recording_output)
+            self._is_recording_output, self.N_LOCAL_PROVENANCE_ITEMS)
 
     @staticmethod
     def _sdram_size_in_bytes_for_key_region(n_atoms):
@@ -214,7 +222,7 @@ class ValueSourceMachineVertex(
 
     def generate_static_resources(
             self, outgoing_partition_slice, n_machine_time_steps,
-            is_recording_output):
+            is_recording_output, n_provenance_items):
 
         recording_regions = 0
         if is_recording_output:
@@ -232,7 +240,10 @@ class ValueSourceMachineVertex(
             # recordings
             recording_utilities.get_recording_header_size(recording_regions) +
             # params region
-            (self.NEURON_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER))
+            (self.NEURON_REGION_ITEMS * constants.BYTE_TO_WORD_MULTIPLIER) +
+            # provenance data region
+            ProvidesProvenanceDataFromMachineImpl.get_provenance_data_size(
+                n_provenance_items))
 
         # the basic sdram
         basic_res = ResourceContainer(sdram=SDRAMResource(sdram))
@@ -263,3 +274,14 @@ class ValueSourceMachineVertex(
     @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
         return True
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
+    def _n_additional_data_items(self):
+        return self.N_LOCAL_PROVENANCE_ITEMS
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
+    def _provenance_region_id(self):
+        return self.DATA_REGIONS.PROVENANCE_DATA.value
+

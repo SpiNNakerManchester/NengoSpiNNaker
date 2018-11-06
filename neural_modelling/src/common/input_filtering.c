@@ -162,10 +162,6 @@ bool _lowpass_filter_initialise(
     spin1_memcpy(filter->state, (void*) data_address[offset],
                  sizeof(value_t_pair_t));
 
-    log_info("Lowpass filter (%k, %k)\n",
-              ((value_t_pair_t *)filter->state)->a,
-              ((value_t_pair_t *)filter->state)->b);
-
     // Store a reference to the step function
     filter->step = &_lowpass_filter_step;
     *size_of_words_read =
@@ -177,12 +173,10 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
                       value_t *output, void *s)
 {
     // Cast the state
-    log_info("linear step");
     lti_state_t *state = (lti_state_t *) s;
 
     // Apply the filter to every dimension (realised as a Direct Form I digital
     // filter).
-    log_info("loop1");
     for (uint32_t d = n_dims, dd = n_dims - 1; d > 0; d--, dd--){
         // Point to the correct previous x and y values.
         value_t_pair_t *xy = &state->xyz[dd * state->order];
@@ -193,7 +187,6 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
         // Direct Form I filter
         // `m` acts as an index into the ring buffer of historic input and
         // output.
-        log_info("loop2");
         for (uint32_t k=0, m = state->n; k < state->order; k++){
             // Update the index into the ring buffer, if this would go
             // negative it wraps to the top of the buffer.
@@ -220,13 +213,11 @@ void _lti_filter_step(uint32_t n_dims, value_t *input,
         xy[state->n].a = output[dd];
     }
 
-    log_info("final if");
     // Rotate the ring buffer by moving the starting pointer, if the starting
     // pointer would go beyond the end of the buffer it is returned to the start.
     if (++state->n == state->order){
         state->n = 0;
     }
-    log_info("finished linear");
 }
 
 //! \brief creates a linear filter
@@ -276,11 +267,11 @@ bool _lti_filter_initialise(
     size_of_words_read +=
         ((sizeof(value_t_pair_t) * state->order) * BYTES_TO_WORD_CONVERSION);
 
-    // If debugging then print out all filter parameters
+    /* If debugging then print out all filter parameters
     for (uint32_t k = 0; k < state->order; k++)
     {
       log_info("a[%d] = %k, b[%d] = %k\n", state->abs[k].a, state->abs[k].b);
-    }
+    }*/
 
     // Zero all the state holding variables
     state->n = 0;
@@ -311,9 +302,9 @@ bool input_filtering_initialise_filters(
         sdram_data[N_LOW_PASS_FILTERS] + sdram_data[N_NONE_PASS_FILTERS] +
         sdram_data[N_LINEAR_FILTERS]);
 
-    log_info("going to try to allocate dtcm for %d filters each with size %d "
+    /*log_info("going to try to allocate dtcm for %d filters each with size %d "
              "bytes", filter_collection->n_filters, sizeof(if_filter_t));
-    log_info("got %d bytes left in heap", sark_heap_max(sark.heap, 0));
+    log_info("got %d bytes left in heap", sark_heap_max(sark.heap, 0));*/
 
     // malloc enough dtcm for the filters
     if (filter_collection->n_filters != 0){
@@ -328,11 +319,11 @@ bool input_filtering_initialise_filters(
         }
     }
 
-    log_info(
+    /*log_info(
         "Loading %d low pass filters, %d none pass filters and %d linear "
         "filters\n",
         sdram_data[N_LOW_PASS_FILTERS], sdram_data[N_NONE_PASS_FILTERS],
-        sdram_data[N_LINEAR_FILTERS]);
+        sdram_data[N_LINEAR_FILTERS]);*/
 
     // Map of filter indices to filter initialisation methods
     FilterInit filter_types_init[] = {
@@ -354,24 +345,24 @@ bool input_filtering_initialise_filters(
     for (uint32_t filter_type_index=0; filter_type_index<N_FILTER_TYPES;
             filter_type_index++){
 
-        log_info("processing filter in type index %d", filter_type_index);
+        //log_info("processing filter in type index %d", filter_type_index);
 
         for (uint32_t filter_type_number = 0;
                 filter_type_number < n_filters[filter_type_index];
                 filter_type_number++) {
 
             if_filter_t *the_filter = &filter_collection->filters[filter_index];
-            log_info("operating on filter index %d", filter_index);
-            log_info("filter address is %x", (uint32_t)the_filter);
+            //log_info("operating on filter index %d", filter_index);
+            //log_info("filter address is %x", (uint32_t)the_filter);
 
             // Get the size of the filter, store it
             uint32_t filter_size = sdram_data[data_index + SIZE];
             the_filter->size = filter_size;
 
-            log_info("Filter [%d] size = %d\n", filter_index, filter_size);
+            //log_info("Filter [%d] size = %d\n", filter_index, filter_size);
 
             // Initialise the input accumulator
-            log_info("trying to allocate filter dtcm");
+            //log_info("trying to allocate filter dtcm");
             the_filter->input = spin1_malloc(
                 sizeof(if_accumulator_t));
             if (the_filter->input == NULL) {
@@ -380,7 +371,7 @@ bool input_filtering_initialise_filters(
             }
 
             // Initialise the input accumulator value
-            log_info("trying input value");
+            //log_info("trying input value");
             the_filter->input->value =
                 spin1_malloc(sizeof(value_t) * filter_size);
             if (the_filter->input->value == NULL) {
@@ -399,14 +390,14 @@ bool input_filtering_initialise_filters(
             }*/
 
             // process latching
-            log_info("latching = %d", sdram_data[data_index + FLAGS]);
+            //log_info("latching = %d", sdram_data[data_index + FLAGS]);
             if (sdram_data[data_index + FLAGS] == LATCHING) {
                 the_filter->input->mask = LATCHING_MASK;
             } else {
                 the_filter->input->mask = NOT_LATCHING_MASK;
             }
 
-            log_info("input mask = %d", the_filter->input->mask);
+            //log_info("input mask = %d", the_filter->input->mask);
             // process output
             if (filter_output_array == NULL) {
                 the_filter->output = spin1_malloc(sizeof(value_t) *
@@ -460,7 +451,7 @@ bool input_filtering_initialise_routes(
     // Copy in the number of routing entries
     filters->n_routes = address[N_ROUTES];
     *sdram_words_read += STARTS_OF_DATA;
-    log_info("Loading %d filter routes\n", filters->n_routes);
+    //log_info("Loading %d filter routes\n", filters->n_routes);
 
     // Malloc sufficient room for the entries
     if (filters->n_routes != 0){
@@ -481,13 +472,13 @@ bool input_filtering_initialise_routes(
             BYTES_TO_WORD_CONVERSION);
 
         // debug print
-        for (uint32_t n = 0; n < filters->n_routes; n++)
+        /*for (uint32_t n = 0; n < filters->n_routes; n++)
         {
             log_debug("\tRoute[%d] = (0x%08x, 0x%08x) dmask=0x%08x => %d\n",
                   n, filters->routes[n].key, filters->routes[n].mask,
                   filters->routes[n].dimension_mask,
                   filters->routes[n].input_index);
-        }
+        }*/
     }
     return true;
 }

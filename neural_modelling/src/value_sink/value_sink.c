@@ -6,8 +6,6 @@
 #include <common/input_filtering.h>
 #include <common/packet_queue.h>
 
-
-
 //! the number of timer ticks that this model should run for before exiting.
 uint32_t simulation_ticks = 0;
 
@@ -40,7 +38,7 @@ static unsigned int queue_overflows = 0;
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
-    SYSTEM, SLICE_DATA, FILTERS, FILTER_ROUTING, RECORDING
+    SYSTEM, SLICE_DATA, FILTERS, FILTER_ROUTING, RECORDING, PROVENANCE_REGION
 } regions;
 
 //! callback priorities
@@ -52,6 +50,20 @@ typedef enum callback_priorities{
 typedef enum slice_data_parameters{
     N_ATOMS, LO_ATOM
 } slice_data_parameters;
+
+//! enum mapping of extra provenance data items
+typedef enum extra_provenance_data_region_entries{
+    NUMBER_OF_QUEUE_OVERFLOWS = 0
+} extra_provenance_data_region_entries;
+
+//! \brief callback for storing extra provenance data items
+void c_main_store_provenance_data(address_t provenance_region){
+    log_debug("writing other provenance data");
+
+    // store the data into the provenance data region
+    provenance_region[NUMBER_OF_QUEUE_OVERFLOWS] = queue_overflows;
+    log_debug("finished other provenance data");
+}
 
 //! \brief processes multicast packet with payload
 //! \param[in] key: the pakcet key
@@ -254,6 +266,15 @@ static bool initialize(uint32_t *timer_period) {
 
     // Multicast packet queue
     packet_queue_init(&packets);
+
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
+
+    // set up provenance function
+    simulation_set_provenance_function(
+        c_main_store_provenance_data,
+        data_specification_get_region(PROVENANCE_REGION, address));
 
     // passed
     return true;

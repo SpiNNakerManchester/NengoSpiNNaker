@@ -47,8 +47,14 @@ void spin1_wfi();
 typedef enum regions {
     SYSTEM = 0, ENSEMBLE_PARAMS = 1, ENCODER = 2, BIAS = 3, GAIN = 4,
     DECODER = 5, LEARNT_DECODER = 6, KEYS = 7, FILTERS = 8, ROUTING = 9,
-    PES = 10, VOJA = 11, RECORDING_INDEXES = 12, RECORDING = 13
+    PES = 10, VOJA = 11, RECORDING_INDEXES = 12, RECORDING = 13,
+    PROVENANCE_REGION = 14
 } regions;
+
+//! enum mapping of extra provenance data items
+typedef enum extra_provenance_data_region_entries{
+    NUMBER_OF_QUEUE_OVERFLOWS = 0
+} extra_provenance_data_region_entries;
 
 //! enum mapping ensemble params in sdram from python
 typedef enum ensemble_params_region_elements {
@@ -194,6 +200,16 @@ void resume_callback(){
     recording_reset();
 }
 
+//! \brief callback for storing extra provenance data items
+void c_main_store_provenance_data(address_t provenance_region){
+    log_debug("writing other provenance data");
+
+    // store the data into the provenance data region
+    provenance_region[NUMBER_OF_QUEUE_OVERFLOWS] = queue_overflows;
+    log_debug("finished other provenance data");
+}
+
+
 //! \brief Simulate neurons and slowly dribble a spike vector out into a
 //! given array. This function will also apply any encoder learning rules.
 //! \param[in] ensemble: State of the ensemble
@@ -244,9 +260,9 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // **NOTE** idea here is that by interspersing these between
             // encoding operations, write buffer should have time to be
             // written out
-            //recording_record(
-            //    scaled_encoders_recording_index, &learnt_encoder_vector,
-            //    sizeof(value_t) * n_dims);
+            recording_record(
+                scaled_encoders_recording_index, &learnt_encoder_vector,
+                sizeof(value_t) * n_dims);
 
             // If neuron's not in refractory period,
             // apply input encoded by learnt encoders
@@ -258,7 +274,7 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
 
         // If the neuron's in its refractory period, decrement the refractory
         // counter
-        /*
+
         if (in_refractory_period){
             neuron_refractory_decrement(n, ensemble->state);
         }
@@ -290,11 +306,11 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
                     encoder_vector, ensemble->gain[n], n_dims,
                     &modulatory_filters, (const value_t**) const_learnt_input);
             }
-        }*/
+        }
 
         // Rotate the neuron firing bit and progress the spike vector
         // if necessary.
-        /*bit >>= 1;
+        bit >>= 1;
         if (bit == 0) {
             // Bit is out of range so reset it
             bit = (1 << 31);
@@ -309,15 +325,16 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // Reset the local spike vector
             local_spikes = 0x0;
         }
-        voltage_recording_values[n] = voltage;*/
+        voltage_recording_values[n] = voltage;
     }
-/*
+
     // Copy any remaining spikes into the specified spike vector
     if (ensemble->parameters.n_neurons % BITS_IN_WORD) {
 
         // Copy spikes into the spike vector
+        log_info("spikes = %x", (uint32_t) spikes);
         *spikes = local_spikes;
-    }*/
+    }
 
     // Finish up the recording
     /*n_recordings_outstanding += 1;
@@ -755,6 +772,7 @@ void timer_callback(uint timer_count, uint unused) {
     // passed
     if (infinite_run != TRUE && time >= simulation_ticks) {
 
+        log_info("finished!");
         // go into pause and resume state to avoid another tick
         simulation_handle_pause_resume(resume_callback);
 
@@ -795,11 +813,11 @@ void timer_callback(uint timer_count, uint unused) {
     // If there are multiple cores for this ensemble then schedule copying the
     // input vector into SDRAM.  Otherwise if this is address is NULL start
     // processing the neurons.
-    log_info("possibley process write filtered!");
+    //log_info("possibley process write filtered!");
     if (ensemble.parameters.n_populations > 1) {
         // If there are any learnt input signals to transfer, start transfer
         // of 1st signal
-        log_info("process write filtered!");
+        //log_info("process write filtered!");
         if(ensemble.parameters.n_learnt_input_signals > 0) {
             write_filtered_learnt_vector(INITIAL_LEARNT_VECTOR_INDEX);
         }
@@ -808,7 +826,7 @@ void timer_callback(uint timer_count, uint unused) {
         }
     }
     else {
-        log_info("start sim neurons!");
+        //log_info("start sim neurons!");
         // Process the neurons, writing the spikes out into DTCM rather than a
         // shared SDRAM vector.
         simulate_neurons(&ensemble, ensemble.spikes);
@@ -824,6 +842,8 @@ void timer_callback(uint timer_count, uint unused) {
     log_info("done timer");
 
 }
+
+//! \brief set sdram spikes
 
 //! \brief initialises the ensemble_parameters_t struct, and the learnt input
 //!        vectors.
@@ -1193,6 +1213,36 @@ static bool read_in_recording_indexs(address_t recording_index_address){
     return true;
 }
 
+//! \brief sets up the dtcm for spike vectors
+//! \return boolean of True if it successfully read all the regions and set up
+//!         all its internal data structures. Otherwise returns False
+bool spike_vector_setup(){
+    uint32_t padded_spike_vector_size = 0;
+
+    // figure ceil based value for each population words when 1 bit per neuron
+    for (uint p = 0; p < ensemble.parameters.n_populations; p++){
+        // Include this population
+        padded_spike_vector_size +=
+            ensemble.population_lengths[p] / BITS_IN_WORD;
+
+        // round component
+        if (ensemble.population_lengths[p] % BITS_IN_WORD){
+            padded_spike_vector_size++;
+        }
+    }
+
+    // store spike length into ensemble params
+    ensemble.sdram_spikes_length = padded_spike_vector_size;
+
+    // alloc dtcm for the spikes
+    ensemble.spikes = spin1_malloc(padded_spike_vector_size * sizeof(uint32_t));
+    if (ensemble.spikes == NULL){
+      log_error("failed to allocate dtcm for the ensemble.spikes parameter.");
+      return false;
+    }
+    return true;
+}
+
 //! Initialises the model by reading in the regions and checking recording
 //! data.
 //! \param[out] timer_period a pointer for the memory address where the timer
@@ -1219,10 +1269,25 @@ static bool initialize(uint32_t *timer_period){
         return false;
     }
 
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
+
+    // set up provenance function
+    simulation_set_provenance_function(
+        c_main_store_provenance_data,
+        data_specification_get_region(PROVENANCE_REGION, address));
+
     // get the ensemble params from sdram
     log_info("sorting out ensemble param init");
     if (!ensemble_param_read(
             data_specification_get_region(ENSEMBLE_PARAMS, address))){
+        return false;
+    }
+
+    // set up spike vectors
+    log_info("sorting out the spike vector init");
+    if (!spike_vector_setup()){
         return false;
     }
 

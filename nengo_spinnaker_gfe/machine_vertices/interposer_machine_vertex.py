@@ -14,8 +14,11 @@ from pacman.model.resources import ResourceContainer, SDRAMResource
 from spinn_front_end_common.abstract_models import AbstractHasAssociatedBinary
 from spinn_front_end_common.abstract_models.impl import \
     MachineDataSpecableVertex
+from spinn_front_end_common.interface.provenance import \
+    ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
+from spinn_front_end_common.utilities.utility_objs import ExecutableType, \
+    ProvenanceDataItem
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_utilities.overrides import overrides
 
@@ -23,7 +26,8 @@ from spinn_utilities.overrides import overrides
 class InterposerMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
-        AbstractTransmitsMulticastSignals):
+        AbstractTransmitsMulticastSignals,
+        ProvidesProvenanceDataFromMachineImpl):
 
     __slots__ = [
         "_size_in",
@@ -49,10 +53,16 @@ class InterposerMachineVertex(
                ('INPUT_FILTERS', 3),
                ('INPUT_ROUTING', 4),
                ('TRANSFORM', 5),
-               ('MC_TRANSMISSION', 6)])
+               ('MC_TRANSMISSION', 6),
+               ('PROVENANCE_DATA', 7)])
+
+    EXTRA_PROVENANCE_DATA_ENTRIES = Enum(
+        value="EXTRA_PROVENANCE_DATA_ENTRIES",
+        names=[('QUEUE_OVERFLOWS', 0)])
 
     SLICE_DATA_ITEMS = 3
     MC_TRANSMISSION_REGION_ITEMS = 2
+    N_LOCAL_PROVENANCE_ITEMS = 1
 
     def __init__(
             self, size_in, output_slice, transform_data, n_keys, filter_keys,
@@ -63,6 +73,7 @@ class InterposerMachineVertex(
         AbstractAcceptsMulticastSignals.__init__(self)
         MachineDataSpecableVertex.__init__(self)
         AbstractTransmitsMulticastSignals.__init__(self)
+        ProvidesProvenanceDataFromMachineImpl.__init__(self)
 
         self._size_in = size_in
         self._output_slice = output_slice
@@ -188,7 +199,7 @@ class InterposerMachineVertex(
             (self.MC_TRANSMISSION_REGION_ITEMS *
              constants.BYTE_TO_WORD_MULTIPLIER),
             label="mc_transmission data")
-
+        self.reserve_provenance_data_region(spec)
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -202,11 +213,15 @@ class InterposerMachineVertex(
     @overrides(AbstractNengoMachineVertex.resources_required)
     def resources_required(self):
         return self.generate_static_resources(
-            self._transform_data, self._n_keys, self._filters)
+            self._transform_data, self._n_keys, self._filters,
+            self.N_LOCAL_PROVENANCE_ITEMS)
 
     @staticmethod
-    def generate_static_resources(transform_data, n_keys, filters):
+    def generate_static_resources(
+            transform_data, n_keys, filters, local_provenance_items):
         sdram = (
+            ProvidesProvenanceDataFromMachineImpl.get_provenance_data_size(
+                local_provenance_items) +
             fec_constants.SYSTEM_BYTES_REQUIREMENT +
             (InterposerMachineVertex.SLICE_DATA_ITEMS *
              constants.BYTE_TO_WORD_MULTIPLIER) +
@@ -228,3 +243,40 @@ class InterposerMachineVertex(
     @overrides(AbstractTransmitsMulticastSignals.transmits_multicast_signals)
     def transmits_multicast_signals(self, transmission_params):
         return transmission_params in self._transmission_params
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
+    def _n_additional_data_items(self):
+        return self.N_LOCAL_PROVENANCE_ITEMS
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
+    def _provenance_region_id(self):
+        return self.DATA_REGIONS.PROVENANCE_DATA.value
+
+    @overrides(ProvidesProvenanceDataFromMachineImpl.
+               get_provenance_data_from_machine)
+    def get_provenance_data_from_machine(self, transceiver, placement):
+        # get data from basic prov
+        provenance_data = self._read_provenance_data(transceiver, placement)
+        provenance_items = self._read_basic_provenance_items(
+            provenance_data, placement)
+        provenance_data = self._get_remaining_provenance_data_items(
+            provenance_data)
+
+        # get item in data
+        queue_overflows = provenance_data[
+            self.EXTRA_PROVENANCE_DATA_ENTRIES.QUEUE_OVERFLOWS.value]
+        label, x, y, p, names = self._get_placement_details(placement)
+
+        # translate into provenance data items
+        provenance_items.append(ProvenanceDataItem(
+            self._add_name(names, "Time_queue_overflows"),
+            queue_overflows,
+            report=queue_overflows > 0,
+            message=(
+                "The packets acquired by core {}:{}:{} running model {} "
+                "failed to keep {} items in its buffer. Unknown how to "
+                "rectify".format(x, y, p, self.get_binary_file_name(),
+                                 queue_overflows))))
+        return provenance_items

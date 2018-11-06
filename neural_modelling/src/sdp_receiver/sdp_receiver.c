@@ -28,7 +28,7 @@ static uint32_t random_backoff_us;
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
-    SYSTEM, SDP_PORT, KEYS, MC_TRANSMISSION_PARAMS
+    SYSTEM, SDP_PORT, KEYS, MC_TRANSMISSION_PARAMS, PROVENANCE_REGION
 } regions;
 
 //! enum mapping sdp_port region
@@ -250,6 +250,10 @@ static bool initialize(uint32_t *timer_period, uint32_t *sdp_port){
     if(!malloc_dtcm_and_init()){
         return false;
     }
+
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
 
     //passed
     return true;

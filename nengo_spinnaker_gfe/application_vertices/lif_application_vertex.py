@@ -955,6 +955,11 @@ class LIFApplicationVertex(
              len(self._probeable_variables)) *
             constants.BYTE_TO_WORD_MULTIPLIER)
 
+        # provenance data region
+        provenance_data = LIFMachineVertex.get_provenance_data_size(
+            LIFMachineVertex.EXTRA_PROVENANCE_DATA_ENTRIES
+            .N_LOCAL_PROVENANCE_ITEMS.value)
+
         total = (
             ensemble_region + lif_region + pes_region + voja_region +
             decoders_region + learnt_decoders_region + encoders_region +
@@ -963,7 +968,8 @@ class LIFApplicationVertex(
             inhib_filter_region + modulatory_filters_region +
             learnt_encoder_filters_region + input_routing_region +
             inhib_routing_region + modulatory_routing_region +
-            learnt_encoder_routing_region + recording_index_region)
+            learnt_encoder_routing_region + recording_index_region +
+            provenance_data)
 
         if len(slices) == 1:
             return SDRAMResource(int(math.ceil(total / n_cores)))

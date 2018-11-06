@@ -56,7 +56,7 @@ static uint32_t random_backoff_us;
 //! enum mapping region ids to regions in python
 typedef enum regions {
     SYSTEM, SLICE_DATA, KEYS, INPUT_FILTERS, INPUT_ROUTING, TRANSFORM,
-    MC_TRANSMISSION
+    MC_TRANSMISSION, PROVENANCE_REGION
 } regions;
 
 //! callback priorities
@@ -78,6 +78,11 @@ typedef enum slice_data_items{
 typedef enum key_data_items{
     N_KEYS, START_OF_KEYS
 }key_data_items;
+
+//! enum mapping of extra provenance data items
+typedef enum extra_provenance_data_region_entries{
+    NUMBER_OF_QUEUE_OVERFLOWS = 0
+} extra_provenance_data_region_entries;
 
 // Global variables
 // General parameters (system region)
@@ -113,6 +118,15 @@ static unsigned int queue_overflows;
 //! \return None
 void resume_callback() {
     queue_overflows = 0;
+}
+
+//! \brief callback for storing extra provenance data items
+void c_main_store_provenance_data(address_t provenance_region){
+    log_debug("writing other provenance data");
+
+    // store the data into the provenance data region
+    provenance_region[NUMBER_OF_QUEUE_OVERFLOWS] = queue_overflows;
+    log_debug("finished other provenance data");
 }
 
 //! \brief Multicast packet handling
@@ -304,6 +318,7 @@ static bool sort_out_input_filters_routes(address_t address){
     if(!input_filtering_initialise_output(&filters, params.input_size)){
         return false;
     }
+
     return true;
 }
 
@@ -346,6 +361,15 @@ static bool initialize(uint32_t *timer_period){
         &infinite_run, SDP, DMA)) {
         return false;
     }
+
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
+
+    // set up provenance function
+    simulation_set_provenance_function(
+        c_main_store_provenance_data,
+        data_specification_get_region(PROVENANCE_REGION, address));
 
     //! get mc transmission params
     if(!get_mc_transmission_data(

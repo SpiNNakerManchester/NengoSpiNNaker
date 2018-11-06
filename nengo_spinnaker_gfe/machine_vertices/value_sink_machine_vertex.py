@@ -16,18 +16,21 @@ from spinn_front_end_common.interface.buffer_management import \
     recording_utilities
 from spinn_front_end_common.interface.buffer_management.buffer_models import \
     AbstractReceiveBuffersToHost
+from spinn_front_end_common.interface.provenance import \
+    ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants
 from spinn_front_end_common.utilities import helpful_functions as \
     fec_helpful_functions
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
+from spinn_front_end_common.utilities.utility_objs import ExecutableType, \
+    ProvenanceDataItem
 from spinn_utilities.overrides import overrides
 
 
 class ValueSinkMachineVertex(
         AbstractNengoMachineVertex, MachineDataSpecableVertex,
         AbstractHasAssociatedBinary, AbstractAcceptsMulticastSignals,
-        AbstractReceiveBuffersToHost):
+        AbstractReceiveBuffersToHost, ProvidesProvenanceDataFromMachineImpl):
 
     __slots__ = [
         #
@@ -59,11 +62,21 @@ class ValueSinkMachineVertex(
                ('SLICE_DATA', 1),
                ('FILTERS', 2),
                ('FILTER_ROUTING', 3),
-               ('RECORDING', 4)])
+               ('RECORDING', 4),
+               ('PROVENANCE_DATA', 5)])
+
+    # provenance region elements
+    EXTRA_PROVENANCE_DATA_ENTRIES = Enum(
+        value="EXTRA_PROVENANCE_DATA_ENTRIES",
+        names=[('QUEUE_OVERFLOWS', 0)])
+
+    # n provenance items
+    N_LOCAL_PROVENANCE_ITEMS = 1
 
     SLICE_DATA_SDRAM_REQUIREMENT = 8
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
     N_RECORDING_REGIONS = 1
+
 
     def __init__(
             self, input_slice, minimum_buffer_sdram, receive_buffer_host,
@@ -76,6 +89,8 @@ class ValueSinkMachineVertex(
         AbstractHasAssociatedBinary.__init__(self)
         AbstractAcceptsMulticastSignals.__init__(self)
         AbstractReceiveBuffersToHost.__init__(self)
+        ProvidesProvenanceDataFromMachineImpl.__init__(self)
+
         self._input_slice = input_slice
         self._minimum_buffer_sdram = minimum_buffer_sdram
         self._maximum_sdram_for_buffering = maximum_sdram_for_buffering
@@ -86,6 +101,8 @@ class ValueSinkMachineVertex(
         self._input_n_keys = input_n_keys
         self._time_between_requests = time_between_requests
         self._buffer_size_before_receive = buffer_size_before_receive
+        self._buffered_sdram_per_timestep = [
+            self.SDRAM_RECORDING_SDRAM_PER_ATOM * input_slice.n_atoms]
 
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
@@ -165,6 +182,7 @@ class ValueSinkMachineVertex(
             region=self.DATA_REGIONS.RECORDING.value,
             size=recording_utilities.get_recording_header_size(
                 self.N_RECORDING_REGIONS))
+        self.reserve_provenance_data_region(spec)
 
     @overrides(AbstractHasAssociatedBinary.get_binary_start_type)
     def get_binary_start_type(self):
@@ -179,6 +197,8 @@ class ValueSinkMachineVertex(
         container = ResourceContainer(
             sdram=SDRAMResource(
                 constants.SYSTEM_BYTES_REQUIREMENT +
+                ProvidesProvenanceDataFromMachineImpl.get_provenance_data_size(
+                    self.N_LOCAL_PROVENANCE_ITEMS) +
                 ValueSinkMachineVertex.SLICE_DATA_SDRAM_REQUIREMENT +
                 helpful_functions.sdram_size_in_bytes_for_filter_region(
                     self._input_filters) +
@@ -225,3 +245,40 @@ class ValueSinkMachineVertex(
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
         return "value_sink.aplx"
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
+    def _n_additional_data_items(self):
+        return self.N_LOCAL_PROVENANCE_ITEMS
+
+    @property
+    @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
+    def _provenance_region_id(self):
+        return self.DATA_REGIONS.PROVENANCE_DATA.value
+
+    @overrides(ProvidesProvenanceDataFromMachineImpl.
+               get_provenance_data_from_machine)
+    def get_provenance_data_from_machine(self, transceiver, placement):
+        # get data from basic prov
+        provenance_data = self._read_provenance_data(transceiver, placement)
+        provenance_items = self._read_basic_provenance_items(
+            provenance_data, placement)
+        provenance_data = self._get_remaining_provenance_data_items(
+            provenance_data)
+
+        # get item in data
+        queue_overflows = provenance_data[
+            self.EXTRA_PROVENANCE_DATA_ENTRIES.QUEUE_OVERFLOWS.value]
+        label, x, y, p, names = self._get_placement_details(placement)
+
+        # translate into provenance data items
+        provenance_items.append(ProvenanceDataItem(
+            self._add_name(names, "Time_queue_overflows"),
+            queue_overflows,
+            report=queue_overflows > 0,
+            message=(
+                "The packets acquired by core {}:{}:{} running model {} "
+                "failed to keep {} items in its buffer. Unknown how to "
+                "rectify".format(x, y, p, self.get_binary_file_name(),
+                                 queue_overflows))))
+        return provenance_items

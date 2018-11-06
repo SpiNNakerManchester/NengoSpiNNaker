@@ -256,7 +256,7 @@ class NengoSimulator(SpiNNaker):
             if isinstance(application_vertex, ValueSinkApplicationVertex):
 
                 app_data = numpy.zeros(
-                    (self.get_generated_output("RunTime"),
+                    (int(self.get_generated_output("RunTime")),
                      application_vertex.size_in), dtype=numpy.float)
                 nengo_object = self._nengo_to_app_graph_map[application_vertex]
                 self._nengo_object_to_data_map[nengo_object] = app_data

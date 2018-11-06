@@ -72,7 +72,8 @@ static uint32_t dma_port;
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
-    SYSTEM, OUTPUT_REGION, KEY_REGION, NEURON_REGION, RECORDING
+    SYSTEM, OUTPUT_REGION, KEY_REGION, NEURON_REGION, RECORDING,
+    PROVENANCE_REGION
 } regions;
 
 //! enum mapping neuron params
@@ -347,6 +348,10 @@ static bool initialize(uint32_t *timer_period){
             data_specification_get_region(KEY_REGION, address))){
         return false;
     }
+
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
 
     return true;
 }

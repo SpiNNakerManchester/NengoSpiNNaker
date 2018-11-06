@@ -36,7 +36,7 @@ if_collection_t g_input;
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
-    SYSTEM, TRANSMITTER, FILTERS, FILTER_ROUTING
+    SYSTEM, TRANSMITTER, FILTERS, FILTER_ROUTING, PROVENANCE_REGION
 } regions;
 
 //! enum mapping transmitter
@@ -195,6 +195,10 @@ static bool initialize(uint32_t *timer_period) {
             words_read)){
         return false;
     }
+
+    // sort out provenance region
+    simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
 
     // passed
     return true;
