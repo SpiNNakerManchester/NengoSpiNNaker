@@ -874,7 +874,7 @@ class LIFApplicationVertex(
             (LIFMachineVertex.ENSEMBLE_PARAMS_ITEMS +
              (len(self._learnt_encoder_filters) *
               LIFMachineVertex.SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR) +
-             n_cores + LIFMachineVertex.POP_LENGTH_CONSTANT_ITEMS) *
+             n_cores) *
             constants.BYTE_TO_WORD_MULTIPLIER)
 
         # lif region
@@ -925,9 +925,7 @@ class LIFApplicationVertex(
             learnt_output_slice.n_atoms)
 
         # partitioning data for the machine vertices
-        population_length_region = (
-            (LIFMachineVertex.POP_LENGTH_CONSTANT_ITEMS *
-             constants.BYTE_TO_WORD_MULTIPLIER) * n_cores)
+        population_length_region = constants.BYTE_TO_WORD_MULTIPLIER * n_cores
 
         # filter regions
         input_filter_region = helpful_functions.\

@@ -45,7 +45,8 @@ typedef enum routing_region_paramter_positions{
 // Commonly used pair of value_t types
 typedef struct _value_t_pair_t
 {
-  value_t a, b;
+  value_t a;
+  value_t b;
 } value_t_pair_t;
 
 
@@ -82,6 +83,8 @@ struct _lti_filter_init_params {
 void _none_filter_step(uint32_t n_dims, value_t *input,
                        value_t *output, void *params){
     use(params);
+
+
     // The None filter just copies its input to the output
     for (uint32_t d = 0; d < n_dims; d++){
         output[d] = input[d];
@@ -103,6 +106,9 @@ bool _none_filter_initialise(
     use(size);
     use(size_of_words_read);
 
+    // set the address of the state to null, as the none filter has no state
+    filter->state = NULL;
+
     // We just need to set the function pointer for the step function.
     filter->step = &_none_filter_step;
     *size_of_words_read += 0;
@@ -116,6 +122,7 @@ void _lowpass_filter_step(
     value_t_pair_t *params = (value_t_pair_t *) pars;
     register int32_t a = bitsk(params->a);
     register int32_t b = bitsk(params->b);
+    log_info("low pass filter step a=%k, b = %k", a, b);
 
     // Apply the filter to every dimension (realised as a Direct Form I digital
     // filter).
@@ -161,6 +168,9 @@ bool _lowpass_filter_initialise(
     }
     spin1_memcpy(filter->state, (void*) data_address[offset],
                  sizeof(value_t_pair_t));
+    value_t_pair_t *data = (value_t_pair_t *) filter->state;
+    log_info("state for low pass is a = %k, b = %k",
+             data->a, data->b);
 
     // Store a reference to the step function
     filter->step = &_lowpass_filter_step;
@@ -319,11 +329,11 @@ bool input_filtering_initialise_filters(
         }
     }
 
-    /*log_info(
+    log_info(
         "Loading %d low pass filters, %d none pass filters and %d linear "
         "filters\n",
         sdram_data[N_LOW_PASS_FILTERS], sdram_data[N_NONE_PASS_FILTERS],
-        sdram_data[N_LINEAR_FILTERS]);*/
+        sdram_data[N_LINEAR_FILTERS]);
 
     // Map of filter indices to filter initialisation methods
     FilterInit filter_types_init[] = {
@@ -384,20 +394,13 @@ bool input_filtering_initialise_filters(
 
             memset(the_filter->input->value, 0, sizeof(value_t) * filter_size);
 
-            /*for (uint32_t index = 0; index < filter_size; index++){
-                log_info("input value at index %d is %d", index,
-                the_filter->input->value[index]);
-            }*/
-
             // process latching
-            //log_info("latching = %d", sdram_data[data_index + FLAGS]);
             if (sdram_data[data_index + FLAGS] == LATCHING) {
                 the_filter->input->mask = LATCHING_MASK;
             } else {
                 the_filter->input->mask = NOT_LATCHING_MASK;
             }
 
-            //log_info("input mask = %d", the_filter->input->mask);
             // process output
             if (filter_output_array == NULL) {
                 the_filter->output = spin1_malloc(sizeof(value_t) *
@@ -413,12 +416,6 @@ bool input_filtering_initialise_filters(
 
             // Zero the input and the output
             memset(the_filter->output, 0, sizeof(value_t) * filter_size);
-
-            /*for (uint32_t index = 0; index < filter_size; index++){
-                log_info(
-                    "filter output at index %d is %d",
-                     index, the_filter->output[index]);
-            }*/
 
             // pointer for tracking number of words a filter reads
             uint32_t size_of_words_read = 0;

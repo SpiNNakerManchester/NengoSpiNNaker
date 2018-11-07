@@ -114,7 +114,6 @@ class LIFMachineVertex(
     ENSEMBLE_PARAMS_ITEMS = 17
     SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR = 2
     NEURON_PARAMS_ITEMS = 2
-    POP_LENGTH_CONSTANT_ITEMS = 1
     N_RECORDING_VARIABLE_SIZE = 1
     PES_REGION_N_ELEMENTS = 1
     VOJA_REGION_N_ELEMENTS = 2
@@ -657,7 +656,6 @@ class LIFMachineVertex(
         # add pop length data
         chip_level_machine_vertex_slices = app_vertex.machine_vertex_slices[
             app_vertex.core_slice_to_chip_slice[self.neuron_slice]]
-        spec.write_value(len(chip_level_machine_vertex_slices))
         for chip_level_core_slice in chip_level_machine_vertex_slices:
             spec.write_value(chip_level_core_slice.n_atoms)
 
@@ -682,7 +680,7 @@ class LIFMachineVertex(
             (self.ENSEMBLE_PARAMS_ITEMS + self.NEURON_PARAMS_ITEMS +
              (len(self._learnt_encoder_filters) *
               self.SDRAM_ITEMS_PER_LEARNT_INPUT_VECTOR) +
-             self.POP_LENGTH_CONSTANT_ITEMS + n_pop_length_sizes) *
+             + n_pop_length_sizes) *
             constants.BYTE_TO_WORD_MULTIPLIER,
             label="ensemble params")
 

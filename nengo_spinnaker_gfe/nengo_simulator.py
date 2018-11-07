@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import numpy
 from nengo.cache import NoDecoderCache
@@ -245,7 +246,12 @@ class NengoSimulator(SpiNNaker):
         SpiNNaker.run(self, steps)
 
         # extract data
-        self._extract_data()
+        try:
+            self._extract_data()
+        except Exception as e:
+            e_inf = sys.exc_info()
+            self._recover_from_error(
+                e, e_inf, self.get_generated_output("ExecutableTargets"))
 
     @property
     def data(self):

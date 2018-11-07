@@ -1,5 +1,6 @@
 import numpy
 
+from data_specification.enums import DataType
 from nengo_spinnaker_gfe.nengo_filters.basic_filter_impl import BasicFilterImpl
 from spinn_utilities.overrides import overrides
 from nengo_spinnaker_gfe import helpful_functions
@@ -58,6 +59,6 @@ class LowPassFilter(BasicFilterImpl):
         b = self.SECOND_CO_EFFICIENT - a
 
         print "low pass a {}".format(a)
-        spec.write_value(helpful_functions.convert_numpy_array_to_s16_15(a))
+        spec.write_value(a, data_type=DataType.S1615)
         print "low pass b {}".format(b)
-        spec.write_value(helpful_functions.convert_numpy_array_to_s16_15(b))
+        spec.write_value(b, data_type=DataType.S1615)
