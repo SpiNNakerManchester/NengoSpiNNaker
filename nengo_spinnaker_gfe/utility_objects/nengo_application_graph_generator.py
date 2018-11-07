@@ -72,4 +72,5 @@ class NengoApplicationGraphGenerator(object):
         return (executor.get_item("NengoOperatorGraph"),
                 executor.get_item("NengoHostNetwork"),
                 executor.get_item("NengoGraphToAppGraphMap"),
+                executor.get_item("AppGraphToNengoOperatorMap"),
                 executor.get_item("NengoRandomNumberGenerator"))

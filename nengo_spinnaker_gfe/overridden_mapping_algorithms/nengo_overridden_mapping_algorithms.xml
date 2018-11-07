@@ -136,6 +136,7 @@
             <param_type>NengoOperatorGraph</param_type>
             <param_type>NengoHostGraph</param_type>
             <param_type>NengoGraphToAppGraphMap</param_type>
+            <param_type>AppGraphToNengoOperatorMap</param_type>
             <param_type>NengoRandomNumberGenerator</param_type>
         </outputs>
     </algorithm>

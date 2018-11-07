@@ -49,7 +49,8 @@ class NengoSimulator(SpiNNaker):
         "_nengo_object_to_data_map",
         "_profiled_nengo_object_to_data_map",
         "_nengo_to_app_graph_map",
-        "_nengo_app_machine_graph_mapper"
+        "_nengo_app_machine_graph_mapper",
+        "_app_graph_to_nengo_operator_map"
     ]
 
     CONFIG_FILE_NAME = "nengo_spinnaker.cfg"
@@ -94,6 +95,7 @@ class NengoSimulator(SpiNNaker):
         self._nengo_object_to_data_map = dict()
         self._profiled_nengo_object_to_data_map = dict()
         self._nengo_to_app_graph_map = None
+        self._app_graph_to_nengo_operator_map = None
         self._nengo_app_machine_graph_mapper = None
 
         executable_finder = ExecutableFinder()
@@ -187,7 +189,8 @@ class NengoSimulator(SpiNNaker):
         nengo_app_graph_generator = NengoApplicationGraphGenerator()
 
         (self._nengo_operator_graph, host_network,
-         self._nengo_to_app_graph_map, random_number_generator) = \
+         self._nengo_to_app_graph_map, self._app_graph_to_nengo_operator_map,
+         random_number_generator) = \
             nengo_app_graph_generator(
             self._extra_inputs["NengoModel"], self.machine_time_step,
             self._extra_inputs["NengoRandomNumberGeneratorSeed"],
@@ -214,6 +217,8 @@ class NengoSimulator(SpiNNaker):
         self.update_extra_inputs(
             {"NengoHostGraph": host_network,
              "NengoGraphToAppGraphMap": self._nengo_to_app_graph_map,
+             "AppGraphToNengoOperatorMap":
+                 self._app_graph_to_nengo_operator_map,
              "NengoRandomNumberGenerator": random_number_generator,
              "NengoOperatorGraph": self._nengo_operator_graph})
 
@@ -264,7 +269,8 @@ class NengoSimulator(SpiNNaker):
                 app_data = numpy.zeros(
                     (int(self.get_generated_output("RunTime")),
                      application_vertex.size_in), dtype=numpy.float)
-                nengo_object = self._nengo_to_app_graph_map[application_vertex]
+                nengo_object = \
+                    self._app_graph_to_nengo_operator_map[application_vertex]
                 self._nengo_object_to_data_map[nengo_object] = app_data
                 machine_vertices = self._nengo_app_machine_graph_mapper.\
                     get_machine_vertices(application_vertex)
