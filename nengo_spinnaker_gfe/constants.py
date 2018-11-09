@@ -50,14 +50,14 @@ FILTER_ROUTING_TAG = "filter_routing"
 # key field size in bits
 KEY_BIT_SIZE = 32
 
+# default timings
+DEFAULT_DT = 0.001
+DEFAULT_TIME_SCALE = 1.0
+
 # math constants
 MICROSECONDS_PER_SECOND = 1000000.0
 CONVERT_MILLISECONDS_TO_SECONDS = 1000
 SECONDS_TO_MICRO_SECONDS_CONVERTER = 1e6
-
-# default timings
-DEFAULT_DT = 0.001
-DEFAULT_TIME_SCALE = 1.0
 
 # DSG memory calculation
 BYTE_TO_WORD_MULTIPLIER = 4

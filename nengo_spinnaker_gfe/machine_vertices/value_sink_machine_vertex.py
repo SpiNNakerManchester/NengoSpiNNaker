@@ -1,5 +1,7 @@
 from enum import Enum
+import numpy
 
+from data_specification.enums import DataType
 from nengo_spinnaker_gfe import helpful_functions
 from nengo_spinnaker_gfe.abstracts.abstract_accepts_multicast_signals import \
     AbstractAcceptsMulticastSignals
@@ -76,6 +78,7 @@ class ValueSinkMachineVertex(
     SLICE_DATA_SDRAM_REQUIREMENT = 8
     SDRAM_RECORDING_SDRAM_PER_ATOM = 4
     N_RECORDING_REGIONS = 1
+    RECORDING_REGION_ID = 0
 
 
     def __init__(
@@ -282,3 +285,26 @@ class ValueSinkMachineVertex(
                 "rectify".format(x, y, p, self.get_binary_file_name(),
                                  queue_overflows))))
         return provenance_items
+
+    def get_data_for_recording_region(
+            self, run_time, placement, buffer_manager, sampling_interval):
+        neuron_param_region, data_missing = buffer_manager.get_data_for_vertex(
+            placement, self.RECORDING_REGION_ID)
+
+        # convert to byte buffer and read into numpy array of uint32's
+        data = numpy.frombuffer(
+            neuron_param_region.read_all(), dtype=numpy.int32)
+
+        # some shaping stuff
+        data.shape = (run_time, -1)
+
+        # TODO push this down into the c code for better efficency
+        # apply sampling interval
+        data = data[::sampling_interval]
+
+        # Recast back to float and return
+        return data / DataType.S1615.scale
+
+
+
+

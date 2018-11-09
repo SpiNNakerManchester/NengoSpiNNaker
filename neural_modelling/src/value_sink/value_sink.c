@@ -2,12 +2,16 @@
 #include <data_specification.h>
 #include <debug.h>
 #include <simulation.h>
+#include <recording.h>
 #include <common/nengo_typedefs.h>
 #include <common/input_filtering.h>
 #include <common/packet_queue.h>
 
 //! the number of timer ticks that this model should run for before exiting.
 uint32_t simulation_ticks = 0;
+
+//! The recording flags
+static uint32_t recording_flags = 0;
 
 //! the int that represents the bool for if the run is infinite or not.
 static uint32_t infinite_run;
@@ -23,9 +27,6 @@ static uint32_t input_lo_atom;
 
 //! collection of filters
 if_collection_t filters;
-
-//! recording region current address
-address_t recording_address;
 
 //! Queued multicast packets
 static packet_queue_t packets;
@@ -55,6 +56,9 @@ typedef enum slice_data_parameters{
 typedef enum extra_provenance_data_region_entries{
     NUMBER_OF_QUEUE_OVERFLOWS = 0
 } extra_provenance_data_region_entries;
+
+//! the recording region channel
+#define RECORDING_CHANNEL 0
 
 //! \brief callback for storing extra provenance data items
 void c_main_store_provenance_data(address_t provenance_region){
@@ -138,10 +142,9 @@ void resume_callback(){
     if (queue_overflows > 0){
         log_error("overloaded queue %d times.", queue_overflows);
     }
-    // Get the address this core's DTCM data starts at from SRAM
-    address_t address = data_specification_get_data_address();
-    // reset recording region
-    recording_address = data_specification_get_region(RECORDING, address);
+
+    recording_reset();
+
     // reset tracker of queue overflows
     queue_overflows = 0;
 }
@@ -167,6 +170,9 @@ void timer_callback(uint timer_count, uint unused){
         // go into pause and resume state to avoid another tick
         simulation_handle_pause_resume(resume_callback);
 
+        // finish recording
+        recording_finalise();
+
         // Subtract 1 from the time so this tick gets done again on the next
         // run
         time -= 1;
@@ -179,9 +185,10 @@ void timer_callback(uint timer_count, uint unused){
 
     // Filter inputs, write the latest value to SRAM
     input_filtering_step(&filters);
-    spin1_memcpy(
-        recording_address, filters.output, input_atoms * sizeof(value_t));
-    recording_address = &recording_address[input_atoms];
+    recording_record_and_notify(
+        RECORDING_CHANNEL,  filters.output, input_atoms * sizeof(value_t),
+        NULL);
+    recording_do_timestep_update(time);
 }
 
 //! \brief entry method for reading the slice data region
@@ -262,7 +269,13 @@ static bool initialize(uint32_t *timer_period) {
     }
 
     //! set up recording
-    recording_address = data_specification_get_region(RECORDING, address);
+    if (!recording_initialize(
+            data_specification_get_region(RECORDING, address),
+            &recording_flags)){
+        log_error("failed to setup recording");
+        return false;
+    }
+    log_debug("Recording flags = 0x%08x", recording_flags);
 
     // Multicast packet queue
     packet_queue_init(&packets);

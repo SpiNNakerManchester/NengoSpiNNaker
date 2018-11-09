@@ -4,6 +4,9 @@ import sys
 
 import numpy
 from nengo.cache import NoDecoderCache
+from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
+from nengo_spinnaker_gfe.application_vertices.lif_application_vertex import \
+    LIFApplicationVertex
 from nengo_spinnaker_gfe.application_vertices.\
     value_sink_application_vertex import ValueSinkApplicationVertex
 from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
@@ -263,22 +266,36 @@ class NengoSimulator(SpiNNaker):
         return self._nengo_object_to_data_map
 
     def _extract_data(self):
+        """ extracts data from machine (only probes and ensembles so far)
+        
+        :return: 
+        """
+
+        # go through app verts looking for specific vertex types
         for application_vertex in self._nengo_operator_graph.vertices:
-            if isinstance(application_vertex, ValueSinkApplicationVertex):
 
-                app_data = numpy.zeros(
-                    (int(self.get_generated_output("RunTime")),
-                     application_vertex.size_in), dtype=numpy.float)
-                nengo_object = \
+            # probe based data items
+            if isinstance(application_vertex, AbstractProbeable):
+
+                # tie in to data map
+                nengo_probes = \
                     self._app_graph_to_nengo_operator_map[application_vertex]
-                self._nengo_object_to_data_map[nengo_object] = app_data
-                machine_vertices = self._nengo_app_machine_graph_mapper.\
-                    get_machine_vertices(application_vertex)
 
-                for machine_vertex in machine_vertices:
-                    app_data[:, machine_vertex.input_slice] = \
-                        machine_vertex.get_data(self.get_generated_output(
-                            "RunTime"))
+                for nengo_probe in nengo_probes:
+                    data = application_vertex.get_data_for_variable(
+                        variable=nengo_probe.attr,
+                        run_time=self.get_generated_output("RunTime"),
+                        placements=(self.get_generated_output(
+                            "MemoryPlacements")),
+                        graph_mapper=self._nengo_app_machine_graph_mapper,
+                        buffer_manager=(self.get_generated_output(
+                            "BufferManager")))
+
+                    # add data to the sim store for probe data
+                    self._nengo_object_to_data_map[nengo_probe] = \
+                        numpy.vstack(
+                            (self._nengo_object_to_data_map[nengo_probe],
+                             data))
 
     def _generate_machine_graph(self, steps):
         """ generate the machine graph in context of pre allocated system 

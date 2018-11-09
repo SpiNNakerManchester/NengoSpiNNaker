@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 
 import numpy
 
@@ -79,10 +80,9 @@ class NengoApplicationGraphBuilder(object):
     """
 
     def __call__(
-            self, nengo_network, machine_time_step,
-            nengo_random_number_generator_seed, decoder_cache,
-            utilise_extra_core_for_probes,
-            nengo_nodes_as_function_of_time,
+            self, nengo_network, machine_time_step, decoder_cache,
+            machine_time_step_in_seconds, nengo_random_number_generator_seed,
+            utilise_extra_core_for_probes, nengo_nodes_as_function_of_time,
             function_of_time_nodes_time_period, nengo_ensemble_profiling,
             nengo_ensemble_profiling_n_samples):
         """ entrance method to start converting from nengo objects to nengo 
@@ -94,6 +94,7 @@ class NengoApplicationGraphBuilder(object):
         :param machine_time_step: the machine time step 
         :param nengo_nodes_as_function_of_time: set of nodes which will \
         operate as function of times.
+        :param machine_time_step_in_seconds: the time step in seconds
         :param decoder_cache: still don't know what this is for yet.
         :param nengo_random_number_generator_seed: The nengo random number \
         generator seed.
@@ -136,7 +137,7 @@ class NengoApplicationGraphBuilder(object):
 
         # mappings between nengo instances and the spinnaker operator graph
         nengo_to_app_graph_map = dict()
-        app_graph_to_nengo_operator_map = dict()
+        app_graph_to_nengo_operator_map = defaultdict(list)
 
         self._build_sub_network_graph(
             nengo_network, random_number_generator,
@@ -146,7 +147,8 @@ class NengoApplicationGraphBuilder(object):
             nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
             function_of_time_nodes_time_period, progress_bar,
-            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+            machine_time_step_in_seconds)
         progress_bar.end()
 
         return (nengo_operator_graph, host_network, nengo_to_app_graph_map,
@@ -162,7 +164,6 @@ class NengoApplicationGraphBuilder(object):
         count += len(nengo_network.probes)
         return count
 
-
     def _build_sub_network_graph(
             self, nengo_network, random_number_generator,
             utilise_extra_core_for_output_types_probe,
@@ -171,7 +172,8 @@ class NengoApplicationGraphBuilder(object):
             host_network, nengo_nodes_as_function_of_time, decoder_cache,
             nengo_random_number_generator_seed,
             function_of_time_nodes_time_period, progress_bar,
-            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples):
+            nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+            machine_time_step_in_seconds):
         """ Builds an entire sub network from the nengo network. 
         
         :param nengo_network: the nengo network 
@@ -192,6 +194,7 @@ class NengoApplicationGraphBuilder(object):
         :param decoder_cache: still don't know what this is for yet.
         :param nengo_random_number_generator_seed: The nengo random number \
         generator seed.
+        :param machine_time_step_in_seconds: machine time step in seconds
         :param progress_bar: the progress bar
         :param function_of_time_nodes_time_period: the dict of nodes to function
         :return: 4 things in a tuple. \
@@ -214,7 +217,8 @@ class NengoApplicationGraphBuilder(object):
                 host_network, nengo_nodes_as_function_of_time, decoder_cache,
                 nengo_random_number_generator_seed,
                 function_of_time_nodes_time_period, progress_bar,
-                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples)
+                nengo_ensemble_profiling, nengo_ensemble_profiling_n_samples,
+                machine_time_step_in_seconds)
 
         # convert from ensembles to neuron model operators
         for nengo_ensemble in progress_bar.over(nengo_network.ensembles, False):
@@ -253,7 +257,7 @@ class NengoApplicationGraphBuilder(object):
                 app_graph_to_nengo_operator_map, random_number_generator,
                 nengo_operator_graph, host_network, decoder_cache,
                 live_io_receivers, nengo_random_number_generator_seed,
-                live_io_senders)
+                live_io_senders, machine_time_step_in_seconds)
 
         return (nengo_operator_graph, host_network, nengo_to_app_graph_map,
                 app_graph_to_nengo_operator_map, random_number_generator)
@@ -263,7 +267,7 @@ class NengoApplicationGraphBuilder(object):
             app_graph_to_nengo_operator_map, random_number_generator,
             nengo_operator_graph, host_network, decoder_cache,
             live_io_receivers, nengo_random_number_generator_seed,
-            live_io_senders):
+            live_io_senders, machine_time_step_in_seconds):
         """ converts a nengo probe into a nengo operator 
         
         :param nengo_probe: the nengo probe in question
@@ -278,6 +282,7 @@ class NengoApplicationGraphBuilder(object):
         :param live_io_senders: dict of nengo object to sdp transmitters 
         :param nengo_random_number_generator_seed: the seed for the nengo \
         random number generator
+        :param machine_time_step_in_seconds: time step in seconds
         :param live_io_receivers: dict of nengo object to sdp receivers 
         :rtype: None: 
         """
@@ -290,10 +295,12 @@ class NengoApplicationGraphBuilder(object):
             new_app_vertex = ValueSinkApplicationVertex(
                 label="value sink for probe {}".format(nengo_probe.label),
                 rng=random_number_generator, size_in=int(nengo_probe.size_in),
-                seed=helpful_functions.get_seed(nengo_probe))
+                seed=helpful_functions.get_seed(nengo_probe),
+                sampling_interval=nengo_probe.sample_every,
+                simulation_time_in_seconds=machine_time_step_in_seconds)
             nengo_operator_graph.add_vertex(new_app_vertex)
             nengo_to_app_graph_map[nengo_probe] = new_app_vertex
-            app_graph_to_nengo_operator_map[new_app_vertex] = nengo_probe
+            app_graph_to_nengo_operator_map[new_app_vertex].append(nengo_probe)
 
             # NOTE: the add_to_container=False is needed, else its built into
             #  the network. which we don't want here
@@ -317,7 +324,7 @@ class NengoApplicationGraphBuilder(object):
                     app_vertex.can_probe_variable(nengo_probe.attr)):
                 app_vertex.set_probeable_variable(nengo_probe.attr)
                 nengo_to_app_graph_map[nengo_probe] = app_vertex
-                app_graph_to_nengo_operator_map[app_vertex] = nengo_probe
+                app_graph_to_nengo_operator_map[app_vertex].append(nengo_probe)
 
             # if cant be recorded locally by the vertex, check if its one
             #  of those that can be recorded by a value sink vertex.
@@ -331,10 +338,13 @@ class NengoApplicationGraphBuilder(object):
                           "attribute {}".format(
                                nengo_probe.label, nengo_probe.attr),
                     size_in=int(nengo_probe.size_in),
-                    seed=helpful_functions.get_seed(nengo_probe))
+                    seed=helpful_functions.get_seed(nengo_probe),
+                    sampling_interval=nengo_probe.sample_every,
+                    simulation_time_in_seconds=machine_time_step_in_seconds)
 
                 nengo_to_app_graph_map[nengo_probe] = new_app_vertex
-                app_graph_to_nengo_operator_map[new_app_vertex] = nengo_probe
+                app_graph_to_nengo_operator_map[new_app_vertex].append(
+                    nengo_probe)
                 nengo_operator_graph.add_vertex(new_app_vertex)
 
                 # build connection and let connection conversion do rest
@@ -465,7 +475,7 @@ class NengoApplicationGraphBuilder(object):
         # update objects
         nengo_operator_graph.add_vertex(operator)
         nengo_to_app_graph_map[nengo_ensemble] = operator
-        app_graph_to_nengo_operator_map[operator] = nengo_ensemble
+        app_graph_to_nengo_operator_map[operator].append(nengo_ensemble)
 
     @staticmethod
     def _node_conversion(
@@ -554,7 +564,7 @@ class NengoApplicationGraphBuilder(object):
 
         # add to mapping. May point to itself if host based
         nengo_to_app_graph_map[nengo_node] = operator
-        app_graph_to_nengo_operator_map[operator] = nengo_node
+        app_graph_to_nengo_operator_map[operator].append(nengo_node)
 
     def _connection_conversion(
             self, nengo_connection, nengo_operator_graph,
@@ -642,7 +652,8 @@ class NengoApplicationGraphBuilder(object):
                     outgoing_partition)
             nengo_operator_graph.add_edge(application_edge, identifier)
             nengo_to_app_graph_map[nengo_connection] = application_edge
-            app_graph_to_nengo_operator_map[application_edge] = nengo_connection
+            app_graph_to_nengo_operator_map[application_edge].append(
+                nengo_connection)
 
     @staticmethod
     def _get_reception_parameters(nengo_connection):
@@ -926,8 +937,8 @@ class NengoApplicationGraphBuilder(object):
                     raise Exception("ah")
 
                 nengo_to_app_graph_map[nengo_connection.pre_obj] = operator
-                app_graph_to_nengo_operator_map[operator] = \
-                    nengo_connection.pre_obj
+                app_graph_to_nengo_operator_map[operator].append(
+                    nengo_connection.pre_obj)
                 nengo_operator_graph.add_vertex(operator)
             else:
                 operator = live_io_receivers[nengo_connection.pre_obj]

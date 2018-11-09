@@ -340,8 +340,7 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
     }
 
     // Finish up the recording
-    /*uint32_t size_in_bytes = get_bit_field_size(ensemble->parameters
-    .n_neurons);
+    /*uint32_t size_in_bytes = get_bit_field_size(ensemble->parameters.n_neurons);
     log_info("size of bytes = %d", size_in_bytes);
     if (!out_spikes_is_empty()){
         if (!out_spikes_record(

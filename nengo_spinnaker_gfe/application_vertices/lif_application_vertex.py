@@ -36,7 +36,7 @@ from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
 from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
     nengo_partitioner import NengoPartitioner
-from nengo_spinnaker_gfe.utility_objects.neuron_recorder import NeuronRecorder
+from nengo_spinnaker_gfe.utility_objects.neuron_recorder import DataRecorder
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts. \
     abstract_nengo_application_vertex import \
@@ -101,7 +101,8 @@ class LIFApplicationVertex(
         "_tau_refactory",
         "_machine_vertex_slices",
         "_core_slice_to_chip_slice",
-        "_radius"]
+        "_radius",
+        "_neuron_recorder"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -147,6 +148,10 @@ class LIFApplicationVertex(
     SDRAM_OUTGOING_LEARNT = "SDRAM_LINK_FOR_LEARNT_VECTOR"
     SDRAM_OUTGOING_SPIKE_VECTOR = "SDRAM_LINK_FOR_SPIKE"
     SDRAM_OUTGOING_SEMAPHORE = "SDRAM_LINK_FOR_SEMAPHORE"
+
+    BYTES_PER_VOLTAGE_ENTRY = 2
+    BYTES_PER_ENCODER_ENTRY = 4
+
 
     def __init__(
             self, label, rng, seed, eval_points, encoders, scaled_encoders,
@@ -235,8 +240,10 @@ class LIFApplicationVertex(
         for flag in self._probeable_variables:
             self._is_recording_probeable_variable[flag] = False
 
-        self._neuron_recorder = NeuronRecorder(
-            self._is_recording_probeable_variable.keys(), n_neurons)
+        self._neuron_recorder = DataRecorder(
+            self._is_recording_probeable_variable.keys(), n_neurons,
+            {constants.RECORD_VOLTAGE_FLAG: self.BYTES_PER_VOLTAGE_ENTRY,
+             constants.SCALED_ENCODERS_FLAG: self.BYTES_PER_ENCODER_ENTRY})
 
         # add extra probes based off recording on core or not
         if not utilise_extra_core_for_output_types_probe:
@@ -343,15 +350,29 @@ class LIFApplicationVertex(
     def get_possible_probeable_variables(self):
         return self._probeable_variables
 
-    @overrides(AbstractProbeable.get_data_for_variable)
+    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @overrides(AbstractProbeable.get_data_for_variable,
+               additional_arguments=["n_machine_time_steps"])
     def get_data_for_variable(
-            self, variable, n_machine_time_steps, placements, graph_mapper,
-            buffer_manager, machine_time_step):
+            self, variable, run_time, placements, graph_mapper,
+            buffer_manager, n_machine_time_steps):
         if variable == constants.RECORD_OUTPUT_FLAG:
             variable = constants.RECORD_SPIKES_FLAG
-        return self._neuron_recorder.get_matrix_data(
-            self.label, buffer_manager, self._probeable_variables[variable],
-            placements, graph_mapper, self, variable, n_machine_time_steps)
+
+        data, _, __ = self._neuron_recorder.get_matrix_data(
+            label=self.label, buffer_manager=buffer_manager,
+            region=LIFMachineVertex.DATA_REGIONS.RECORDING.value,
+            placements=placements, graph_mapper=graph_mapper,
+            application_vertex=self, variable=variable,
+            n_machine_time_steps=n_machine_time_steps)
+
+        if variable == constants.ENCODERS_FLAG:
+            # Reshape and return
+            data = numpy.reshape(data, (
+                n_machine_time_steps, self._n_neurons,
+                    self.n_dimensions
+                )
+            )
 
     @overrides(AbstractProbeable.can_probe_variable)
     def can_probe_variable(self, variable):
@@ -669,6 +690,7 @@ class LIFApplicationVertex(
             Slice(0, int(self._decoders.shape[0])),  # Outputs
             Slice(0, len(self._learnt_encoder_filters))  # Learnt output
         ]
+
         # create core sized partitions
         all_slices_and_resources = NengoPartitioner.create_slices_for_multiple(
             sliced_objects, self, self._max_resources_to_use_per_core,
@@ -691,7 +713,7 @@ class LIFApplicationVertex(
                 n_machine_time_steps)
             this_verts_minimum_buffer_sdram = \
                 recording_utilities.get_minimum_buffer_sdram(
-                buffered_sdram, minimum_buffer_sdram)
+                    buffered_sdram, minimum_buffer_sdram)
             buffered_sdram_per_timestep = self._get_buffered_sdram_per_timestep(
                 slices[self.SLICES_POSITIONS.NEURON.value])
             overflow_sdram = self._neuron_recorder.get_sampling_overflow_sdram(
