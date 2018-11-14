@@ -73,8 +73,8 @@ class ValueSourceApplicationVertex(
 
     @overrides(AbstractProbeable.get_data_for_variable)
     def get_data_for_variable(
-            self,  variable, n_machine_time_steps, placements,
-            graph_mapper, buffer_manager, machine_time_step):
+            self,  variable, run_time, placements, graph_mapper,
+            buffer_manager):
         pass
 
     @overrides(AbstractProbeable.get_possible_probeable_variables)

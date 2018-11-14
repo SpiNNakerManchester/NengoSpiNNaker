@@ -214,7 +214,8 @@ class NengoSimulator(SpiNNaker):
             self._extra_inputs["TimeBetweenRequests"],
             self._extra_inputs["BufferSizeBeforeReceive"],
             self._extra_inputs["SpikeBufferMaxSize"],
-            self._extra_inputs["VariableBufferMaxSize"])
+            self._extra_inputs["VariableBufferMaxSize"],
+            self._extra_inputs["MachineTimeStepInSeconds"])
 
         # add the extra outputs as new inputs
         self.update_extra_inputs(

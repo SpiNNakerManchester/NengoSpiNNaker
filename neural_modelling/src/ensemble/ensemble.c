@@ -5,7 +5,7 @@
 #include <simulation.h>
 #include <recording.h>
 #include <bit_field.h>
-#include <out_spikes.h>
+#include <common/bool_recorder.h>
 
 // Ensemble includes
 #include <ensemble/ensemble.h>
@@ -182,7 +182,7 @@ uint8_t spikes_recording_index = INVALID_RECORDING_INDEX;
 uint8_t decoder_recording_index = INVALID_RECORDING_INDEX;
 
 //! number of possible recording variables
-uint n_recording_variables = 0;
+int n_recording_variables = 0;
 
 //! flag to ensure out spikes finished dma before restarting
 static uint32_t n_recordings_outstanding = 0;
@@ -199,6 +199,7 @@ void recording_done_callback() {
 //! \brief resume callback to set recording stuff back
 void resume_callback(){
     recording_reset();
+    out_bools_reset();
 }
 
 //! \brief callback for storing extra provenance data items
@@ -239,6 +240,9 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
         spin1_wfi();
     }
 
+    // Reset the out spikes before starting if a beginning of recording
+    out_bools_reset();
+
     // Update each neuron in turn
     for (uint32_t n = 0; n < ensemble->parameters.n_neurons; n++) {
         // Get this neuron's encoder vector
@@ -261,9 +265,11 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // **NOTE** idea here is that by interspersing these between
             // encoding operations, write buffer should have time to be
             // written out
-            recording_record(
-                scaled_encoders_recording_index, &learnt_encoder_vector,
-                sizeof(value_t) * n_dims);
+            if (scaled_encoders_recording_index != INVALID_RECORDING_INDEX){
+                recording_record(
+                    scaled_encoders_recording_index, &learnt_encoder_vector,
+                    sizeof(value_t) * n_dims);
+            }
 
             // If neuron's not in refractory period,
             // apply input encoded by learnt encoders
@@ -299,7 +305,7 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
                 // we're constructing.
                 log_info("neuron %d spiked", n);
                 local_spikes |= bit;
-                out_spikes_set_spike(n);
+                out_bools_set_bool(n);
 
                 // Update non-filtered Voja learning
                 value_t** const_learnt_input = ensemble->learnt_input;
@@ -340,29 +346,27 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
     }
 
     // Finish up the recording
-    /*uint32_t size_in_bytes = get_bit_field_size(ensemble->parameters.n_neurons);
+    uint32_t size_in_bytes = get_bit_field_size(ensemble->parameters.n_neurons);
     log_info("size of bytes = %d", size_in_bytes);
-    if (!out_spikes_is_empty()){
-        if (!out_spikes_record(
+    if (spikes_recording_index != INVALID_RECORDING_INDEX){
+        if (!out_bools_record(
                 spikes_recording_index, time,
                 get_bit_field_size(ensemble->parameters.n_neurons),
                 recording_done_callback)){
-            log_error("failed to record spikes");
-            rt_error(RTE_SWERR);
         }
         else{
+            log_info("success and now set to %d", n_recordings_outstanding);
             n_recordings_outstanding += 1;
         }
-    }*/
+    }
     if (voltage_recording_index != INVALID_RECORDING_INDEX){
         if(!recording_record_and_notify(
                 voltage_recording_index, voltage_recording_values,
                 sizeof(uint16_t) * ensemble->parameters.n_neurons,
                 recording_done_callback)){
-            log_error("failed to record voltages");
-            rt_error(RTE_SWERR);
         }
         else{
+            log_info("success and now set to %d", n_recordings_outstanding);
             n_recordings_outstanding += 1;
         }
     }
@@ -1327,7 +1331,7 @@ static bool read_in_recording_indexs(address_t recording_index_address){
     // it continues to work if changed between runs, but less might be used in
     // any individual run
     log_info("n neurons = %d", ensemble.parameters.n_neurons);
-    if (!out_spikes_initialize(ensemble.parameters.n_neurons)) {
+    if (!out_bools_initialize(ensemble.parameters.n_neurons)) {
         return false;
     }
     return true;

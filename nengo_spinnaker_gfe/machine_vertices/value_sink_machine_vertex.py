@@ -243,7 +243,7 @@ class ValueSinkMachineVertex(
     @overrides(AbstractReceiveBuffersToHost.get_n_timesteps_in_buffer_space)
     def get_n_timesteps_in_buffer_space(self, buffer_space, machine_time_step):
         return recording_utilities.get_n_timesteps_in_buffer_space(
-            buffer_space, [self._buffered_sdram_per_timestep])
+            buffer_space, self._buffered_sdram_per_timestep)
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):

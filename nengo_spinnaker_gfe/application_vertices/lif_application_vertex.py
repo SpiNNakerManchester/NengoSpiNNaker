@@ -102,7 +102,7 @@ class LIFApplicationVertex(
         "_machine_vertex_slices",
         "_core_slice_to_chip_slice",
         "_radius",
-        "_neuron_recorder"]
+        "_data_recorder"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -240,7 +240,7 @@ class LIFApplicationVertex(
         for flag in self._probeable_variables:
             self._is_recording_probeable_variable[flag] = False
 
-        self._neuron_recorder = DataRecorder(
+        self._data_recorder = DataRecorder(
             self._is_recording_probeable_variable.keys(), n_neurons,
             {constants.RECORD_VOLTAGE_FLAG: self.BYTES_PER_VOLTAGE_ENTRY,
              constants.SCALED_ENCODERS_FLAG: self.BYTES_PER_ENCODER_ENTRY})
@@ -339,6 +339,7 @@ class LIFApplicationVertex(
         if variable == constants.RECORD_OUTPUT_FLAG:
             variable = constants.RECORD_SPIKES_FLAG
         self._is_recording_probeable_variable[variable] = True
+        self._data_recorder.set_recording(variable, True)
 
     @overrides(AbstractProbeable.is_set_probeable_variable)
     def is_set_probeable_variable(self, variable):
@@ -359,7 +360,7 @@ class LIFApplicationVertex(
         if variable == constants.RECORD_OUTPUT_FLAG:
             variable = constants.RECORD_SPIKES_FLAG
 
-        data, _, __ = self._neuron_recorder.get_matrix_data(
+        data, _, __ = self._data_recorder.get_matrix_data(
             label=self.label, buffer_manager=buffer_manager,
             region=LIFMachineVertex.DATA_REGIONS.RECORDING.value,
             placements=placements, graph_mapper=graph_mapper,
@@ -716,7 +717,7 @@ class LIFApplicationVertex(
                     buffered_sdram, minimum_buffer_sdram)
             buffered_sdram_per_timestep = self._get_buffered_sdram_per_timestep(
                 slices[self.SLICES_POSITIONS.NEURON.value])
-            overflow_sdram = self._neuron_recorder.get_sampling_overflow_sdram(
+            overflow_sdram = self._data_recorder.get_sampling_overflow_sdram(
                 slices[self.SLICES_POSITIONS.NEURON.value])
 
             # Tile direct input across all encoder copies (used for learning)
@@ -754,7 +755,7 @@ class LIFApplicationVertex(
                 buffered_sdram_per_timestep=buffered_sdram_per_timestep,
                 minimum_buffer_sdram_usage=this_verts_minimum_buffer_sdram,
                 is_recording=(
-                    len(self._neuron_recorder.recording_variables) > 0),
+                    len(self._data_recorder.recording_variables) > 0),
                 encoders_with_gain=(
                     helpful_functions.convert_matrix_to_machine_vertex_level(
                         self._encoders_with_gain,
@@ -787,7 +788,7 @@ class LIFApplicationVertex(
         for recordable_variable in self._is_recording_probeable_variable:
             if self._is_recording_probeable_variable[recordable_variable]:
                 values.append(
-                    self._neuron_recorder.get_buffered_sdram_per_timestep(
+                    self._data_recorder.get_buffered_sdram_per_timestep(
                         recordable_variable, vertex_slice))
         return values
 
@@ -796,7 +797,7 @@ class LIFApplicationVertex(
         for recordable_variable in self._is_recording_probeable_variable:
             if self._is_recording_probeable_variable[recordable_variable]:
                 values.append(
-                    self._neuron_recorder.get_buffered_sdram(
+                    self._data_recorder.get_buffered_sdram(
                         recordable_variable, vertex_slice,
                         n_machine_time_steps))
         return values

@@ -312,11 +312,17 @@ class LIFMachineVertex(
 
         # store the recording field indexes
         spec.write_value(len(recording_regions))
+        recording_indexes = dict()
+
         recording_index = 0
         for recording_param in recording_regions:
             if app_vertex.is_set_probeable_variable(recording_param):
-                spec.write_value(recording_index)
+                recording_indexes[recording_param] = recording_index
                 recording_index += 1
+
+        for recording_param in recording_regions:
+            if recording_param in recording_indexes:
+                spec.write_value(recording_indexes[recording_param])
             else:
                 spec.write_value(self.NOT_RECORDING_REGION_ID)
 

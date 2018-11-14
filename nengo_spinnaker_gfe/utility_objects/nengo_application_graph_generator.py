@@ -19,7 +19,7 @@ class NengoApplicationGraphGenerator(object):
             maximum_sdram_for_sink_vertex_buffing,
             using_auto_pause_and_resume, time_between_requests,
             buffer_size_before_receive, spike_buffer_max_size,
-            variable_buffer_max_size):
+            variable_buffer_max_size, machine_time_step_in_seconds):
 
         # create data holders
         inputs = dict()
@@ -57,6 +57,7 @@ class NengoApplicationGraphGenerator(object):
         inputs["BufferSizeBeforeReceive"] = buffer_size_before_receive
         inputs["SpikeBufferMaxSize"] = spike_buffer_max_size
         inputs["VariableBufferMaxSize"] = variable_buffer_max_size
+        inputs["MachineTimeStepInSeconds"] = machine_time_step_in_seconds
 
         # Execute the algorithms
         executor = PACMANAlgorithmExecutor(
