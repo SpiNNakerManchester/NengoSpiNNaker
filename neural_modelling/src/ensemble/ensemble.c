@@ -467,64 +467,47 @@ static inline void decode_output_and_transmit(
     // Sleep for a random time so that packet transmission occurs some time
     // after the timer tick.  For shorter simulations this will hide the effect
     // of clock drift for a short period.
-    log_info("a");
     spin1_delay_us(random_backoff_us);
 
     // Extract parameters
-    log_info("b");
     const ensemble_parameters_t *params = &ensemble->parameters;
-    log_info("c");
     uint32_t n_neurons_total = params->n_neurons_total;
-    log_info("d");
     uint32_t n_populations = params->n_populations;
-    log_info("e");
     uint32_t n_decoder_rows =
         params->n_decoder_rows + params->n_learnt_decoder_rows;
 
-    log_info("f");
     uint32_t *pop_lengths = ensemble->population_lengths;
-    log_info("g");
     value_t *decoder = ensemble->decoders;
-    log_info("h");
     uint32_t *keys = ensemble->keys;
-    log_info("i");
     uint32_t *spike_vector = ensemble->spikes;
-    log_info("j");
 
     // Apply the decoder and transmit multicast packets.
     // Each decoder row is applied in turn to get the output value, which is
     // then transmitted.
-    log_info("loop");
 
     // Set the next expected time to wait for between spike sending
     expected_time = tc[T1_COUNT] - time_between_spikes;
 
     for (uint32_t d = 0; d < n_decoder_rows; d++) {
 
-        log_info("k");
         // Get the row of the decoder
         value_t *row = &decoder[d * n_neurons_total];
 
         // Compute the decoded value
-        log_info("l");
         value_t output = decode_spike_train(n_populations, pop_lengths,
                                             row, spike_vector);
 
         // Wait until the expected time to send
-        log_info("m");
         while (tc[T1_COUNT] > expected_time) {
             // Do Nothing
         }
         expected_time -= time_between_spikes;
 
         // Transmit this value (keep trying until it sends)
-        log_info("n");
         while(!spin1_send_mc_packet(keys[d], bitsk(output), WITH_PAYLOAD)){
             spin1_delay_us(1);
         }
-        log_info("o");
     }
-    log_info("p");
 }
 
 //! \brief Multicast packet with payload received. Puts packet into queue and
@@ -532,7 +515,6 @@ static inline void decode_output_and_transmit(
 //! \param[in] key: the mc key
 //! \param[in] payload: the mc payload
 void multicast_payload_callback(uint key, uint payload) {
-    log_info("packet!");
     // Queue the packet for later processing, if no processing is scheduled then
     // trigger the queue processor.
     if (packet_queue_push(&packets, key, payload)) {
@@ -546,12 +528,10 @@ void multicast_payload_callback(uint key, uint payload) {
         // dropped.
         queue_overflows++;
     }
-    log_info("packet Done !");
 }
 
 //! \brief extracts packets from queue and applies input filters
 void process_queue() {
-    log_info("process queue !");
     uint32_t offset = ensemble.parameters.input_subspace_offset;
     uint32_t max_dim_sub_one = ensemble.parameters.input_subspace_n_dims - 1;
 
@@ -598,7 +578,6 @@ void process_queue() {
 //! \param[in] arg1: meh
 //! \param[in] arg0: meh
 void user_event(uint arg0, uint arg1) {
-    log_info("user");
     use(arg0);
     use(arg1);
     process_queue();

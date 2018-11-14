@@ -76,7 +76,8 @@ class ValueSinkApplicationVertex(
                 app_data[:, machine_vertex.input_slice.as_slice] = \
                     machine_vertex.get_data_for_recording_region(
                         run_time=run_time,
-                        placement=placements.get_placement_for(machine_vertex),
+                        placement=placements.get_placement_of_vertex(
+                            machine_vertex),
                         buffer_manager=buffer_manager,
                         sampling_interval=self._sampling_interval)
 
@@ -139,7 +140,7 @@ class ValueSinkApplicationVertex(
             inputs_n_keys += 1
 
         for input_slice in NengoPartitioner.divide_slice(
-                Slice(0, self._size_in), n_vertices):
+                Slice(0, self._size_in - 1), n_vertices):
             machine_vertex = ValueSinkMachineVertex(
                 input_slice=input_slice,
                 minimum_buffer_sdram=minimum_buffer_sdram,

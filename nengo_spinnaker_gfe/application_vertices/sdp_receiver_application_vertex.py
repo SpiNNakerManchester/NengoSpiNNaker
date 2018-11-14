@@ -18,12 +18,12 @@ class SDPReceiverApplicationVertex(
     ABS THIS LOOKS VERY MUCH LIKE A SPIKE INJECTOR WITH PAYLOADS!!!!!
     """
 
-    __slots__ = [
-        #
-        '_connection_vertices',
-        #
-        "_size_in"
-    ]
+    #__slots__ = [
+    #    #
+    #    '_connection_vertices',
+    #    #
+    #    "_size_in"
+    #]
 
     n_sdp_receiver_machine_vertices = 0
 
@@ -92,3 +92,9 @@ class SDPReceiverApplicationVertex(
                     "The SDP receiver does not know what to do with output"
                     " port {}".format(
                         outgoing_partition.identifier.source_port.value))
+
+    def __repr__(self):
+        return "sd"
+
+    def __str__(self):
+        return "sd"

@@ -26,7 +26,8 @@ class DataRecorder(object):
         "_indexes",
         "_n_neurons",
         "_matrix_variable_sizes",
-        "_n_recorded_regions"
+        "_n_recorded_regions",
+        "_machine_vertex_to_slice"
     ]
 
     N_BYTES_FOR_TIMESTAMP = 4
@@ -57,6 +58,7 @@ class DataRecorder(object):
         self._n_neurons = n_neurons
         self._matrix_variable_sizes = matrix_variable_sizes
         self._n_recorded_regions = len(allowed_variables)
+        self._machine_vertex_to_slice = dict()
         for variable in allowed_variables:
             self._sampling_rates[variable] = 0
             self._indexes[variable] = None
@@ -69,7 +71,10 @@ class DataRecorder(object):
         return sum(vertex_slice.lo_atom <= index <= vertex_slice.hi_atom
                    for index in self._indexes[variable])
 
-    def _neurons_recording(self, variable, vertex_slice):
+    def add_machine_vertex_mapping(self, variable, machine_vertex, atom_slice):
+        self._machine_vertex_to_slice[(variable, machine_vertex)] = atom_slice
+
+    def _bits_recording(self, variable, vertex_slice):
         if self._sampling_rates[variable] == 0:
             return []
         if self._indexes[variable] is None:
@@ -90,6 +95,14 @@ class DataRecorder(object):
         step = (globals_variables.get_simulator().machine_time_step /
                 constants.CONVERT_MILLISECONDS_TO_SECONDS)
         return self._sampling_rates[variable] * step
+
+    def get_sorted_matrix_data(
+            self,  label, buffer_manager, region, placements, graph_mapper,
+            application_vertex, variable, n_machine_time_steps):
+        data, indices, sampling_interval = self.get_matrix_data(
+            label, buffer_manager, region, placements, graph_mapper,
+            application_vertex, variable, n_machine_time_steps)
+        return data[numpy.argsort(indices)], indices, sampling_interval
 
     def get_matrix_data(
             self, label, buffer_manager, region, placements, graph_mapper,
@@ -122,22 +135,20 @@ class DataRecorder(object):
         indexes = []
         for vertex in progress.over(vertices):
             placement = placements.get_placement_of_vertex(vertex)
-            vertex_slice = graph_mapper.get_slice(vertex)
-            neurons = self._neurons_recording(variable, vertex_slice)
-            n_neurons = len(neurons)
-            if n_neurons == 0:
+            vertex_slice = self._machine_vertex_to_slice[(variable, vertex)]
+            if vertex_slice.n_atoms == 0:
                 continue
-            indexes.extend(neurons)
+            indexes.extend(self._bits_recording(variable, vertex_slice))
             # for buffering output info is taken form the buffer manager
-            neuron_param_region_data_pointer, missing_data = \
-                buffer_manager.get_data_for_vertex(
-                    placement, region)
-            record_raw = neuron_param_region_data_pointer.read_all()
+            recording_region_data_pointer, missing_data = \
+                buffer_manager.get_data_for_vertex(placement, region)
+            record_raw = recording_region_data_pointer.read_all()
             record_length = len(record_raw)
 
             row_length = (
                 self.N_BYTES_FOR_TIMESTAMP + (
-                    n_neurons * self._matrix_variable_sizes[variable]))
+                    vertex_slice.n_atoms *
+                    self._matrix_variable_sizes[variable]))
 
             # There is one column for time and one for each neuron recording
             n_rows = record_length // row_length
@@ -146,7 +157,8 @@ class DataRecorder(object):
             format_string = "<i{}".format(self._matrix_variable_sizes[variable])
             record = (
                 numpy.asarray(record_raw, dtype="uint8").view(
-                    dtype=format_string)).reshape((n_rows, (n_neurons + 1)))
+                    dtype=format_string)).reshape(
+                (n_rows, (vertex_slice.n_atoms + 1)))
 
             # Check if you have the expected data
             if not missing_data and n_rows == expected_rows:
@@ -156,7 +168,7 @@ class DataRecorder(object):
                 missing_str += "({}, {}, {}); ".format(
                     placement.x, placement.y, placement.p)
                 # Start the fragment for this slice empty
-                fragment = numpy.empty((expected_rows, n_neurons))
+                fragment = numpy.empty((expected_rows, vertex_slice.n_atoms))
                 for i in xrange(0, expected_rows):
                     time = i * sampling_rate
                     # Check if there is data for this timestep
@@ -167,7 +179,8 @@ class DataRecorder(object):
                                        float(DataType.S1615.scale))
                     else:
                         # Set row to nan
-                        fragment[i] = numpy.full(n_neurons, numpy.nan)
+                        fragment[i] = numpy.full(
+                            vertex_slice.n_atoms, numpy.nan)
             if data is None:
                 data = fragment
             else:
@@ -178,14 +191,26 @@ class DataRecorder(object):
                 "Population {} is missing recorded data in region {} from the"
                 " following cores: {}".format(label, region, missing_str))
         sampling_interval = self.get_neuron_sampling_interval(variable)
+
         return data, indexes, sampling_interval
 
-    def get_spikes(
+    def get_bools(
             self, label, buffer_manager, region, placements, graph_mapper,
             application_vertex, machine_time_step):
+        """ 
+        
+        :param label: 
+        :param buffer_manager: 
+        :param region: 
+        :param placements: 
+        :param graph_mapper: 
+        :param application_vertex: 
+        :param machine_time_step: 
+        :return: 
+        """
 
-        spike_times = list()
-        spike_ids = list()
+        recorded_times = list()
+        recorded_ids = list()
         ms_per_tick = \
             machine_time_step / constants.CONVERT_MILLISECONDS_TO_SECONDS
 
@@ -194,67 +219,68 @@ class DataRecorder(object):
         progress = ProgressBar(vertices, "Getting spikes for {}".format(label))
         for vertex in progress.over(vertices):
             placement = placements.get_placement_of_vertex(vertex)
-            vertex_slice = graph_mapper.get_slice(vertex)
+            vertex_slice = self._machine_vertex_to_slice[(SPIKES, vertex)]
 
             if self._indexes[SPIKES] is None:
-                neurons_recording = vertex_slice.n_atoms
+                things_recording = vertex_slice.n_atoms
             else:
-                neurons_recording = sum(
+                things_recording = sum(
                     (vertex_slice.lo_atom <= index <= vertex_slice.hi_atom)
                     for index in self._indexes[SPIKES])
-                if neurons_recording == 0:
+                if things_recording == 0:
                     continue
-                if neurons_recording < vertex_slice.n_atoms:
+                if things_recording < vertex_slice.n_atoms:
                     # For spikes the overflow position is also returned
-                    neurons_recording += self.N_BITS_FOR_OVERFLOW
+                    things_recording += self.N_BITS_FOR_OVERFLOW
             # Read the spikes
             n_words = int(math.ceil(
-                neurons_recording / constants.WORD_TO_BIT_CONVERSION))
+                things_recording / constants.WORD_TO_BIT_CONVERSION))
             n_bytes = n_words * constants.BYTE_TO_WORD_MULTIPLIER
             n_words_with_timestamp = n_words + self.N_WORDS_FOR_TIMESTAMP
 
             # for buffering output info is taken form the buffer manager
-            neuron_param_region_data_pointer, data_missing = \
-                buffer_manager.get_data_for_vertex(
-                    placement, region)
+            recording_region_data_pointer, data_missing = \
+                buffer_manager.get_data_for_vertex(placement, region)
             if data_missing:
                 missing_str += "({}, {}, {}); ".format(
                     placement.x, placement.y, placement.p)
-            record_raw = neuron_param_region_data_pointer.read_all()
+            record_raw = recording_region_data_pointer.read_all()
 
             raw_data = (
                 numpy.asarray(record_raw, dtype="uint8").view(
                     dtype="<i4")).reshape([-1, n_words_with_timestamp])
+
             if len(raw_data) > 0:
                 record_time = raw_data[:, 0] * float(ms_per_tick)
-                spikes = raw_data[:, 1:].byteswap().view("uint8")
-                bits = numpy.fliplr(numpy.unpackbits(spikes).reshape(
+                bools = raw_data[:, 1:].byteswap().view("uint8")
+                bits = numpy.fliplr(numpy.unpackbits(bools).reshape(
                     (-1, constants.WORD_TO_BIT_CONVERSION))).reshape(
                     (-1, n_bytes * self.N_BITS_IN_A_BYTE))
                 time_indices, local_indices = numpy.where(bits == 1)
                 if self._indexes[SPIKES] is None:
                     indices = local_indices + vertex_slice.lo_atom
                     times = record_time[time_indices].reshape((-1))
-                    spike_ids.extend(indices)
-                    spike_times.extend(times)
+                    recorded_ids.extend(indices)
+                    recorded_times.extend(times)
                 else:
-                    neurons = self._neurons_recording(SPIKES, vertex_slice)
-                    n_neurons = len(neurons)
+                    things_recording = self._bits_recording(
+                        SPIKES, vertex_slice)
+                    n_things = len(things_recording)
                     for time_indice, local in zip(time_indices, local_indices):
-                        if local < n_neurons:
-                            spike_ids.append(neurons[local])
-                            spike_times.append(record_time[time_indice])
+                        if local < n_things:
+                            recorded_ids.append(things_recording[local])
+                            recorded_times.append(record_time[time_indice])
 
         if len(missing_str) > 0:
             logger.warn(
-                "Population {} is missing spike data in region {} from the"
+                "Population {} is missing bool data in region {} from the"
                 " following cores: {}".format(label, region, missing_str))
 
-        if len(spike_ids) == 0:
+        if len(recorded_ids) == 0:
             return numpy.zeros((0, 2), dtype="float")
 
-        result = numpy.column_stack((spike_ids, spike_times))
-        return result[numpy.lexsort((spike_times, spike_ids))]
+        result = numpy.column_stack((recorded_ids, recorded_times))
+        return result[numpy.lexsort((recorded_times, recorded_ids))]
 
     def get_recordable_variables(self):
         return self._sampling_rates.keys()

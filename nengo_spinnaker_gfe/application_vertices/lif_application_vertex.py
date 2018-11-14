@@ -36,7 +36,7 @@ from nengo_spinnaker_gfe.nengo_filters.\
     filter_and_routing_region_generator import FilterAndRoutingRegionGenerator
 from nengo_spinnaker_gfe.overridden_mapping_algorithms.\
     nengo_partitioner import NengoPartitioner
-from nengo_spinnaker_gfe.utility_objects.neuron_recorder import DataRecorder
+from nengo_spinnaker_gfe.utility_objects.data_recorder import DataRecorder
 from nengo_spinnaker_gfe import constants, helpful_functions
 from nengo_spinnaker_gfe.abstracts. \
     abstract_nengo_application_vertex import \
@@ -102,7 +102,8 @@ class LIFApplicationVertex(
         "_machine_vertex_slices",
         "_core_slice_to_chip_slice",
         "_radius",
-        "_data_recorder"]
+        "_data_recorder",
+        "_actual_recording_region_map"]
 
     ENSEMBLE_PROFILER_TAGS = Enum(
         value="PROFILER_TAGS",
@@ -244,6 +245,7 @@ class LIFApplicationVertex(
             self._is_recording_probeable_variable.keys(), n_neurons,
             {constants.RECORD_VOLTAGE_FLAG: self.BYTES_PER_VOLTAGE_ENTRY,
              constants.SCALED_ENCODERS_FLAG: self.BYTES_PER_ENCODER_ENTRY})
+        self._actual_recording_region_map = dict()
 
         # add extra probes based off recording on core or not
         if not utilise_extra_core_for_output_types_probe:
@@ -253,6 +255,13 @@ class LIFApplicationVertex(
                 constants.DECODER_OUTPUT_FLAG] = False
 
         self._maximum_sdram_for_buffering = None
+
+    def set_recording_region_id(self, variable, recording_region_id):
+        self._actual_recording_region_map[variable] = recording_region_id
+
+    @property
+    def actual_recording_region_map(self):
+        return self._actual_recording_region_map
 
     @property
     def input_n_keys(self):
@@ -351,22 +360,34 @@ class LIFApplicationVertex(
     def get_possible_probeable_variables(self):
         return self._probeable_variables
 
-    @inject_items({"n_machine_time_steps": "TotalMachineTimeSteps"})
+    @inject_items(
+        {"n_machine_time_steps": "TotalMachineTimeSteps",
+         "machine_time_step": "MachineTimeStep"})
     @overrides(AbstractProbeable.get_data_for_variable,
-               additional_arguments=["n_machine_time_steps"])
+               additional_arguments=[
+                   "n_machine_time_steps", "machine_time_step"])
     def get_data_for_variable(
             self, variable, run_time, placements, graph_mapper,
-            buffer_manager, n_machine_time_steps):
+            buffer_manager, n_machine_time_steps, machine_time_step):
         if variable == constants.RECORD_OUTPUT_FLAG:
             variable = constants.RECORD_SPIKES_FLAG
 
-        data, _, __ = self._data_recorder.get_matrix_data(
-            label=self.label, buffer_manager=buffer_manager,
-            region=LIFMachineVertex.DATA_REGIONS.RECORDING.value,
-            placements=placements, graph_mapper=graph_mapper,
-            application_vertex=self, variable=variable,
-            n_machine_time_steps=n_machine_time_steps)
+        data = None
+        if variable == constants.RECORD_SPIKES_FLAG:
+            data, _, __ = self._data_recorder.get_bools(
+                label=self.label, buffer_manager=buffer_manager,
+                region=self._actual_recording_region_map[variable],
+                placements=placements, graph_mapper=graph_mapper,
+                application_vertex=self, machine_time_step=machine_time_step)
+        else:
+            data, _, __ = self._data_recorder.get_matrix_data(
+                label=self.label, buffer_manager=buffer_manager,
+                region=self._actual_recording_region_map[variable],
+                placements=placements, graph_mapper=graph_mapper,
+                application_vertex=self, variable=variable,
+                n_machine_time_steps=n_machine_time_steps)
 
+        # post data extraction processing
         if variable == constants.ENCODERS_FLAG:
             # Reshape and return
             data = numpy.reshape(data, (
@@ -374,6 +395,9 @@ class LIFApplicationVertex(
                     self.n_dimensions
                 )
             )
+
+        # return the data
+        return data
 
     @overrides(AbstractProbeable.can_probe_variable)
     def can_probe_variable(self, variable):
@@ -780,6 +804,18 @@ class LIFApplicationVertex(
                         self._learnt_decoders / machine_time_step_in_seconds,
                         slices[self.SLICES_POSITIONS.NEURON.value].as_slice,
                         constants.MATRIX_CONVERSION_PARTITIONING.ROWS)))
+
+            # add mappings to the data recorder so it can tie it all back later
+            self._data_recorder.add_machine_vertex_mapping(
+                constants.RECORD_VOLTAGE_FLAG, vertex,
+                slices[self.SLICES_POSITIONS.NEURON.value])
+            self._data_recorder.add_machine_vertex_mapping(
+                constants.SCALED_ENCODERS_FLAG, vertex,
+                slices[self.SLICES_POSITIONS.NEURON.value])
+            self._data_recorder.add_machine_vertex_mapping(
+                constants.RECORD_SPIKES_FLAG, vertex,
+                slices[self.SLICES_POSITIONS.NEURON.value])
+
             cluster_vertices.append(vertex)
         return cluster_vertices
 

@@ -3,25 +3,25 @@ import os
 import sys
 
 import numpy
+
 from nengo.cache import NoDecoderCache
+from nengo.probe import Probe as NengoProbe
+
 from nengo_spinnaker_gfe.abstracts.abstract_probeable import AbstractProbeable
-from nengo_spinnaker_gfe.application_vertices.lif_application_vertex import \
-    LIFApplicationVertex
-from nengo_spinnaker_gfe.application_vertices.\
-    value_sink_application_vertex import ValueSinkApplicationVertex
 from nengo_spinnaker_gfe.utility_objects.nengo_machine_graph_generator import \
     NengoMachineGraphGenerator
+from nengo_spinnaker_gfe import binaries, constants
+from nengo_spinnaker_gfe.utility_objects.\
+    nengo_application_graph_generator import NengoApplicationGraphGenerator
+from nengo_spinnaker_gfe import overridden_mapping_algorithms
+from pacman.executor.injection_decorator import provide_injectables, \
+    clear_injectables
+
+from spinnaker_graph_front_end.spinnaker import SpiNNaker
 
 from spinn_front_end_common.utilities import helpful_functions
 from spinn_front_end_common.utilities.utility_objs import ExecutableFinder
 
-from nengo_spinnaker_gfe import binaries, constants
-from nengo_spinnaker_gfe.utility_objects.\
-    nengo_application_graph_generator import NengoApplicationGraphGenerator
-
-from spinnaker_graph_front_end.spinnaker import SpiNNaker
-
-from nengo_spinnaker_gfe import overridden_mapping_algorithms
 
 logger = logging.getLogger(__name__)
 
@@ -272,6 +272,9 @@ class NengoSimulator(SpiNNaker):
         :return: 
         """
 
+        # provide the outputs to the injector scope
+        provide_injectables(self._last_run_outputs)
+
         # go through app verts looking for specific vertex types
         for application_vertex in self._nengo_operator_graph.vertices:
 
@@ -281,22 +284,28 @@ class NengoSimulator(SpiNNaker):
                 # tie in to data map
                 nengo_probes = \
                     self._app_graph_to_nengo_operator_map[application_vertex]
+                self._process_data_from_probe(nengo_probes, application_vertex)
 
-                for nengo_probe in nengo_probes:
-                    data = application_vertex.get_data_for_variable(
-                        variable=nengo_probe.attr,
-                        run_time=self.get_generated_output("RunTime"),
-                        placements=(self.get_generated_output(
-                            "MemoryPlacements")),
-                        graph_mapper=self._nengo_app_machine_graph_mapper,
-                        buffer_manager=(self.get_generated_output(
-                            "BufferManager")))
+        # clean injectable scope
+        clear_injectables()
 
-                    # add data to the sim store for probe data
+    def _process_data_from_probe(self, nengo_probes, application_vertex):
+        for nengo_probe in nengo_probes:
+            if isinstance(nengo_probe, NengoProbe):
+                data = application_vertex.get_data_for_variable(
+                    variable=nengo_probe.attr,
+                    run_time=self.get_generated_output("RunTime"),
+                    placements=(self.get_generated_output("MemoryPlacements")),
+                    graph_mapper=self._nengo_app_machine_graph_mapper,
+                    buffer_manager=(self.get_generated_output("BufferManager")))
+
+                # add data to the sim store for probe data
+                if nengo_probe in self._nengo_object_to_data_map:
                     self._nengo_object_to_data_map[nengo_probe] = \
-                        numpy.vstack(
-                            (self._nengo_object_to_data_map[nengo_probe],
-                             data))
+                        numpy.vstack((
+                            self._nengo_object_to_data_map[nengo_probe], data))
+                else:
+                    self._nengo_object_to_data_map[nengo_probe] = data
 
     def _generate_machine_graph(self, steps):
         """ generate the machine graph in context of pre allocated system 

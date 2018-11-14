@@ -107,6 +107,10 @@ class ValueSinkMachineVertex(
         self._buffered_sdram_per_timestep = [
             self.SDRAM_RECORDING_SDRAM_PER_ATOM * input_slice.n_atoms]
 
+    @property
+    def input_slice(self):
+        return self._input_slice
+
     @overrides(AbstractAcceptsMulticastSignals.accepts_multicast_signals)
     def accepts_multicast_signals(self, transmission_params):
         return transmission_params.projects_to(self._input_slice.as_slice)
@@ -296,7 +300,7 @@ class ValueSinkMachineVertex(
             neuron_param_region.read_all(), dtype=numpy.int32)
 
         # some shaping stuff
-        data.shape = (run_time, -1)
+        data.shape = (int(run_time), -1)
 
         # TODO push this down into the c code for better efficency
         # apply sampling interval
