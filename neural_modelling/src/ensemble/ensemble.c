@@ -252,14 +252,15 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
         bool in_refractory_period = neuron_refractory(n, ensemble->state);
 
         // Loop through learnt input signals and encoder slices
-        uint32_t f = 0;
-        uint32_t e = n_dims;
+        uint32_t encoder_slice = n_dims;
         value_t neuron_input = ZERO_ACCUM_CONSTANT;
-        for(; f < ensemble->parameters.n_learnt_input_signals;
-                f++, e += n_dims){
+        for(uint32_t f = 0; f < ensemble->parameters.n_learnt_input_signals;
+                f++, encoder_slice += n_dims){
+
             // Get encoder vector for this neuron offset for correct learnt
             // encoder
-            const value_t *learnt_encoder_vector = encoder_vector + e;
+            const value_t *learnt_encoder_vector =
+                encoder_vector + encoder_slice;
 
             // Record learnt encoders
             // **NOTE** idea here is that by interspersing these between

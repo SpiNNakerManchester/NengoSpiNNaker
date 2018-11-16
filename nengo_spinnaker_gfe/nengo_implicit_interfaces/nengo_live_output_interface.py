@@ -11,3 +11,20 @@ class NengoLiveOutputInterface(object):
         """
         pass
 
+    @property
+    def size_in(self):
+        """
+        
+        :return: 
+        """
+        return None
+
+    @property
+    def size_out(self):
+        """
+        
+        :return: 
+        """
+        return None
+
+

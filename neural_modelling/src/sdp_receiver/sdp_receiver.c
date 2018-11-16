@@ -73,6 +73,7 @@ void resume_callback(){}
 //! \param[in] port: the sdp port it was received from
 void sdp_received(uint mailbox, uint port) {
     use(port);
+    log_info("received sdp packet");
     sdp_msg_t *message = (sdp_msg_t*) mailbox;
 
     // Copy the data into the output buffer

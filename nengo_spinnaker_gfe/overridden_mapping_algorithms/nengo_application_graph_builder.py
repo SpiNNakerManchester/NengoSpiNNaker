@@ -348,10 +348,12 @@ class NengoApplicationGraphBuilder(object):
                 nengo_operator_graph.add_vertex(new_app_vertex)
 
                 # build connection and let connection conversion do rest
+                # NOTE the synapse = None is to avoid extra operators in the
+                # network run
                 with host_network:
                     nengo_connection = nengo.Connection(
                         nengo_probe.target, nengo_probe,
-                        synapse=nengo_probe.synapse,
+                        synapse=None,
                         solver=nengo_probe.solver,
                         seed=nengo_to_app_graph_map[nengo_probe].seed,
                         add_to_container=False)
@@ -923,11 +925,15 @@ class NengoApplicationGraphBuilder(object):
 
                 # TODO sort out this inhirtance issue.
                 with host_network:
-                    host_output_node = NengoOutputNode(operator)
+                    host_output_node = NengoOutputNode(
+                        operator, "output node for {}".format(
+                            nengo_connection.pre_obj.label))
                     if host_output_node not in host_network:
-                        host_network.add(host_output_node)
+                        #NOTE synapse = None to avoid extra operators in the
+                        # host network when running
                         nengo.Connection(
-                            nengo_connection.pre_obj, host_output_node)
+                            nengo_connection.pre_obj, host_output_node,
+                            synapse=None)
 
                 # update records
                 live_io_receivers[nengo_connection.pre_obj] = operator

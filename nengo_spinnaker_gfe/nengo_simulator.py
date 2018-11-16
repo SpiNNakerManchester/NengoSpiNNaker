@@ -133,7 +133,7 @@ class NengoSimulator(SpiNNaker):
         # basic mapping extras
         extra_mapping_algorithms = [
             "NengoKeyAllocator", "NengoHostGraphUpdateBuilder",
-            "NengoCreateHostSimulator", "NengoSetUpLiveIO"]
+            "NengoSetUpLiveIO"]
 
         # only add the sdram edge allocator if not using a virtual board
         if not helpful_functions.read_config_boolean(
@@ -149,7 +149,10 @@ class NengoSimulator(SpiNNaker):
         # update the main flow with new algorithms and params
         self.extend_extra_mapping_algorithms(extra_mapping_algorithms)
         self.update_extra_inputs(
-            {'NengoNodesAsFunctionOfTime': function_of_time_nodes,
+            {"UserCreateDatabaseFlag": True,
+             'DefaultNotifyHostName': self.config.get_str(
+                "Database", "notify_hostname"),
+             'NengoNodesAsFunctionOfTime': function_of_time_nodes,
              'NengoNodesAsFunctionOfTimeTimePeriod':
                  function_of_time_nodes_time_period,
              'NengoModel': network,
@@ -266,6 +269,10 @@ class NengoSimulator(SpiNNaker):
     def data(self):
         return self._nengo_object_to_data_map
 
+    @property
+    def loading_generated_outputs(self):
+        return self._load_outputs
+
     def _extract_data(self):
         """ extracts data from machine (only probes and ensembles so far)
         
@@ -358,9 +365,16 @@ class NengoSimulator(SpiNNaker):
 
     def close(self, turn_off_machine=None, clear_routing_tables=None,
               clear_tags=None):
-        """Clean the SpiNNaker board and prevent further simulation."""
+        """Clean the SpiNNaker board and close threads to prevent further 
+        simulation."""
         if not self._closed:
-            self.io_controller.close()
+            # close the two threads that could be generating input
+            self._last_run_outputs[
+                "NengoHostSideGraphUpdaterDBConnection"].close()
+            self._last_run_outputs["NengoLiveIO"].stop()
+            self._last_run_outputs["NengoHostSideGraphUpdater"].close()
+
+            # clean up the spinnaker machine
             self.controller.send_signal("stop")
             SpiNNaker.stop(
                 self=self, turn_off_machine=turn_off_machine,

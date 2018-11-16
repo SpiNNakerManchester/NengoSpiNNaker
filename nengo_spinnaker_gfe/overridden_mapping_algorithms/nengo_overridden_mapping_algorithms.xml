@@ -208,27 +208,6 @@
             <param_type>NengoLiveIO</param_type>
         </outputs>
     </algorithm>
-    <algorithm name="NengoCreateHostSimulator">
-        <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_create_host_simulator</python_module>
-        <python_class>NengoCreateHostSimulator</python_class>
-        <input_definitions>
-            <parameter>
-                <param_name>host_network</param_name>
-                <param_type>NengoHostGraph</param_type>
-            </parameter>
-            <parameter>
-                <param_name>machine_time_step_in_seconds</param_name>
-                <param_type>MachineTimeStepInSeconds</param_type>
-            </parameter>
-        </input_definitions>
-        <required_inputs>
-            <param_name>host_network</param_name>
-            <param_name>machine_time_step_in_seconds</param_name>
-        </required_inputs>
-        <outputs>
-            <param_type>NengoHostNetwork</param_type>
-        </outputs>
-    </algorithm>
     <algorithm name="NengoKeyAllocator">
         <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_key_allocator</python_module>
         <python_class>NengoKeyAllocator</python_class>
@@ -301,21 +280,37 @@
         <python_class>NengoHostGraphUpdateBuilder</python_class>
         <input_definitions>
             <parameter>
-                <param_name>nengo_host_graph</param_name>
-                <param_type>NengoHostNetwork</param_type>
-            </parameter>
-            <parameter>
                 <param_name>time_step</param_name>
                 <param_type>MachineTimeStep</param_type>
             </parameter>
+            <parameter>
+                <param_name>host_network</param_name>
+                <param_type>NengoHostGraph</param_type>
+            </parameter>
+            <parameter>
+                <param_name>machine_time_step_in_seconds</param_name>
+                <param_type>MachineTimeStepInSeconds</param_type>
+            </parameter>
+            <parameter>
+                <param_name>database_socket_addresses</param_name>
+                <param_type>DatabaseSocketAddresses</param_type>
+            </parameter>
+            <parameter>
+                <param_name>notify_host_name</param_name>
+                <param_type>DefaultNotifyHostName</param_type>
+            </parameter>
         </input_definitions>
         <required_inputs>
-            <param_name>nengo_host_graph</param_name>
+            <param_name>host_network</param_name>
             <param_name>time_step</param_name>
+            <param_name>machine_time_step_in_seconds</param_name>
+            <param_name>database_socket_addresses</param_name>
+            <param_name>notify_host_name</param_name>
         </required_inputs>
         <outputs>
             <param_type>NengoHostSideGraphUpdater</param_type>
             <param_type>NengoHostSideGraphUpdaterDBConnection</param_type>
+            <param_type>DatabaseSocketAddresses</param_type>
         </outputs>
     </algorithm>
 </algorithms>

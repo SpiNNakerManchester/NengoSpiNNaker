@@ -87,16 +87,26 @@ def create_model():
         p_error = nengo.Probe(error, synapse=0.005, label="p_error")
         p_recall = nengo.Probe(recall, synapse=None, label="p_recall")
 
+        probes = [p_keys, p_values, p_learning, p_error, p_recall]
+
         if record_encoders:
             p_encoders = nengo.Probe(
                 conn_in.learning_rule, 'scaled_encoders',
                 label="p_encoders")
-    return model, list(), dict()
+            probes.append(p_encoders)
+    return model, list(), dict(), probes
 
 if __name__ == '__main__':
-    network, function_of_time, function_of_time_time_period = create_model()
+    network, function_of_time, function_of_time_time_period, \
+    probes = create_model()
     if USE_GFE:
         sim = gfe_nengo.NengoSimulator(network)
     else:
         sim = mundy_nengo.Simulator(network)
     sim.run(0.1)
+
+    for probe in probes:
+        print "data for probe {} is {}".format(probe.label, sim.data[probe])
+
+
+

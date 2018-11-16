@@ -44,6 +44,7 @@ class NengoSetUpLiveIO(object):
                     connection_listener = ConnectionListener(connection)
                     self._connection_listener.append(connection_listener)
                     connection_listener.add_callback(self._process_packet)
+                    connection_listener.start()
 
     def _process_packet(self, sdp_message):
         # Unpack the data, and store it as the input for the vertex

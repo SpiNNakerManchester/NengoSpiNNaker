@@ -22,7 +22,7 @@ from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
 from spinn_front_end_common.utilities.utility_objs import ExecutableType
 from spinn_utilities.overrides import overrides
-from spinnman.messages.sdp import SDPMessage, SDPHeader
+from spinnman.messages.sdp import SDPMessage, SDPHeader, SDPFlag
 
 
 class SDPReceiverMachineVertex(
@@ -212,13 +212,16 @@ class SDPReceiverMachineVertex(
         self.reserve_provenance_data_region(spec)
 
     def send_output_to_spinnaker(self, value, placement, transceiver):
+
         # Apply the pre-slice, the connection function and the transform.
-        c_value = value[self._pre_slice]
+        c_value = value[(
+            self._managing_app_outgoing_partition.identifier.
+            transmission_parameter.pre_slice)]
 
         # locate required transforms and functions
         partition_transmission_function = \
             self._managing_app_outgoing_partition.identifier\
-                .transmission_parameter.function
+                .transmission_parameter.parameter_function
         partition_transmission_transform = \
             self._managing_app_outgoing_partition.identifier\
                 .transmission_parameter.full_transform(slice_out=False)
@@ -235,10 +238,11 @@ class SDPReceiverMachineVertex(
         data = helpful_functions.convert_numpy_array_to_s16_15(c_value)
         packet = SDPMessage(
             sdp_header=SDPHeader(
-                destination_port=constants.SDP_PORTS.SDP_RECEIVER,
+                destination_port=constants.SDP_PORTS.SDP_RECEIVER.value,
                 destination_cpu=placement.p, destination_chip_x=placement.x,
-                destination_chip_y=placement.y),
-            data=data)
+                destination_chip_y=placement.y,
+                flags=SDPFlag.REPLY_NOT_EXPECTED),
+            data=bytes(data.data))
         transceiver.send_sdp_message(packet)
 
     @property
