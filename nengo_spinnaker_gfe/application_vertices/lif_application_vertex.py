@@ -372,6 +372,8 @@ class LIFApplicationVertex(
         if variable == constants.RECORD_OUTPUT_FLAG:
             variable = constants.RECORD_SPIKES_FLAG
 
+        print "getting variable {}".format(variable)
+
         data = None
         if variable == constants.RECORD_SPIKES_FLAG:
             data, _, __ = self._data_recorder.get_bools(
@@ -390,11 +392,12 @@ class LIFApplicationVertex(
         # post data extraction processing
         if variable == constants.ENCODERS_FLAG:
             # Reshape and return
-            data = numpy.reshape(data, (
-                n_machine_time_steps, self._n_neurons,
-                    self.n_dimensions
-                )
-            )
+            #data = numpy.reshape(data, (
+            #    n_machine_time_steps, self._n_neurons,
+            #        self.n_dimensions
+            #    )
+            #)
+            pass
 
         # return the data
         return data
@@ -459,10 +462,20 @@ class LIFApplicationVertex(
                     constants.ENSEMBLE_OUTPUT_PORT.LEARNT:
                 outgoing_learnt_partitions.append(outgoing_partition)
 
+        if len(outgoing_learnt_partitions) > 1:
+            raise Exception("this doesnt make sense. If there's multiple "
+                            "outgoing learnt partitions, where's the extra "
+                            "keys being recorded for the c code?")
+
+        if len(standard_outgoing_partitions) > 1:
+            raise Exception("this doesnt make sense. If there's multiple "
+                            "outgoing standard partitions, where's the extra "
+                            "keys being recorded for the c code?")
+
         # locate decoders and n keys
         if len(standard_outgoing_partitions) != 0:
             self._decoders, self._n_output_keys = self._get_decoders_and_n_keys(
-                standard_outgoing_partitions, True)
+                standard_outgoing_partitions[0], True)
 
         # convert to cluster sizes
         self._cluster_size_out = self._decoders.shape[0]
@@ -975,13 +988,9 @@ class LIFApplicationVertex(
                 constants.MATRIX_CONVERSION_PARTITIONING.ROWS).nbytes
 
         # basic key regions
-        key_region = (
-            constants.BYTES_PER_KEY * self._n_output_keys *
-            output_slice.n_atoms)
+        key_region = constants.BYTES_PER_KEY * self._n_output_keys
 
-        learnt_key_region = (
-            constants.BYTES_PER_KEY * self._n_learnt_output_keys *
-            learnt_output_slice.n_atoms)
+        learnt_key_region = constants.BYTES_PER_KEY * self._n_learnt_output_keys
 
         # partitioning data for the machine vertices
         population_length_region = constants.BYTE_TO_WORD_MULTIPLIER * n_cores
@@ -1133,7 +1142,8 @@ class LIFApplicationVertex(
         self._learnt_decoders = numpy.array([])
         self._pes_learning_rules = list()
 
-        for learnt_outgoing_partition in outgoing_learnt_partitions:
+        if len(outgoing_learnt_partitions) != 0:
+            learnt_outgoing_partition = outgoing_learnt_partitions[0]
             partition_identifier = learnt_outgoing_partition.identifier
             transmission_parameter = partition_identifier.transmission_parameter
             learning_rule_type = \
@@ -1164,8 +1174,9 @@ class LIFApplicationVertex(
 
             decoder_start = self._learnt_decoders.shape[0]
 
-            rule_decoders, self._n_learnt_output_keys = \
-                self._get_decoders_and_n_keys([learnt_outgoing_partition])
+            rule_decoders, this_learnt_n_keys = \
+                self._get_decoders_and_n_keys(learnt_outgoing_partition)
+            self._n_learnt_output_keys += this_learnt_n_keys
 
             # If there are no existing decodes, hstacking doesn't
             # work so set decoders to new learnt decoder matrix
@@ -1249,29 +1260,27 @@ class LIFApplicationVertex(
                 decoded_input_filter_index=decoded_input_filter_index)
             self._voja_learning_rules.append(voja_learning_rule)
 
-    def _get_decoders_and_n_keys(
-            self, standard_outgoing_partitions, minimise=False):
+    def _get_decoders_and_n_keys(self, outgoing_partition, minimise=False):
 
         decoders = list()
         n_keys = 0
-        for standard_outgoing_partition in standard_outgoing_partitions:
-            partition_identifier = standard_outgoing_partition.identifier
-            if not isinstance(partition_identifier.transmission_parameter,
-                              EnsembleTransmissionParameters):
-                raise NengoException(
-                    "To determine the decoders and keys, the ensemble {} "
-                    "assumes it only has ensemble transmission params. this "
-                    "was not the case.".format(self))
-            decoder = partition_identifier.transmission_parameter.full_decoders
-            if not minimise:
-                keep = numpy.array([True for _ in range(decoder.shape[0])])
-            else:
-                # We can reduce the number of packets sent and the memory
-                # requirements by removing columns from the decoder matrix which
-                # will always result in packets containing zeroes.
-                keep = numpy.any(decoder != 0, axis=1)
-            decoders.append(decoder[keep, :])
-            n_keys += decoder.shape[0]
+        partition_identifier = outgoing_partition.identifier
+        if not isinstance(partition_identifier.transmission_parameter,
+                          EnsembleTransmissionParameters):
+            raise NengoException(
+                "To determine the decoders and keys, the ensemble {} "
+                "assumes it only has ensemble transmission params. this "
+                "was not the case.".format(self))
+        decoder = partition_identifier.transmission_parameter.full_decoders
+        if not minimise:
+            keep = numpy.array([True for _ in range(decoder.shape[0])])
+        else:
+            # We can reduce the number of packets sent and the memory
+            # requirements by removing columns from the decoder matrix which
+            # will always result in packets containing zeroes.
+            keep = numpy.any(decoder != 0, axis=1)
+        decoders.append(decoder[keep, :])
+        n_keys += decoder.shape[0]
 
         # Stack the decoders
         if len(decoders) > 0:

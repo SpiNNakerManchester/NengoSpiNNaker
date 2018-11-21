@@ -34,14 +34,18 @@ class ConnectionMachineOutgoingPartition(
         "pre_vertex={}, identifier={}, edges={}, constraints={}, label={}, " \
         "seed={})"
 
+    COUNT = 0
+
     def __init__(self, rng, identifier, pre_vertex, seed):
         AbstractTrafficTypeSecureOutgoingPartition.__init__(
-            self, identifier=identifier, label="connection_machine_partition",
+            self, identifier=identifier,
+            label="connection_machine_partition{}".format(self.COUNT),
             allowed_edge_types=MachineEdge,
             traffic_type=EdgeTrafficType.MULTICAST)
         AbstractNengoObject.__init__(self, rng=rng, seed=seed)
         self._outgoing_edges_destinations = list()
         self._pre_vertex = pre_vertex
+        self.COUNT += 1
 
     @property
     def pre_vertex(self):

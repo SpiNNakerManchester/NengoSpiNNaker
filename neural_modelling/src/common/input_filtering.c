@@ -122,7 +122,7 @@ void _lowpass_filter_step(
     value_t_pair_t *params = (value_t_pair_t *) pars;
     register int32_t a = bitsk(params->a);
     register int32_t b = bitsk(params->b);
-    log_info("low pass filter step a=%k, b = %k", a, b);
+    //log_info("low pass filter step a=%k, b = %k", a, b);
 
     // Apply the filter to every dimension (realised as a Direct Form I digital
     // filter).

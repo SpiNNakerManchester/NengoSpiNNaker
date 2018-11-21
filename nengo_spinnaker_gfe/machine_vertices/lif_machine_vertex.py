@@ -181,10 +181,6 @@ class LIFMachineVertex(
     def output_slice(self):
         return self._output_slice
 
-    @property
-    def learnt_slice(self):
-        return self._learnt_slice
-
     @overrides(AbstractRecordable.is_recording)
     def is_recording(self):
         return self._is_recording
@@ -425,7 +421,10 @@ class LIFMachineVertex(
             if isinstance(
                     outgoing_partition, ConnectionMachineOutgoingPartition):
                 if (outgoing_partition.identifier.source_port ==
-                        constants.ENSEMBLE_OUTPUT_PORT.NEURONS):
+                        constants.ENSEMBLE_OUTPUT_PORT.NEURONS or
+                    outgoing_partition.identifier.source_port ==
+                        constants.OUTPUT_PORT.STANDARD):
+                    print "doing neuron/standard keys"
                     self._write_keys_to_spec(
                         spec, outgoing_partition, routing_info,
                         app_vertex.output_n_keys)
@@ -436,16 +435,20 @@ class LIFMachineVertex(
                     outgoing_partition, ConnectionMachineOutgoingPartition):
                 if (outgoing_partition.identifier.source_port ==
                         constants.ENSEMBLE_OUTPUT_PORT.LEARNT):
+                    print "doing learnt keys"
                     self._write_keys_to_spec(
                         spec, outgoing_partition, routing_info,
-                        app_vertex.learnt_output_n_keys)
+                        self._learnt_decoders.shape[0])
 
-    @staticmethod
-    def _write_keys_to_spec(spec, outgoing_partition, routing_info, n_keys):
+    def _write_keys_to_spec(
+            self, spec, outgoing_partition, routing_info, n_keys):
         this_partitions_info = routing_info.get_routing_info_from_partition(
             outgoing_partition)
-        spec.write_value(n_keys)
+        key_index = 0
         for key in this_partitions_info.get_keys(n_keys):
+            print "ensmeble {} has key {} of {}".format(self._label,
+                                                        key_index, key)
+            key_index += 1
             spec.write_value(key)
 
     def _write_routes_region(
@@ -593,8 +596,14 @@ class LIFMachineVertex(
         spec.write_value(self._sub_population_id)
         spec.write_value(self._input_slice.lo_atom)
         spec.write_value(self._input_slice.n_atoms)
-        spec.write_value(self._output_slice.n_atoms)
-        spec.write_value(self._learnt_slice.n_atoms)
+        if len(self._decoders) == 0:
+            spec.write_value(0)
+        else:
+            spec.write_value(self._decoders.shape[0])
+        if len(self._learnt_encoder_filters) == 0:
+            spec.write_value(0)
+        else:
+            spec.write_value(self._learnt_decoders.shape[0])
 
         # my local input memory point
         machine_graph_edge = \
@@ -751,18 +760,18 @@ class LIFMachineVertex(
         # reserve the key region
         spec.reserve_memory_region(
             self.DATA_REGIONS.KEYS.value,
-            ((constants.BYTES_PER_KEY * app_vertex.output_n_keys *
-             self._output_slice.n_atoms) +
-             (constants.BYTES_PER_KEY * app_vertex.learnt_output_n_keys *
-              self._learnt_slice.n_atoms)),
+            ((constants.BYTES_PER_KEY * app_vertex.output_n_keys) +
+             (constants.BYTES_PER_KEY * app_vertex.learnt_output_n_keys)),
             label="keys region")
 
         # reserve the pes region
         spec.reserve_memory_region(
-            self.DATA_REGIONS.PES.value,
+            region=self.DATA_REGIONS.PES.value,
             # pes learning rule region
-            (self.PES_REGION_N_ELEMENTS + len(self._local_pes_learning_rules) +
-             self.PES_REGION_SLICED_RULE_N_ELEMENTS),
+            size=((self.PES_REGION_N_ELEMENTS + len(
+                self._local_pes_learning_rules) +
+              self.PES_REGION_SLICED_RULE_N_ELEMENTS) *
+             constants.BYTE_TO_WORD_MULTIPLIER),
             label="pes region")
 
         # reserve the voja region

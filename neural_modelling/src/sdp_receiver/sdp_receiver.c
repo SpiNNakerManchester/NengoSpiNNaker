@@ -23,8 +23,11 @@ static uint32_t time_between_spikes;
 //! The random backoff between timer ticks to desynchronize sources
 static uint32_t random_backoff_us;
 
+//! provenance of how many packets received
+static uint32_t n_packets_received;
+
 //! start value for
-#define START_VALUE_OUTPUT 0x00000000
+#define START_VALUE_OUTPUT 0
 
 //! enum mapping region ids to regions in python
 typedef enum regions {
@@ -51,6 +54,11 @@ typedef enum callback_priorities{
     SDP = -1, TIMER = 1, DMA = 0
 } callback_priorities;
 
+//! enum mapping of extra provenance data items
+typedef enum extra_provenance_data_region_entries{
+    N_PACKETS_RECEIVED = 0
+} extra_provenance_data_region_entries;
+
 
 /** \brief Shared Rx parameters.
  */
@@ -66,21 +74,25 @@ typedef struct sdp_rx_parameters {
 sdp_rx_parameters_t g_sdp_rx; //!< Global parameters
 
 //! \brief function for handling resume functionality
-void resume_callback(){}
+void resume_callback(){
+    n_packets_received = 0;
+}
 
 //! \brief Receive packed data packed in SDP message
 //! \param[in] mailbox: the box
 //! \param[in] port: the sdp port it was received from
 void sdp_received(uint mailbox, uint port) {
     use(port);
-    log_info("received sdp packet");
+    n_packets_received += 1;
     sdp_msg_t *message = (sdp_msg_t*) mailbox;
 
     // Copy the data into the output buffer
     // Mark values as being fresh
-    value_t * data = (value_t*) message->data;
+
+    value_t * data = (value_t*) &(message->cmd_rc);
     for (uint d = 0; d < g_sdp_rx.n_dimensions; d++) {
         g_sdp_rx.output[d] = data[d];
+        log_info("data for d %d is %k", d, data[d]);
         g_sdp_rx.fresh[d] = true;
     }
     spin1_msg_free(message);
@@ -98,8 +110,6 @@ void timer_callback(uint timer_count, uint unused) {
     use(timer_count);
     use(unused);
     time++;
-
-    log_debug("Timer tick %u", time);
 
     // If a fixed number of simulation ticks are specified and these have
     // passed
@@ -133,6 +143,10 @@ void timer_callback(uint timer_count, uint unused) {
             expected_time -= time_between_spikes;
 
             // try to send message
+            log_info("sending payload of %k in form %d converted back as %k "
+                     "with key %d",
+                     g_sdp_rx.output[d], bitsk(g_sdp_rx.output[d]),
+                     kbits(bitsk(g_sdp_rx.output[d])), g_sdp_rx.keys[d]);
             while(!spin1_send_mc_packet(
                     g_sdp_rx.keys[d], bitsk(g_sdp_rx.output[d]),
                     WITH_PAYLOAD)){
@@ -159,10 +173,15 @@ static bool get_sdp_port_data(address_t dsg_address, uint32_t *sdp_port){
 //! \return bool indicating if successful
 static bool get_keys_data(address_t dsg_address){
     g_sdp_rx.n_dimensions = dsg_address[N_KEYS];
+    log_info("n keys is %d", dsg_address[N_KEYS]);
     g_sdp_rx.keys = spin1_malloc(g_sdp_rx.n_dimensions * sizeof(uint));
     if (g_sdp_rx.keys == NULL){
         log_error("failed to allocate dtcm for the keys");
         return false;
+    }
+
+    for (uint32_t n_key = 0; n_key < g_sdp_rx.n_dimensions; n_key++){
+        log_info("key %d = %d", n_key, dsg_address[START_OF_KEYS + n_key]);
     }
     spin1_memcpy(
         g_sdp_rx.keys, &dsg_address[START_OF_KEYS],
@@ -179,7 +198,17 @@ static bool get_mc_transmission_data(address_t dsg_address){
     return true;
 }
 
-//! \brief allocates DTCM for some params and instantiates them to correct values
+//! \brief callback for storing extra provenance data items
+void c_main_store_provenance_data(address_t provenance_region){
+    log_debug("writing other provenance data");
+
+    // store the data into the provenance data region
+    provenance_region[N_PACKETS_RECEIVED] = n_packets_received;
+    log_debug("finished other provenance data");
+}
+
+//! \brief allocates DTCM for some params and instantiates them to correct
+//!        values
 //! \return bool indicating if successful
 static bool malloc_dtcm_and_init(){
     // allocate dtcms
@@ -254,6 +283,12 @@ static bool initialize(uint32_t *timer_period, uint32_t *sdp_port){
 
     // sort out provenance region
     simulation_set_provenance_data_address(
+        data_specification_get_region(PROVENANCE_REGION, address));
+
+
+    // set up provenance function
+    simulation_set_provenance_function(
+        c_main_store_provenance_data,
         data_specification_get_region(PROVENANCE_REGION, address));
 
     //passed

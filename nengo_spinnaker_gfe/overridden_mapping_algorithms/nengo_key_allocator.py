@@ -494,6 +494,7 @@ class NengoKeyAllocator(object):
             route = Router.convert_routing_table_entry_to_spinnaker_route(
                 entry)
             chip_route_nets[chip][route].append(out_going_partition)
+            net_graph[out_going_partition] = set()
 
             # Add constraints to the net graph dependent on which nets take
             # different routes at this point.

@@ -30,7 +30,7 @@ class ValueSinkApplicationVertex(
         "_is_recording_probeable_variable"
     ]
 
-    MAX_WIDTH = 16
+    MAX_WIDTH = 16.0
 
     def __init__(
             self, label, rng, size_in, seed, sampling_interval,
@@ -121,9 +121,7 @@ class ValueSinkApplicationVertex(
         # Make sufficient vertices to ensure that each has a size_in of less
         # than max_width.
 
-        n_vertices = int(math.ceil((self._size_in // self.MAX_WIDTH)))
-        if n_vertices == 0:
-            n_vertices = 1
+        n_vertices = int(math.ceil((self._size_in / self.MAX_WIDTH)))
 
         incoming_standard_edges = \
             helpful_functions.locate_all_incoming_edges_of_type(

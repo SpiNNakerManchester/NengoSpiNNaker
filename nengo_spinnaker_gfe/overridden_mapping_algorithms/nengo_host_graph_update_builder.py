@@ -11,7 +11,7 @@ class NengoHostGraphUpdateBuilder(object):
 
     def __call__(
             self, host_network, time_step, machine_time_step_in_seconds,
-            database_socket_addresses, notify_host_name):
+            database_socket_addresses, notify_host_name, n_machine_time_steps):
 
         # Build the host simulator
         host_sim = nengo.Simulator(
@@ -20,7 +20,7 @@ class NengoHostGraphUpdateBuilder(object):
         # wrap the host network into the updater, so that there's
         # functionality to call step
         nengo_host_graph_updater = NengoHostGraphUpdater(
-            host_sim, machine_time_step_in_seconds)
+            host_sim, machine_time_step_in_seconds, n_machine_time_steps)
 
         # create the auto pause and resume connection for start and pause
         auto_pause_and_resume_interface = DatabaseConnection(

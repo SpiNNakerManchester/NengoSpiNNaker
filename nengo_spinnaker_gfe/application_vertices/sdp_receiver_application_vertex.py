@@ -71,10 +71,11 @@ class SDPReceiverApplicationVertex(
         for outgoing_partition in outgoing_partitions:
             if (outgoing_partition.identifier.source_port ==
                     constants.OUTPUT_PORT.STANDARD):
-
                 # Create a vertex for this connection
                 machine_vertex = SDPReceiverMachineVertex(
-                    outgoing_partition=outgoing_partition, label=self._label)
+                    outgoing_partition=outgoing_partition,
+                    label=self._label + " handling partition {}".format(
+                        outgoing_partition.label))
                 machine_graph.add_vertex(machine_vertex)
                 graph_mapper.add_vertex_mapping(
                     machine_vertex=machine_vertex, application_vertex=self)
@@ -94,7 +95,7 @@ class SDPReceiverApplicationVertex(
                         outgoing_partition.identifier.source_port.value))
 
     def __repr__(self):
-        return "sd"
+        return self.__str__()
 
     def __str__(self):
-        return "sd"
+        return self._label

@@ -4,6 +4,7 @@ import nengo
 import nengo_spinnaker_gfe.nengo_simulator as gfe_nengo
 import nengo_spinnaker as mundy_nengo
 USE_GFE = True
+USE_NENGO = False
 
 
 def create_model():
@@ -101,12 +102,16 @@ if __name__ == '__main__':
     probes = create_model()
     if USE_GFE:
         sim = gfe_nengo.NengoSimulator(network)
+    elif USE_NENGO:
+        sim = nengo.Simulator(network)
     else:
         sim = mundy_nengo.Simulator(network)
     sim.run(0.1)
 
     for probe in probes:
         print "data for probe {} is {}".format(probe.label, sim.data[probe])
+
+    sim.stop()
 
 
 

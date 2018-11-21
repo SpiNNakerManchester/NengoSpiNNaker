@@ -266,10 +266,17 @@ void simulate_neurons(ensemble_state_t *ensemble, uint32_t *spikes) {
             // **NOTE** idea here is that by interspersing these between
             // encoding operations, write buffer should have time to be
             // written out
+            log_info("check reocrding encoders");
             if (scaled_encoders_recording_index != INVALID_RECORDING_INDEX){
+                log_info("recording encoders");
                 recording_record(
                     scaled_encoders_recording_index, &learnt_encoder_vector,
                     sizeof(value_t) * n_dims);
+                for( uint32_t vector_index = 0; vector_index < n_dims;
+                        vector_index ++){
+                    log_info("record encoder vector element %d is %k",
+                             vector_index, learnt_encoder_vector[vector_index]);
+                }
             }
 
             // If neuron's not in refractory period,
@@ -910,6 +917,7 @@ void timer_callback(uint timer_count, uint unused) {
         log_info("the state address is %d", (uint32_t) filter.state);
     }
 
+    recording_do_timestep_update(time);
     log_info("done timer");
 
 }
@@ -1265,6 +1273,48 @@ static bool initialise_recording(address_t recording_address){
     return success;
 }
 
+//! \brief initialises the key region
+//! \param[in] key_region: the address in SDRAM where the keys are stored
+//! \return True if key initialisation is successful, flase otherwise
+static bool ensemble_setup_keys_region(address_t key_region){
+    ensemble.keys = spin1_malloc(
+        sizeof(uint32_t) * (
+            ensemble.parameters.n_decoder_rows +
+            ensemble.parameters.n_learnt_decoder_rows));
+    if (ensemble.keys == NULL){
+        log_error("failed to allocate enough dtcm for keys");
+        return false;
+    }
+
+    uint32_t words_read = 0;
+
+    // Copy static keys into beginning of this array
+    if (ensemble.parameters.n_decoder_rows != 0){
+        spin1_memcpy(ensemble.keys, &key_region[words_read],
+                     ensemble.parameters.n_decoder_rows * sizeof(uint32_t));
+        words_read += ensemble.parameters.n_decoder_rows;
+    }
+
+    // Follow this by learnt keys
+    if (ensemble.parameters.n_learnt_decoder_rows != 0){
+        spin1_memcpy(
+            ensemble.keys + ensemble.parameters.n_decoder_rows,
+            &key_region[words_read],
+            ensemble.parameters.n_learnt_decoder_rows * sizeof(uint32_t));
+    }
+
+    log_info("n_decoder_rows = %d", ensemble.parameters.n_decoder_rows);
+    log_info("n_learnt_decoder_rows = %d",
+             ensemble.parameters.n_learnt_decoder_rows);
+    for (uint32_t key_index = 0;
+            key_index <  (ensemble.parameters.n_decoder_rows +
+                          ensemble.parameters.n_learnt_decoder_rows);
+            key_index ++){
+        log_info("key %d is %d", key_index, ensemble.keys[key_index]);
+    }
+    return true;
+}
+
 //! \brief reads in the recording index for the model
 //! \param[in] recording_index_address: the address in SDRAM where to store
 //! recording indexes
@@ -1419,6 +1469,13 @@ static bool initialize(uint32_t *timer_period){
     // sort out matrix reads for encoder, bias, gain, decoders
     log_info("sorting out setup matrix");
     if (!ensemble_setup_matrix_based_regions(address)){
+        return false;
+    }
+
+    // sort out key region
+    log_info("sorting out key region");
+    if (!ensemble_setup_keys_region(
+            data_specification_get_region(KEYS, address))){
         return false;
     }
 

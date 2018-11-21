@@ -76,6 +76,8 @@ void mcpl_callback(uint key, uint payload)
 {
     // Queue the packet for later processing, if no processing is scheduled then
     // trigger the queue processor.
+    log_info("data key %d payload %d converted payload %k",
+             key, payload, kbits(payload));
     if (packet_queue_push(&packets, key, payload))
     {
         if (!queue_processing)

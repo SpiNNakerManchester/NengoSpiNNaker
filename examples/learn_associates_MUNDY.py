@@ -107,3 +107,5 @@ if __name__ == '__main__':
 
     for probe in probes:
         print "data for probe {} is {}".format(probe.label, sim.data[probe])
+
+    sim.stop()

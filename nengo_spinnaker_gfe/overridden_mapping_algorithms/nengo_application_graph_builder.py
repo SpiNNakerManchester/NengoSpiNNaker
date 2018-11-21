@@ -656,6 +656,8 @@ class NengoApplicationGraphBuilder(object):
             nengo_to_app_graph_map[nengo_connection] = application_edge
             app_graph_to_nengo_operator_map[application_edge].append(
                 nengo_connection)
+        else:
+            raise Exception("dont know what to do here")
 
     @staticmethod
     def _get_reception_parameters(nengo_connection):

@@ -20,7 +20,8 @@ from spinn_front_end_common.interface.provenance import \
     ProvidesProvenanceDataFromMachineImpl
 from spinn_front_end_common.interface.simulation import simulation_utilities
 from spinn_front_end_common.utilities import constants as fec_constants
-from spinn_front_end_common.utilities.utility_objs import ExecutableType
+from spinn_front_end_common.utilities.utility_objs import ExecutableType, \
+    ProvenanceDataItem
 from spinn_utilities.overrides import overrides
 from spinnman.messages.sdp import SDPMessage, SDPHeader, SDPFlag
 
@@ -37,6 +38,8 @@ class SDPReceiverMachineVertex(
 
         # the outgoing partition this sdp receiver is managing for the host
         "_managing_app_outgoing_partition",
+        # n packets sent during the last run
+        "_n_packets_transmitted"
     ]
 
     DATA_REGIONS = Enum(
@@ -47,12 +50,17 @@ class SDPReceiverMachineVertex(
                ('MC_TRANSMISSION_PARAMS', 3),
                ('PROVENANCE_DATA', 4)])
 
+    EXTRA_PROVENANCE_DATA_ENTRIES = Enum(
+        value="EXTRA_PROVENANCE_DATA_ENTRIES",
+        names=[('N_PACKETS_C_CODE_RECEIVED', 0)])
+
     BYTES_PER_FIELD = 4
+    SIZE_OF_N_KEYS_IN_BYTES = 4
     SDP_PORT_SIZE = 1
     USE_REVERSE_IPTAGS = False
     SDP_PORT = 6
     MC_TRANSMISSION_REGION_ITEMS = 2
-    N_LOCAL_PROVENANCE_ITEMS = 0
+    N_LOCAL_PROVENANCE_ITEMS = 1
 
     # TODO THIS LIMIT IS BECAUSE THE C CODE ASSUMES 1 SDP Message contains
     # the next timer ticks worth of changes. future could be modded to remove
@@ -76,6 +84,7 @@ class SDPReceiverMachineVertex(
             .transmission_parameter.full_transform(
                 slice_out=self.TRANSFORM_SLICE_OUT)
         self._n_keys = transform.shape[0]
+        self._n_packets_transmitted = 0
 
         # Check n keys size
         if self._n_keys > self.MAX_N_KEYS_SUPPORTED:
@@ -124,7 +133,8 @@ class SDPReceiverMachineVertex(
 
     @staticmethod
     def _calculate_sdram_for_keys(keys):
-        return SDPReceiverMachineVertex.BYTES_PER_FIELD * keys
+        return (SDPReceiverMachineVertex.BYTES_PER_FIELD * keys) + \
+               SDPReceiverMachineVertex.SIZE_OF_N_KEYS_IN_BYTES
 
     @overrides(AbstractHasAssociatedBinary.get_binary_file_name)
     def get_binary_file_name(self):
@@ -148,6 +158,8 @@ class SDPReceiverMachineVertex(
     def generate_machine_data_specification(
             self, spec, placement, machine_graph, routing_info, iptags,
             reverse_iptags, machine_time_step, time_scale_factor, graph_mapper):
+
+        print "dsg for placement {}".format(placement)
         self._reserve_memory_regions(spec)
         spec.switch_write_focus(self.DATA_REGIONS.SYSTEM.value)
         spec.write_array(simulation_utilities.get_simulation_header_array(
@@ -190,6 +202,7 @@ class SDPReceiverMachineVertex(
             machine_outgoing_partition)
         spec.write_value(self._n_keys)
         for key in partition_routing_info.get_keys(n_keys=self._n_keys):
+            print "key is {}".format(key)
             spec.write_value(key)
 
     def _reserve_memory_regions(self, spec):
@@ -244,6 +257,7 @@ class SDPReceiverMachineVertex(
                 flags=SDPFlag.REPLY_NOT_EXPECTED),
             data=bytes(data.data))
         transceiver.send_sdp_message(packet)
+        self._n_packets_transmitted += 1
 
     @property
     @overrides(ProvidesProvenanceDataFromMachineImpl._n_additional_data_items)
@@ -254,3 +268,32 @@ class SDPReceiverMachineVertex(
     @overrides(ProvidesProvenanceDataFromMachineImpl._provenance_region_id)
     def _provenance_region_id(self):
         return self.DATA_REGIONS.PROVENANCE_DATA.value
+
+    @overrides(ProvidesProvenanceDataFromMachineImpl.
+               get_provenance_data_from_machine)
+    def get_provenance_data_from_machine(self, transceiver, placement):
+        # get data from basic prov
+        provenance_data = self._read_provenance_data(transceiver, placement)
+        provenance_items = self._read_basic_provenance_items(
+            provenance_data, placement)
+        provenance_data = self._get_remaining_provenance_data_items(
+            provenance_data)
+
+        # get item in data
+        n_packets_the_c_code_received = provenance_data[
+            self.EXTRA_PROVENANCE_DATA_ENTRIES.N_PACKETS_C_CODE_RECEIVED.value]
+        label, x, y, p, names = self._get_placement_details(placement)
+
+        # translate into provenance data items
+        provenance_items.append(ProvenanceDataItem(
+            self._add_name(names, "n_packets_the_c_code_received"),
+            n_packets_the_c_code_received,
+            report=n_packets_the_c_code_received != self._n_packets_transmitted,
+            message=(
+                "The host transmitted {} packets for core {}:{}:{}. The core "
+                "failed to receive them all. As it received {} packets."
+                "Unknown how to rectify".format(
+                    self._n_packets_transmitted, x, y, p,
+                    n_packets_the_c_code_received))))
+        return provenance_items
+

@@ -76,20 +76,20 @@ static inline void _if_filter_input(
 //! \brief Simulate one step of a filter and reset its accumulator if necessary
 //! \param[in] filter: the filters to work with
 static inline void _if_filter_step(if_filter_t* filter){
-    log_info("in private filter step");
-    log_info("filter is %x", (uint32_t)filter);
+    //log_info("in private filter step");
+    //log_info("filter is %x", (uint32_t)filter);
     // Disable interrupts to avoid a race condition
     uint32_t cpsr = spin1_fiq_disable();
 
     // Apply the simulation step
-    log_info( "size=%d", filter->size);
-    for (uint32_t n = 0; n < filter->size; n++)
-    {
-        log_info("input value %d is %d", n, filter->input->value[n]);
-        log_info("output value %d is %d", n, filter->output[n]);
-    }
-    log_info("the filter mask is %d", filter->input->mask);
-    log_info("the state address is %d", (uint32_t) filter->state);
+    //log_info( "size=%d", filter->size);
+    //for (uint32_t n = 0; n < filter->size; n++)
+    //{
+    //    log_info("input value %d is %d", n, filter->input->value[n]);
+    //    log_info("output value %d is %d", n, filter->output[n]);
+    //}
+    //log_info("the filter mask is %d", filter->input->mask);
+    //log_info("the state address is %d", (uint32_t) filter->state);
 
     filter->step(filter->size, filter->input->value,
                  filter->output, filter->state);
