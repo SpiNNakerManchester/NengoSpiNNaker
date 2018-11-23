@@ -128,14 +128,11 @@ class NengoSimulator(SpiNNaker):
                 os.path.join(os.path.dirname(__file__),
                              self.CONFIG_FILE_NAME))],
             machine_time_step=machine_time_step,
-            extra_xml_paths=xml_paths)
-
-        # basic mapping extras
-        extra_mapping_algorithms = [
-            "NengoKeyAllocator", "NengoHostGraphUpdateBuilder",
-            "NengoSetUpLiveIO"]
+            extra_xml_paths=xml_paths,
+            chip_id_allocator="NengoMallocBasedChipIDAllocator")
 
         # only add the sdram edge allocator if not using a virtual board
+        extra_mapping_algorithms = list()
         if not helpful_functions.read_config_boolean(
                 self.config, "Machine", "virtual_board"):
             extra_mapping_algorithms.append(

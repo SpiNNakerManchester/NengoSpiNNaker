@@ -2,6 +2,27 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="https://github.com/SpiNNakerManchester/PACMAN
             https://raw.githubusercontent.com/SpiNNakerManchester/PACMAN/master/pacman/operations/algorithms_metadata_schema.xsd">
+    <algorithm name="NengoMallocBasedChipIDAllocator">
+        <python_module>pacman.operations.chip_id_allocator_algorithms.malloc_based_chip_id_allocator</python_module>
+        <python_class>MallocBasedChipIdAllocator</python_class>
+        <input_definitions>
+            <parameter>
+                <param_name>machine</param_name>
+                <param_type>MemoryMachine</param_type>
+            </parameter>
+            <parameter>
+                <param_name>graph</param_name>
+                <param_type>NengoOperatorGraph</param_type>
+            </parameter>
+        </input_definitions>
+        <required_inputs>
+            <param_name>machine</param_name>
+            <param_name>graph</param_name>
+        </required_inputs>
+        <outputs>
+            <param_type>MemoryExtendedMachine</param_type>
+        </outputs>
+    </algorithm>
     <algorithm name="NengoRoutingTableGenerator">
         <python_module>nengo_spinnaker_gfe.overridden_mapping_algorithms.nengo_routing_table_generator</python_module>
         <python_class>NengoRoutingTableGenerator</python_class>
@@ -38,16 +59,13 @@
             </parameter>
             <parameter>
                 <param_name>graph</param_name>
-                <param_type>MemoryApplicationGraph</param_type>
-                <param_type>MemoryMachineGraph</param_type>
+                <param_type>NengoOperatorGraph</param_type>
             </parameter>
         </input_definitions>
         <required_inputs>
             <param_name>machine</param_name>
-        </required_inputs>
-        <optional_inputs>
             <param_name>graph</param_name>
-        </optional_inputs>
+        </required_inputs>
         <outputs>
             <param_type>MemoryExtendedVirtualMachine</param_type>
         </outputs>

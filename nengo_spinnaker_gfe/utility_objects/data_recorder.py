@@ -176,7 +176,7 @@ class DataRecorder(object):
                     if len(local_indexes[0]) > 0:
                         # Set row to data for that timestep
                         fragment[i] = (record[local_indexes[0], 1:] /
-                                       float(DataType.S1615.scale))
+                                       float(DataType.S1615.scale))[i]
                     else:
                         # Set row to nan
                         fragment[i] = numpy.full(
